@@ -4,6 +4,11 @@
 
 ```text
 Frontend (`frontend/src/app`, `frontend/src/components`)
+        + UI-02 Stage 3 Risk and Control workspace shell shared by `/riesgos`,
+          `/matriz-riesgo`, `/controles`, `/activos` and `/riesgo-cuantitativo`
+        + `/riesgos` is a frontend operational register projection over loaded
+          ISO matrix, asset-risk and Phase 3 quantitative sources; no new Risk DB,
+          backend contract or source of truth is introduced
         |
         v
 Backend Node/Express

@@ -10,6 +10,7 @@ import { translateClauseLabel, translateStandardLabel } from '@/i18n/displayText
 import QuantitativeRiskSimulationView from '@/components/riesgos/QuantitativeRiskSimulationView';
 import RiskViewSwitcher, { type RiskViewMode } from '@/components/riesgos/RiskViewSwitcher';
 import type { OperationalRiskSimulationRow, QuantitativeRisk } from '@/components/riesgos/riskSimulationUtils';
+import RiskControlWorkspaceShell from '@/components/risk-control/RiskControlWorkspaceShell';
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL || '';
@@ -1338,7 +1339,10 @@ function RiskMatrixPageContent() {
   if (loadingStandards) {
     return (
       <AppLayout>
-        <div className="p-6">{t('riskMatrix.loadingStandards')}</div>
+        <div className="tcdx-risk-refinement p-6 space-y-6">
+          <RiskControlWorkspaceShell activeView="matrix" compactHeader />
+          <div>{t('riskMatrix.loadingStandards')}</div>
+        </div>
       </AppLayout>
     );
   }
@@ -1347,6 +1351,7 @@ function RiskMatrixPageContent() {
     return (
       <AppLayout>
         <div className="p-6 space-y-4">
+          <RiskControlWorkspaceShell activeView="matrix" compactHeader />
           <h1 className="text-2xl font-bold">{t('riskMatrix.title')}</h1>
 
           <div className="bg-yellow-50 border border-yellow-200 p-6 rounded shadow">
@@ -1366,6 +1371,7 @@ function RiskMatrixPageContent() {
   return (
     <AppLayout>
       <div className="tcdx-risk-refinement p-6 space-y-6">
+        <RiskControlWorkspaceShell activeView="matrix" compactHeader />
         <div>
           <h1 className="text-3xl font-bold tracking-tight text-slate-950">Riesgos</h1>
           <p className="text-sm text-[var(--tcdx-color-text-secondary)] mt-1">

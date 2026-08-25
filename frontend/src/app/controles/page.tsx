@@ -8,6 +8,7 @@ import CompanyProfileImpactPanel from '@/components/company-profile/CompanyProfi
 import { getUserFromToken } from '@/utils/auth';
 import { useTranslation } from '@/hooks/useTranslation';
 import { translateDisplayText, translateClauseLabel, translateControlLabel, translateStatusLabel } from '@/i18n/displayText';
+import RiskControlWorkspaceShell from '@/components/risk-control/RiskControlWorkspaceShell';
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL || '';
@@ -1369,11 +1370,15 @@ function ControlesPageContent() {
 
   const summary = workbench?.summary;
   const mode = catalog?.catalog_mode || workbench?.catalog_mode || 'generic';
+  const modeLabel = mode === 'personalized' ? t('controls.catalog.personalized') : t('controls.catalog.generic');
 
   if (loadingScope) {
     return (
       <AppLayout>
-        <div className="p-6">{t('controls.loading')}</div>
+        <div className="mx-auto max-w-[1850px] space-y-6 p-6">
+          <RiskControlWorkspaceShell activeView="controls" compactHeader />
+          <div>{t('controls.loading')}</div>
+        </div>
       </AppLayout>
     );
   }
@@ -1381,6 +1386,7 @@ function ControlesPageContent() {
   return (
     <AppLayout>
       <div className="mx-auto max-w-[1850px] space-y-6 p-6">
+        <RiskControlWorkspaceShell activeView="controls" compactHeader />
         <section className="overflow-hidden rounded-[34px] border border-white/70 bg-[linear-gradient(135deg,#ffffff_0%,#f8fbff_55%,#edf4ff_100%)] p-6 shadow-[0_20px_60px_rgba(15,23,42,0.08)]">
           <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
             <div className="max-w-4xl">
@@ -1403,7 +1409,7 @@ function ControlesPageContent() {
             </div>
 
             <div className="grid min-w-[320px] grid-cols-1 gap-3 md:grid-cols-2">
-              <MetricCard title={t('controls.catalogMode')} value={mode} tone="blue" />
+              <MetricCard title={t('controls.catalogMode')} value={modeLabel} tone="blue" />
               <MetricCard
                 title={t('controls.activeOperation')}
                 value={
@@ -2323,7 +2329,7 @@ function MetricCard({
       <div className="text-[11px] font-semibold uppercase tracking-[0.16em] opacity-75">
         {title}
       </div>
-      <div className="mt-3 text-3xl font-bold tracking-tight break-words">{value}</div>
+      <div className="mt-3 break-normal text-2xl font-bold leading-tight tracking-tight">{value}</div>
     </div>
   );
 }

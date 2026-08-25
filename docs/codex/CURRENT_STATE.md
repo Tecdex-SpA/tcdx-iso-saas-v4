@@ -1,6 +1,6 @@
 # CURRENT_STATE — TCDX ISO SaaS V4
 
-Actualizado: 2026-08-24
+Actualizado: 2026-08-25
 Repositorio: `Tecdex-SpA/tcdx-iso-saas-v4`
 Remote/base `main` verificado para F6.14-A: `e6b431df521300119efaf9194d3ff4d8e56d7004`
 Fuente: repositorio `main` + handoffs runtime cerrados + evidencia runtime validada por el responsable del proyecto + cierre runtime F6.11-A + cierre runtime F6.11-B + cierre runtime F6.12-A + cierre runtime F6.13-A.
@@ -25,7 +25,7 @@ Fuente: repositorio `main` + handoffs runtime cerrados + evidencia runtime valid
 - PUI_PHASE: CLOSED.
 - PRE_UI_DATA_TRUTH_GATE: PASS.
 - PRE-UI: CLOSED.
-- UI enterprise: UI-02 Etapa 2 App Shell y navegacion enterprise DONE_LOCAL en branch `codex/ui02-stage1-foundation` sobre base local `b41b4601ad3efb2c95963ac85dbf3173367e1747`; auditoria de cierre separo configuracion visual a `frontend/src/config/enterpriseNavigation.ts` para no mezclarla con el contrato de autorizacion. Etapa 1/1.2 permanecen cerradas localmente. Alcance limitado a frontend shell/navegacion/i18n/test de contrato/continuidad, sin backend/API/BD/RBAC/rutas/contratos/Math Governance/Data Trust; 9 dominios principales, rutas App Router preservadas 97->97, lint/build/tests focales/git diff --check/screenshots locales PASS; Etapa 3 pendiente de aprobacion del usuario.
+- UI enterprise: UI-02 Etapa 3 Riesgo y Control workspace modelo enterprise DONE_LOCAL en branch `codex/ui02-stage1-foundation` sobre HEAD local `50922626a7d45a2f42569ca3d4c480fad352d8b6` y sin commit por instruccion. Etapa 3 reemplaza `/riesgos` por registro operacional visual, integra workspace compartido en `/riesgos`, `/matriz-riesgo`, `/controles`, `/activos` y `/riesgo-cuantitativo`, preserva deep link `/riesgo-cuantitativo/[id]`, rutas App Router 97->97, RBAC/`mvpPermissions.ts` sin cambios, backend/API/BD/contratos/Math Governance/Data Trust sin cambios. Fuentes reales usadas: matriz ISO, riesgos de activos y riesgo cuantitativo Phase 3; no existe API unificada de Risk Register, no se crea segunda fuente de verdad ni deduplicacion por titulo. Validacion local PASS: lint, typecheck, sidebar/RBAC+Stage3 contract, responsive, build, git diff --check y evidencia visual final en `artifacts/ui02-stage3-risk-control-workspace/`. Siguiente gate: Product Design review antes de autorizar Etapa 4.
 - Fase 6 ampliada 6.8-6.14: LOCAL_CLOSED_PENDING_RUNTIME_VALIDATION.
 - 6.8-01-HF1: CLOSED (reconciliación Observation: `grc_observations` + `grc_observation_relations` son el modelo canónico del Semantic Layer; `grcObservation.service.js` queda como fachada GRC; tabla paralela de 6.8-01 migrada/removida si existía).
 - 6.8-01-HF2: CLOSED / PASS_RUNTIME (deploy validado por el usuario en production/main `5c40dcc0cad8ff98a207ee92b6465648b1a8a3f2`; `schema_migrations` registra `20260818_f6_8_01_hf2_manual_observation_contract_bootstrap` aplicado, `grc.manual_observations@v1` existe published, `current_version_id` correcto, sin duplicados globales/versiones ni contratos tenant-specific).
@@ -118,8 +118,8 @@ El usuario realiza CI/merge/deploy y decide si un fallo requiere un work package
 
 ## Próxima acción
 
-1. Usuario revisa diff y screenshots de `UI-02` Etapa 2.2 en `artifacts/ui02-stage2-2-localization-closeout/`.
-2. Usuario aprueba o rechaza el cierre de localizacion/evidencia visual valida de App Shell antes de avanzar a `UI-02` Etapa 3; Codex debe detenerse hasta esa aprobacion.
+1. Usuario revisa diff y screenshots de `UI-02` Etapa 3 en `artifacts/ui02-stage3-risk-control-workspace/`.
+2. Product Design review decide si `Riesgo y Control` queda aprobado como workspace modelo enterprise antes de iniciar `UI-02` Etapa 4.
 3. Usuario mantiene push/PR/CI/merge/deploy manual si corresponde.
 4. Mantener cerrados PUI-01..PUI-09, F6.8-01/F6.8-02/F6.8-03, 6.9-01..6.9-03, 6.10-01..6.10-05, F6.11-A/B, F6.12-A, F6.13-A y F6.14-A salvo evidencia objetiva nueva.
 

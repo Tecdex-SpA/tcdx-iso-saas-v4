@@ -924,6 +924,129 @@
     "notesPlaceholder": "Comentario del auditor...",
     "empty": "No hay controles para esta auditoría."
   },
+  "riskControlWorkspace": {
+    "eyebrow": "Riesgo y Control",
+    "tabsLabel": "Vistas de Riesgo y Control",
+    "tabs": {
+      "register": "Registro",
+      "matrix": "Matriz",
+      "controls": "Controles",
+      "assets": "Activos",
+      "quantitative": "Riesgo cuantitativo"
+    },
+    "views": {
+      "register": {
+        "title": "Registro de riesgos",
+        "description": "Vista operativa para consultar riesgos reales de matriz ISO, activos y evaluación cuantitativa sin cambiar contratos ni permisos."
+      },
+      "matrix": {
+        "title": "Matriz de riesgos",
+        "description": "Heatmap ISO, priorización por probabilidad e impacto y simulación operacional existente."
+      },
+      "controls": {
+        "title": "Controles",
+        "description": "Workbench de controles, evidencias y estado operacional usando capacidades existentes."
+      },
+      "assets": {
+        "title": "Activos",
+        "description": "Inventario de activos, criticidad y riesgos asociados al alcance operativo."
+      },
+      "quantitative": {
+        "title": "Riesgo cuantitativo",
+        "description": "Exposición anualizada y evaluación económica de tratamientos desde Phase 3."
+      }
+    },
+    "actions": {
+      "refresh": "Actualizar"
+    },
+    "sources": {
+      "isoMatrix": "Matriz ISO",
+      "assetRisk": "Riesgo de activo",
+      "quantitative": "Cuantitativo"
+    },
+    "sourceStates": {
+      "loaded": "Cargado",
+      "empty": "Sin datos",
+      "unavailable": "No disponible",
+      "error": "Error"
+    },
+    "kpis": {
+      "total": "Riesgos totales",
+      "high": "Críticos o altos",
+      "untreated": "Sin tratamiento",
+      "quantitative": "Evaluaciones cuantitativas",
+      "loadedScope": "Fuentes reales cargadas para el tenant activo",
+      "fromLoadedRecords": "Derivado de registros cargados",
+      "matrixOnly": "Solo matriz ISO cargada",
+      "phase3": "Contrato Phase 3"
+    },
+    "filters": {
+      "title": "Filtros",
+      "subtitle": "Dimensiones disponibles en las fuentes cargadas.",
+      "search": "Búsqueda",
+      "source": "Fuente",
+      "level": "Nivel",
+      "status": "Estado",
+      "owner": "Responsable",
+      "standard": "Norma",
+      "all": "Todos",
+      "recommended": "Recomendada",
+      "clear": "Limpiar filtros",
+      "localPagination": "Paginación local sobre registros cargados"
+    },
+    "table": {
+      "title": "Registro enterprise",
+      "subtitle": "No deduplica por título; cada fila conserva su identificador estable y fuente.",
+      "id": "ID",
+      "risk": "Riesgo",
+      "level": "Nivel",
+      "status": "Estado",
+      "owner": "Responsable",
+      "source": "Fuente",
+      "actions": "Acciones",
+      "select": "Seleccionar",
+      "selectRisk": "Seleccionar riesgo {{id}}",
+      "view": "Ver detalle",
+      "pagination": "Mostrando {{shown}} de {{total}} registros",
+      "previous": "Anterior",
+      "next": "Siguiente"
+    },
+    "detail": {
+      "eyebrow": "Detalle contextual",
+      "close": "Cerrar",
+      "closeOverlay": "Cerrar detalle",
+      "summary": "Resumen del riesgo",
+      "identifier": "Identificador",
+      "source": "Fuente",
+      "classification": "Clasificación",
+      "status": "Estado",
+      "owner": "Responsable",
+      "asset": "Activo",
+      "inherent": "Riesgo inherente",
+      "residual": "Riesgo residual",
+      "trust": "Estado de datos",
+      "description": "Resumen",
+      "aiTitle": "IA contextual",
+      "aiUnavailable": "No hay un contrato de IA contextual aplicable a este tipo de registro. No se generan recomendaciones simuladas.",
+      "aiQuantitative": "El análisis cuantitativo asociado está disponible en la vista Phase 3; este panel no modifica ni aprueba registros.",
+      "openQuantitative": "Abrir detalle cuantitativo"
+    },
+    "empty": {
+      "title": "Sin riesgos para mostrar",
+      "description": "Las fuentes consultadas no devolvieron registros para los filtros actuales."
+    },
+    "errors": {
+      "load": "No fue posible cargar el registro de riesgos.",
+      "invalidTenant": "La sesión no contiene un tenant válido.",
+      "scope": "No fue posible cargar el alcance operativo.",
+      "matrixOptions": "No fue posible cargar las opciones de matriz.",
+      "matrix": "No fue posible cargar la matriz de riesgos.",
+      "assets": "No fue posible cargar los activos.",
+      "assetRisks": "No fue posible cargar riesgos de activos.",
+      "quantitative": "No fue posible cargar riesgo cuantitativo.",
+      "noOperationalScope": "No existe alcance operativo activo para matriz."
+    }
+  },
   "riskMatrix": {
     "title": "Matriz de Riesgo",
     "subtitle": "Solo se calculan riesgos sobre normas dentro del alcance operativo activo.",

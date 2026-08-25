@@ -924,6 +924,129 @@
     "notesPlaceholder": "Auditor comment...",
     "empty": "There are no controls for this audit."
   },
+  "riskControlWorkspace": {
+    "eyebrow": "Risk and Control",
+    "tabsLabel": "Risk and Control views",
+    "tabs": {
+      "register": "Register",
+      "matrix": "Matrix",
+      "controls": "Controls",
+      "assets": "Assets",
+      "quantitative": "Quantitative Risk"
+    },
+    "views": {
+      "register": {
+        "title": "Risk Register",
+        "description": "Operational view for real ISO matrix, asset, and quantitative risk records without changing contracts or permissions."
+      },
+      "matrix": {
+        "title": "Risk Matrix",
+        "description": "ISO heatmap, likelihood and impact prioritization, and the existing operational simulation."
+      },
+      "controls": {
+        "title": "Controls",
+        "description": "Controls, evidence, and operational status workbench using existing capabilities."
+      },
+      "assets": {
+        "title": "Assets",
+        "description": "Asset inventory, criticality, and associated risks for the operational scope."
+      },
+      "quantitative": {
+        "title": "Quantitative Risk",
+        "description": "Annualized exposure and treatment economics from Phase 3."
+      }
+    },
+    "actions": {
+      "refresh": "Refresh"
+    },
+    "sources": {
+      "isoMatrix": "ISO Matrix",
+      "assetRisk": "Asset Risk",
+      "quantitative": "Quantitative"
+    },
+    "sourceStates": {
+      "loaded": "Loaded",
+      "empty": "No data",
+      "unavailable": "Unavailable",
+      "error": "Error"
+    },
+    "kpis": {
+      "total": "Total risks",
+      "high": "Critical or high",
+      "untreated": "Without treatment",
+      "quantitative": "Quantitative assessments",
+      "loadedScope": "Real sources loaded for the active tenant",
+      "fromLoadedRecords": "Derived from loaded records",
+      "matrixOnly": "Loaded ISO matrix only",
+      "phase3": "Phase 3 contract"
+    },
+    "filters": {
+      "title": "Filters",
+      "subtitle": "Dimensions available in the loaded sources.",
+      "search": "Search",
+      "source": "Source",
+      "level": "Level",
+      "status": "Status",
+      "owner": "Owner",
+      "standard": "Standard",
+      "all": "All",
+      "recommended": "Recommended",
+      "clear": "Clear filters",
+      "localPagination": "Local pagination over loaded records"
+    },
+    "table": {
+      "title": "Enterprise register",
+      "subtitle": "Does not deduplicate by title; each row keeps its stable identifier and source.",
+      "id": "ID",
+      "risk": "Risk",
+      "level": "Level",
+      "status": "Status",
+      "owner": "Owner",
+      "source": "Source",
+      "actions": "Actions",
+      "select": "Select",
+      "selectRisk": "Select risk {{id}}",
+      "view": "View detail",
+      "pagination": "Showing {{shown}} of {{total}} records",
+      "previous": "Previous",
+      "next": "Next"
+    },
+    "detail": {
+      "eyebrow": "Contextual detail",
+      "close": "Close",
+      "closeOverlay": "Close detail",
+      "summary": "Risk summary",
+      "identifier": "Identifier",
+      "source": "Source",
+      "classification": "Classification",
+      "status": "Status",
+      "owner": "Owner",
+      "asset": "Asset",
+      "inherent": "Inherent risk",
+      "residual": "Residual risk",
+      "trust": "Data state",
+      "description": "Summary",
+      "aiTitle": "Contextual AI",
+      "aiUnavailable": "There is no contextual AI contract applicable to this record type. Simulated recommendations are not generated.",
+      "aiQuantitative": "Associated quantitative analysis is available in the Phase 3 view; this panel does not modify or approve records.",
+      "openQuantitative": "Open quantitative detail"
+    },
+    "empty": {
+      "title": "No risks to display",
+      "description": "The queried sources returned no records for the current filters."
+    },
+    "errors": {
+      "load": "The risk register could not be loaded.",
+      "invalidTenant": "The session does not contain a valid tenant.",
+      "scope": "The operational scope could not be loaded.",
+      "matrixOptions": "The matrix options could not be loaded.",
+      "matrix": "The risk matrix could not be loaded.",
+      "assets": "The assets could not be loaded.",
+      "assetRisks": "The asset risks could not be loaded.",
+      "quantitative": "The quantitative risks could not be loaded.",
+      "noOperationalScope": "There is no active operational scope for the matrix."
+    }
+  },
   "riskMatrix": {
     "title": "Risk Matrix",
     "subtitle": "Risks are only calculated for standards within the active operational scope.",

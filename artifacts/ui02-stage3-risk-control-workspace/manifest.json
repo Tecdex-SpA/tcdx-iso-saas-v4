@@ -1,0 +1,182 @@
+{
+  "verdict": "PASS",
+  "locale": "es",
+  "generatedAt": "2026-08-25T12:57:29.136Z",
+  "tenantContext": {
+    "tenantId": "7d46207b-6fb7-4435-b568-675d99abc1a5",
+    "tenantName": "TECDEX Validación Visual",
+    "source": "runtime UUID visual fixture"
+  },
+  "routes": {
+    "before": 97,
+    "after": 97
+  },
+  "assertions": [
+    "La sesión no contiene un tenant válido absent",
+    "invalid tenant absent",
+    "unauthorized absent",
+    "error de autenticación absent",
+    "Risk matrixs absent",
+    "Inicio / Inicio absent",
+    "Home / Home absent",
+    "known English labels absent in Spanish evidence",
+    "duplicate visible risk titles keep distinct IDs",
+    "real zero and unavailable data represented separately"
+  ],
+  "captures": [
+    {
+      "file": "riesgos-1440-table-and-kpis.png",
+      "locale": "es",
+      "viewport": {
+        "width": 1440,
+        "height": 1100
+      },
+      "route": "/riesgos",
+      "menuState": "sidebar expanded",
+      "tenantVisual": "TECDEX Validación Visual",
+      "dataCondition": "fixture with duplicate titles, real zero, unavailable data, and measured values",
+      "source": "playwright-route-fixture",
+      "assertions": [
+        "valid tenant session",
+        "Spanish locale only",
+        "no invalid tenant/auth/API visible error",
+        "risk titles with duplicate names preserve distinct IDs",
+        "real zero and unavailable data are rendered separately",
+        "drawer keyboard trap, Escape, focus return, and overlay close validated",
+        "routes 97 -> 97"
+      ]
+    },
+    {
+      "file": "riesgos-1440-detail-drawer.png",
+      "locale": "es",
+      "viewport": {
+        "width": 1440,
+        "height": 1100
+      },
+      "route": "/riesgos",
+      "menuState": "sidebar expanded",
+      "tenantVisual": "TECDEX Validación Visual",
+      "dataCondition": "fixture with duplicate titles, real zero, unavailable data, and measured values",
+      "source": "playwright-route-fixture",
+      "assertions": [
+        "valid tenant session",
+        "Spanish locale only",
+        "no invalid tenant/auth/API visible error",
+        "risk titles with duplicate names preserve distinct IDs",
+        "real zero and unavailable data are rendered separately",
+        "drawer keyboard trap, Escape, focus return, and overlay close validated",
+        "routes 97 -> 97"
+      ]
+    },
+    {
+      "file": "riesgos-1280.png",
+      "locale": "es",
+      "viewport": {
+        "width": 1280,
+        "height": 960
+      },
+      "route": "/riesgos",
+      "menuState": "sidebar collapsed",
+      "tenantVisual": "TECDEX Validación Visual",
+      "dataCondition": "fixture with duplicate titles, real zero, unavailable data, and measured values",
+      "source": "playwright-route-fixture",
+      "assertions": [
+        "valid tenant session",
+        "Spanish locale only",
+        "no invalid tenant/auth/API visible error",
+        "risk titles with duplicate names preserve distinct IDs",
+        "real zero and unavailable data are rendered separately",
+        "drawer keyboard trap, Escape, focus return, and overlay close validated",
+        "routes 97 -> 97"
+      ]
+    },
+    {
+      "file": "riesgos-mobile-390-list.png",
+      "locale": "es",
+      "viewport": {
+        "width": 390,
+        "height": 920
+      },
+      "route": "/riesgos",
+      "menuState": "mobile drawer closed",
+      "tenantVisual": "TECDEX Validación Visual",
+      "dataCondition": "fixture with duplicate titles, real zero, unavailable data, and measured values",
+      "source": "playwright-route-fixture",
+      "assertions": [
+        "valid tenant session",
+        "Spanish locale only",
+        "no invalid tenant/auth/API visible error",
+        "risk titles with duplicate names preserve distinct IDs",
+        "real zero and unavailable data are rendered separately",
+        "drawer keyboard trap, Escape, focus return, and overlay close validated",
+        "routes 97 -> 97"
+      ]
+    },
+    {
+      "file": "riesgos-mobile-390-detail.png",
+      "locale": "es",
+      "viewport": {
+        "width": 390,
+        "height": 920
+      },
+      "route": "/riesgos",
+      "menuState": "mobile drawer closed",
+      "tenantVisual": "TECDEX Validación Visual",
+      "dataCondition": "fixture with duplicate titles, real zero, unavailable data, and measured values",
+      "source": "playwright-route-fixture",
+      "assertions": [
+        "valid tenant session",
+        "Spanish locale only",
+        "no invalid tenant/auth/API visible error",
+        "risk titles with duplicate names preserve distinct IDs",
+        "real zero and unavailable data are rendered separately",
+        "drawer keyboard trap, Escape, focus return, and overlay close validated",
+        "routes 97 -> 97"
+      ]
+    },
+    {
+      "file": "matriz-riesgo-1440-workspace.png",
+      "locale": "es",
+      "viewport": {
+        "width": 1440,
+        "height": 1100
+      },
+      "route": "/matriz-riesgo",
+      "menuState": "sidebar expanded",
+      "tenantVisual": "TECDEX Validación Visual",
+      "dataCondition": "fixture with duplicate titles, real zero, unavailable data, and measured values",
+      "source": "playwright-route-fixture",
+      "assertions": [
+        "valid tenant session",
+        "Spanish locale only",
+        "no invalid tenant/auth/API visible error",
+        "risk titles with duplicate names preserve distinct IDs",
+        "real zero and unavailable data are rendered separately",
+        "drawer keyboard trap, Escape, focus return, and overlay close validated",
+        "routes 97 -> 97"
+      ]
+    },
+    {
+      "file": "controles-1440-workspace.png",
+      "locale": "es",
+      "viewport": {
+        "width": 1440,
+        "height": 1100
+      },
+      "route": "/controles",
+      "menuState": "sidebar expanded",
+      "tenantVisual": "TECDEX Validación Visual",
+      "dataCondition": "fixture with duplicate titles, real zero, unavailable data, and measured values",
+      "source": "playwright-route-fixture",
+      "assertions": [
+        "valid tenant session",
+        "Spanish locale only",
+        "no invalid tenant/auth/API visible error",
+        "risk titles with duplicate names preserve distinct IDs",
+        "real zero and unavailable data are rendered separately",
+        "drawer keyboard trap, Escape, focus return, and overlay close validated",
+        "routes 97 -> 97"
+      ]
+    }
+  ]
+}

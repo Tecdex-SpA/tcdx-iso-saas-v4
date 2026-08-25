@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import AppLayout from '@/components/AppLayout';
+import RiskControlWorkspaceShell from '@/components/risk-control/RiskControlWorkspaceShell';
 import Phase3Nav from './Phase3Nav';
 import {
   Phase3Entity360,
@@ -646,7 +647,7 @@ export default function Phase3Workspace({
     return (
       <AppLayout>
         <section aria-busy="true" className="space-y-5">
-          <Phase3Nav />
+          {view === 'quantitative_risks' ? <RiskControlWorkspaceShell activeView="quantitative" compactHeader /> : <Phase3Nav />}
           <div className="h-32 animate-pulse rounded-[var(--tcdx-radius-tecdex-lg)] bg-[var(--tcdx-color-surface-alt)]" />
           <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
             {[0, 1, 2].map(item => (
@@ -664,6 +665,7 @@ export default function Phase3Workspace({
   return (
     <AppLayout>
     <section className="space-y-6">
+      {view === 'quantitative_risks' && <RiskControlWorkspaceShell activeView="quantitative" compactHeader />}
       <nav aria-label="Migas de pan" className="text-sm text-[var(--tcdx-color-text-secondary)]">
         <Link href="/dashboard" className="hover:text-[var(--tcdx-color-primary)]">Inicio</Link>
         <span aria-hidden="true" className="mx-2">/</span>
