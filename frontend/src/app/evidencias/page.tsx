@@ -4,6 +4,7 @@ import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type React
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import AppLayout from '@/components/AppLayout';
+import EnterpriseDomainWorkspaceShell from '@/components/enterprise-domain/EnterpriseDomainWorkspaceShell';
 import GrcPhase1Panel from '@/components/grc/GrcPhase1Panel';
 import { getUserFromToken } from '@/utils/auth';
 import GoogleDriveSourcesPanel from '@/components/evidences/GoogleDriveSourcesPanel';
@@ -1274,27 +1275,22 @@ function EvidenciasPageContent() {
   if (showGrcOperations) {
     return (
       <AppLayout>
-        <div className="tcdx-evidence-refinement min-h-screen bg-[var(--tcdx-color-surface)] p-6">
-          <div className="mx-auto max-w-7xl space-y-5">
-            <div className="flex flex-wrap items-start justify-between gap-4">
-              <div>
-                <h1 className="text-3xl font-bold text-[var(--tcdx-color-text-ink)]">
-                  Operación GRC de evidencias
-                </h1>
-                <p className="mt-1 text-sm text-[var(--tcdx-color-text-muted)]">
-                  Gestiona solicitudes, entregas, revisiones y versiones de evidencia.
-                </p>
-              </div>
-              <Link
-                href="/evidencias"
-                className="inline-flex min-h-10 items-center rounded-md border border-[var(--tcdx-color-border)] bg-white px-4 text-sm font-semibold text-[var(--tcdx-color-text-ink)] shadow-sm transition-colors hover:bg-[var(--tcdx-color-surface-subtle)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--tcdx-color-focus)]"
-              >
-                Volver a biblioteca
-              </Link>
-            </div>
-            <GrcPhase1Panel mode="evidence" />
-          </div>
-        </div>
+        <EnterpriseDomainWorkspaceShell
+          domain="data"
+          eyebrow="Gobierno de evidencias"
+          title="Operación GRC de evidencias"
+          description="Gestiona solicitudes, entregas, revisiones y versiones de evidencia."
+          actions={
+            <Link
+              href="/evidencias"
+              className="inline-flex min-h-10 items-center rounded-md border border-[var(--tcdx-color-border)] bg-white px-4 text-sm font-semibold text-[var(--tcdx-color-text-ink)] shadow-sm transition-colors hover:bg-[var(--tcdx-color-surface-subtle)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--tcdx-color-focus)]"
+            >
+              Volver a biblioteca
+            </Link>
+          }
+        >
+          <GrcPhase1Panel mode="evidence" />
+        </EnterpriseDomainWorkspaceShell>
       </AppLayout>
     );
   }
@@ -1302,17 +1298,22 @@ function EvidenciasPageContent() {
   if (!showLegacyUpload) {
     return (
       <AppLayout>
-        <div className="tcdx-evidence-refinement space-y-4">
-          <div className="flex justify-end px-6 pt-6">
+        <EnterpriseDomainWorkspaceShell
+          domain="data"
+          eyebrow="Gobierno de datos"
+          title="Evidencias"
+          description="Biblioteca operacional de evidencias, trazabilidad documental y asociaciones GRC."
+          actions={
             <Link
               href="/evidencias?grc_operations=1"
               className="inline-flex min-h-10 items-center rounded-md bg-[var(--tcdx-color-action-primary)] px-4 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-[var(--tcdx-color-action-primary-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--tcdx-color-focus)]"
             >
               Operación GRC de evidencias
             </Link>
-          </div>
+          }
+        >
           <UnifiedEvidenceLibrary token={token} canManage={canManageEvidenceAssociations} />
-        </div>
+        </EnterpriseDomainWorkspaceShell>
       </AppLayout>
     );
   }

@@ -25,7 +25,7 @@ Fuente: repositorio `main` + handoffs runtime cerrados + evidencia runtime valid
 - PUI_PHASE: CLOSED.
 - PRE_UI_DATA_TRUTH_GATE: PASS.
 - PRE-UI: CLOSED.
-- UI enterprise: UI-02 Etapa 3 Riesgo y Control workspace modelo enterprise DONE_LOCAL en branch `codex/ui02-stage1-foundation` sobre HEAD local `50922626a7d45a2f42569ca3d4c480fad352d8b6` y sin commit por instruccion. Etapa 3 reemplaza `/riesgos` por registro operacional visual, integra workspace compartido en `/riesgos`, `/matriz-riesgo`, `/controles`, `/activos` y `/riesgo-cuantitativo`, preserva deep link `/riesgo-cuantitativo/[id]`, rutas App Router 97->97, RBAC/`mvpPermissions.ts` sin cambios, backend/API/BD/contratos/Math Governance/Data Trust sin cambios. Fuentes reales usadas: matriz ISO, riesgos de activos y riesgo cuantitativo Phase 3; no existe API unificada de Risk Register, no se crea segunda fuente de verdad ni deduplicacion por titulo. Validacion local PASS: lint, typecheck, sidebar/RBAC+Stage3 contract, responsive, build, git diff --check y evidencia visual final en `artifacts/ui02-stage3-risk-control-workspace/`. Siguiente gate: Product Design review antes de autorizar Etapa 4.
+- UI enterprise: UI-02 Etapa 4 Enterprise Domain Workspaces DONE_LOCAL en branch `codex/ui02-stage1-foundation` sobre HEAD local `267c128480a8505e33e119c2ab250cce2cb0dc78` y sin commit por instruccion. Etapa 4 integra shell enterprise universal para Cumplimiento, Auditoria, Datos, Inteligencia y Reportes; generaliza `MvpViewShell`, `Phase3Workspace` y `Phase5Workspace` opt-in; preserva deep links existentes; rutas App Router 97->97; RBAC/`mvpPermissions.ts` sin cambios; backend/API/BD/contratos/Math Governance/Data Trust sin cambios. Validacion local PASS: lint, typecheck, sidebar/RBAC, responsive, contrato Stage 4, build, git diff --check y evidencia visual final en `artifacts/ui02-stage4-enterprise-domain-workspaces/`. Deuda visual remanente: Product Design review posterior para polish fino y textos/product naming legacy. Siguiente gate: Product Design review de UI-02 Etapa 4.
 - Fase 6 ampliada 6.8-6.14: LOCAL_CLOSED_PENDING_RUNTIME_VALIDATION.
 - 6.8-01-HF1: CLOSED (reconciliación Observation: `grc_observations` + `grc_observation_relations` son el modelo canónico del Semantic Layer; `grcObservation.service.js` queda como fachada GRC; tabla paralela de 6.8-01 migrada/removida si existía).
 - 6.8-01-HF2: CLOSED / PASS_RUNTIME (deploy validado por el usuario en production/main `5c40dcc0cad8ff98a207ee92b6465648b1a8a3f2`; `schema_migrations` registra `20260818_f6_8_01_hf2_manual_observation_contract_bootstrap` aplicado, `grc.manual_observations@v1` existe published, `current_version_id` correcto, sin duplicados globales/versiones ni contratos tenant-specific).
@@ -118,8 +118,8 @@ El usuario realiza CI/merge/deploy y decide si un fallo requiere un work package
 
 ## Próxima acción
 
-1. Usuario revisa diff y screenshots de `UI-02` Etapa 3 en `artifacts/ui02-stage3-risk-control-workspace/`.
-2. Product Design review decide si `Riesgo y Control` queda aprobado como workspace modelo enterprise antes de iniciar `UI-02` Etapa 4.
+1. Usuario revisa diff y screenshots de `UI-02` Etapa 4 en `artifacts/ui02-stage4-enterprise-domain-workspaces/`.
+2. Product Design review decide ajustes visuales finos sobre los cinco dominios enterprise antes de iniciar otra etapa UI.
 3. Usuario mantiene push/PR/CI/merge/deploy manual si corresponde.
 4. Mantener cerrados PUI-01..PUI-09, F6.8-01/F6.8-02/F6.8-03, 6.9-01..6.9-03, 6.10-01..6.10-05, F6.11-A/B, F6.12-A, F6.13-A y F6.14-A salvo evidencia objetiva nueva.
 

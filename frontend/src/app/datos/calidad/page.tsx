@@ -3,6 +3,7 @@ import Phase5Workspace from '@/components/phase5/Phase5Workspace';
 export default function DataQualityPanel() {
   return (
     <Phase5Workspace
+      domainWorkspace="data"
       title="Calidad y confianza del dato"
       description="Evaluaciones de calidad, freshness y estado de confianza. Un dato stale, rejected o unknown se marca con advertencia visible."
       endpoint="/api/data/quality"

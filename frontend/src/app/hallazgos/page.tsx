@@ -3,6 +3,7 @@
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import AppLayout from '@/components/AppLayout';
+import EnterpriseDomainWorkspaceShell from '@/components/enterprise-domain/EnterpriseDomainWorkspaceShell';
 import { getUserFromToken } from '@/utils/auth';
 import { formatAiAuditorDraftDescription, normalizeAiAuditorDraftPriority, readAiAuditorDraftFromSession } from '@/utils/aiAuditorDraft';
 import { useTranslation } from '@/hooks/useTranslation';
@@ -2811,8 +2812,14 @@ function HallazgosPageContent() {
 
   return (
     <AppLayout>
+      <EnterpriseDomainWorkspaceShell
+        domain="audit"
+        eyebrow={t('findings.eyebrow')}
+        title={t('findings.title')}
+        description={t('findings.subtitle')}
+      >
       <div className="mx-auto max-w-[1700px] space-y-6">
-        <section className="overflow-hidden rounded-[34px] border border-white/70 bg-[linear-gradient(135deg,#ffffff_0%,#f8fbff_55%,#edf4ff_100%)] p-6 shadow-[0_20px_60px_rgba(15,23,42,0.08)]">
+        <section className="overflow-hidden rounded-md border border-[var(--tcdx-color-border)] bg-white p-5 shadow-sm">
           <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
             <div className="max-w-4xl">
               <div className="flex flex-wrap items-center gap-3">
@@ -2824,11 +2831,11 @@ function HallazgosPageContent() {
                 </span>
               </div>
 
-              <h1 className="mt-4 text-4xl font-bold tracking-tight text-slate-900 md:text-5xl">
-                {t('findings.title')}
-              </h1>
+              <h2 className="mt-4 text-xl font-bold tracking-tight text-slate-900">
+                {t('findings.badge')}
+              </h2>
 
-              <p className="mt-3 text-base leading-7 text-slate-600 md:text-lg">
+              <p className="mt-3 text-sm leading-6 text-slate-600">
                 {t('findings.subtitle')}
               </p>
             </div>
@@ -3610,6 +3617,7 @@ function HallazgosPageContent() {
           </div>
         )}
       </div>
+      </EnterpriseDomainWorkspaceShell>
     </AppLayout>
   );
 }

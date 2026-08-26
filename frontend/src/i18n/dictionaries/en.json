@@ -177,7 +177,9 @@
       "evidence": "Evidence",
       "data": "Data",
       "dataQuality": "Quality",
+      "dataCatalog": "Catalog",
       "lineage": "Lineage",
+      "semanticLayer": "Semantic Layer",
       "imports": "Imports",
       "metrics": "Metrics",
       "indicators": "Indicators",
@@ -192,6 +194,34 @@
       "users": "Users",
       "companyProfile": "Company Profile",
       "connectors": "Connectors"
+    }
+  },
+  "enterpriseDomainWorkspace": {
+    "tabsLabel": "Domain views",
+    "compliance": {
+      "eyebrow": "Compliance",
+      "title": "Compliance and ISO",
+      "description": "Assessment, health, applicability, and ISO lifecycle with real tenant data and human review."
+    },
+    "audit": {
+      "eyebrow": "Audit and improvement",
+      "title": "Audit and Improvement",
+      "description": "Audits, findings, nonconformities, action plans, and recommendations connected without merging entities."
+    },
+    "data": {
+      "eyebrow": "Data and evidence",
+      "title": "Data and Evidence",
+      "description": "Evidence, quality, catalog, lineage, semantic layer, and imports with traceability and explicit data states."
+    },
+    "intelligence": {
+      "eyebrow": "Intelligence",
+      "title": "GRC Intelligence",
+      "description": "Official metrics, indicators, analysis, and AI assistance with authority limits and governed sources."
+    },
+    "reports": {
+      "eyebrow": "Reports",
+      "title": "BI and Reports",
+      "description": "Exports, BI, Studio, and generations based on official results, templates, and authorized downloads."
     }
   },
   "header": {

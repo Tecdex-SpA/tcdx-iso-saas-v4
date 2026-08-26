@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Image from 'next/image';
 import AppLayout from '@/components/AppLayout';
+import EnterpriseDomainWorkspaceShell from '@/components/enterprise-domain/EnterpriseDomainWorkspaceShell';
 import { getUserRoleFromToken } from '@/utils/auth';
 import TcdxIcon, { type TcdxIconName } from '@/components/icons/TcdxIcon';
 import { useTranslation } from '@/hooks/useTranslation';
@@ -906,38 +907,23 @@ export default function ExportesPage() {
 
   return (
     <AppLayout>
+      <EnterpriseDomainWorkspaceShell
+        domain="reports"
+        eyebrow={t('exports.brand')}
+        title={t('exports.title')}
+        description="Los reportes ejecutivos se basan en salud ISO efectiva: controles activos en alcance, evidencia oficial, hallazgos, no conformidades y planes vencidos."
+        actions={
+          <a
+            href="/dashboard?view=iso"
+            className="inline-flex min-h-10 items-center gap-2 rounded-md border border-[var(--tcdx-color-border)] bg-white px-4 text-sm font-semibold text-[var(--tcdx-color-text-ink)] hover:bg-[var(--tcdx-color-surface-subtle)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--tcdx-color-focus)]"
+          >
+            Ver Centro Control ISO
+            <TcdxIcon name="chevronDown" className="h-4 w-4 -rotate-90" />
+          </a>
+        }
+      >
       <div className="tcdx-reports-refresh space-y-6">
-        <section className="overflow-hidden rounded-[34px] border border-slate-200 bg-[linear-gradient(135deg,#0B2F4F_0%,#103a61_48%,#0b2740_100%)] p-6 shadow-[0_20px_60px_rgba(15,23,42,0.16)]">
-          <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
-            <div className="max-w-3xl">
-              <div className="inline-flex items-center gap-3 rounded-full border border-white/12 bg-white/8 px-3 py-1.5 text-xs font-bold uppercase tracking-[0.18em] text-white/65">
-                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-white/10 text-white">
-                  <TcdxIcon name="export" className="h-4 w-4" />
-                </span>
-                {t('exports.brand')}
-              </div>
-
-              <h1 className="mt-2 text-3xl font-bold text-white md:text-4xl">
-                {t('exports.title')}
-              </h1>
-
-              <p className="mt-3 max-w-2xl text-sm leading-6 text-white/70">
-                Los reportes ejecutivos se basan en salud ISO efectiva: controles activos en alcance,
-                evidencia oficial, hallazgos, no conformidades y planes vencidos.
-              </p>
-
-              <a
-                href="/dashboard?view=iso"
-                className="mt-4 inline-flex w-fit items-center gap-2 rounded-2xl border border-white/15 bg-white/10 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/15"
-              >
-                Ver Centro Control ISO
-                <TcdxIcon name="chevronDown" className="h-4 w-4 -rotate-90" />
-              </a>
-
-              <div className="mt-6 h-px w-28 bg-gradient-to-r from-white/45 to-transparent" />
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-2 xl:min-w-[440px] xl:max-w-[480px]">
+        <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
               <HeroMiniStat
                 label={t('exports.reportTypesLabel')}
                 value={typeCount}
@@ -958,8 +944,6 @@ export default function ExportesPage() {
                 value={historyStats.uniqueClients}
                 helper={t('exports.accumulatedTraceability')}
               />
-            </div>
-          </div>
         </section>
 
         <section className="grid gap-4 xl:grid-cols-[1.05fr_0.95fr_1.1fr_0.95fr]">
@@ -1697,6 +1681,7 @@ export default function ExportesPage() {
           </section>
         )}
       </div>
+      </EnterpriseDomainWorkspaceShell>
     </AppLayout>
   );
 }

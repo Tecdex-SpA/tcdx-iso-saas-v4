@@ -10,6 +10,7 @@ export default function ReportStudio() {
       endpoint="/api/reports"
       primaryLabel="reportes"
       emptyMessage="No hay definiciones de reporte configuradas."
+      domainWorkspace="reports"
       columns={[
         { key: 'report_key', label: 'Reporte' },
         { key: 'display_name', label: 'Nombre' },

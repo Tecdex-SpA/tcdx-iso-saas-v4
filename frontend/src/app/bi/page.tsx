@@ -32,12 +32,13 @@ export default function DashboardBuilder() {
 
   return (
     <Phase5Workspace
-      title="Business Intelligence"
+      title="Reportes Business Intelligence"
       description="Cockpit ejecutivo para interpretar resultados oficiales, priorizar riesgos y convertir indicadores en acciones verificables."
       endpoint="/api/dashboards"
       primaryLabel="dashboards"
       emptyMessage="No hay dashboards configurados. Los tableros predefinidos consumen resultados oficiales, tendencias y decisiones por tenant."
       loadCollection={false}
+      domainWorkspace="reports"
       columns={[
         { key: 'dashboard_key', label: 'Dashboard' },
         { key: 'display_name', label: 'Nombre' },

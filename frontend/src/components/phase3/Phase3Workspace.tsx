@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import AppLayout from '@/components/AppLayout';
+import EnterpriseDomainWorkspaceShell, { type EnterpriseDomainWorkspaceKey } from '@/components/enterprise-domain/EnterpriseDomainWorkspaceShell';
 import RiskControlWorkspaceShell from '@/components/risk-control/RiskControlWorkspaceShell';
 import Phase3Nav from './Phase3Nav';
 import {
@@ -552,9 +553,11 @@ function columnLabel(config: ViewConfig, column: string) {
 export default function Phase3Workspace({
   view,
   entityId,
+  domainWorkspace,
 }: {
   view: ViewKey;
   entityId?: string;
+  domainWorkspace?: EnterpriseDomainWorkspaceKey;
 }) {
   const config = configs[view];
   const [meta, setMeta] = useState<Phase3Meta | null>(null);
@@ -644,64 +647,79 @@ export default function Phase3Workspace({
   }
 
   if (loading) {
+    const loadingContent = (
+      <section aria-busy="true" className="space-y-5">
+        {view === 'quantitative_risks' ? <RiskControlWorkspaceShell activeView="quantitative" compactHeader /> : !domainWorkspace && <Phase3Nav />}
+        <div className="h-32 animate-pulse rounded-[var(--tcdx-radius-tecdex-lg)] bg-[var(--tcdx-color-surface-alt)]" />
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+          {[0, 1, 2].map(item => (
+            <div
+              key={item}
+              className="h-28 animate-pulse rounded-[var(--tcdx-radius-tecdex-lg)] bg-[var(--tcdx-color-surface-alt)]"
+            />
+          ))}
+        </div>
+      </section>
+    );
+
     return (
       <AppLayout>
-        <section aria-busy="true" className="space-y-5">
-          {view === 'quantitative_risks' ? <RiskControlWorkspaceShell activeView="quantitative" compactHeader /> : <Phase3Nav />}
-          <div className="h-32 animate-pulse rounded-[var(--tcdx-radius-tecdex-lg)] bg-[var(--tcdx-color-surface-alt)]" />
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-            {[0, 1, 2].map(item => (
-              <div
-                key={item}
-                className="h-28 animate-pulse rounded-[var(--tcdx-radius-tecdex-lg)] bg-[var(--tcdx-color-surface-alt)]"
-              />
-            ))}
-          </div>
-        </section>
+        {domainWorkspace ? (
+          <EnterpriseDomainWorkspaceShell domain={domainWorkspace} title={config.title} description={config.description}>
+            {loadingContent}
+          </EnterpriseDomainWorkspaceShell>
+        ) : (
+          loadingContent
+        )}
       </AppLayout>
     );
   }
 
-  return (
-    <AppLayout>
+  const createRecordAction = !entityId && !config.overview && canManage ? (
+    <button
+      type="button"
+      onClick={() => setFormOpen(value => !value)}
+      aria-expanded={formOpen}
+      className="min-h-10 rounded-[var(--tcdx-radius-tecdex-sm)] bg-[var(--tcdx-color-primary)] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[var(--tcdx-color-primary-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--tcdx-color-primary)]"
+    >
+      {formOpen ? 'Cerrar formulario' : 'Nuevo registro'}
+    </button>
+  ) : null;
+
+  const workspaceContent = (
     <section className="space-y-6">
       {view === 'quantitative_risks' && <RiskControlWorkspaceShell activeView="quantitative" compactHeader />}
-      <nav aria-label="Migas de pan" className="text-sm text-[var(--tcdx-color-text-secondary)]">
-        <Link href="/dashboard" className="hover:text-[var(--tcdx-color-primary)]">Inicio</Link>
-        <span aria-hidden="true" className="mx-2">/</span>
-        <Link href="/operaciones-grc" className="hover:text-[var(--tcdx-color-primary)]">Operación GRC</Link>
-        {view !== 'operations' && (
-          <>
+      {!domainWorkspace && (
+        <>
+          <nav aria-label="Migas de pan" className="text-sm text-[var(--tcdx-color-text-secondary)]">
+            <Link href="/dashboard" className="hover:text-[var(--tcdx-color-primary)]">Inicio</Link>
             <span aria-hidden="true" className="mx-2">/</span>
-            <span aria-current="page">{config.title}</span>
-          </>
-        )}
-      </nav>
-      <Phase3Nav />
+            <Link href="/operaciones-grc" className="hover:text-[var(--tcdx-color-primary)]">Operación GRC</Link>
+            {view !== 'operations' && (
+              <>
+                <span aria-hidden="true" className="mx-2">/</span>
+                <span aria-current="page">{config.title}</span>
+              </>
+            )}
+          </nav>
+          <Phase3Nav />
 
-      <header className="flex flex-col gap-4 border-b border-[var(--tcdx-color-border)] pb-5 lg:flex-row lg:items-end lg:justify-between">
-        <div className="min-w-0">
-          <p className="text-xs font-semibold uppercase tracking-normal text-[var(--tcdx-color-primary)]">
-            Operación y GRC
-          </p>
-          <h1 className="mt-1 text-2xl font-bold text-[var(--tcdx-color-text-primary)]">
-            {config.title}
-          </h1>
-          <p className="mt-2 max-w-3xl text-sm text-[var(--tcdx-color-text-secondary)]">
-            {config.description}
-          </p>
-        </div>
-        {!entityId && !config.overview && canManage && (
-          <button
-            type="button"
-            onClick={() => setFormOpen(value => !value)}
-            aria-expanded={formOpen}
-            className="min-h-10 rounded-[var(--tcdx-radius-tecdex-sm)] bg-[var(--tcdx-color-primary)] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[var(--tcdx-color-primary-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--tcdx-color-primary)]"
-          >
-            {formOpen ? 'Cerrar formulario' : 'Nuevo registro'}
-          </button>
-        )}
-      </header>
+          <header className="flex flex-col gap-4 border-b border-[var(--tcdx-color-border)] pb-5 lg:flex-row lg:items-end lg:justify-between">
+            <div className="min-w-0">
+              <p className="text-xs font-semibold uppercase tracking-normal text-[var(--tcdx-color-primary)]">
+                Operación y GRC
+              </p>
+              <h1 className="mt-1 text-2xl font-bold text-[var(--tcdx-color-text-primary)]">
+                {config.title}
+              </h1>
+              <p className="mt-2 max-w-3xl text-sm text-[var(--tcdx-color-text-secondary)]">
+                {config.description}
+              </p>
+            </div>
+            {createRecordAction}
+          </header>
+        </>
+      )}
 
       {error && (
         <div
@@ -949,6 +967,22 @@ export default function Phase3Workspace({
       )}
       <Phase3Glossary />
     </section>
+  );
+
+  return (
+    <AppLayout>
+      {domainWorkspace ? (
+        <EnterpriseDomainWorkspaceShell
+          domain={domainWorkspace}
+          title={config.title}
+          description={config.description}
+          actions={createRecordAction}
+        >
+          {workspaceContent}
+        </EnterpriseDomainWorkspaceShell>
+      ) : (
+        workspaceContent
+      )}
     </AppLayout>
   );
 }

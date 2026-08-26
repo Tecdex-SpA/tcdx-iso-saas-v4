@@ -3,6 +3,7 @@
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import AppLayout from '@/components/AppLayout';
+import EnterpriseDomainWorkspaceShell from '@/components/enterprise-domain/EnterpriseDomainWorkspaceShell';
 import GrcPhase1Panel from '@/components/grc/GrcPhase1Panel';
 import CompanyProfileImpactPanel from '@/components/company-profile/CompanyProfileImpactPanel';
 import IsoAuditorPreview from '@/components/auditor-iso/IsoAuditorPreview';
@@ -254,18 +255,30 @@ function AuditoriasWorkspaceContent() {
 
   return (
     <AppLayout>
+      <EnterpriseDomainWorkspaceShell
+        domain="audit"
+        eyebrow="Auditoría y mejora"
+        title="Auditorías"
+        description={
+          canUseAiAuditor
+            ? 'Programa, preauditoría e IA auditora en un solo espacio operativo.'
+            : 'Programa, preauditoría y preparación documental en un solo espacio operativo.'
+        }
+      >
       <div className="space-y-5">
-        <section className="mx-auto flex max-w-[1800px] flex-col gap-3 rounded-[28px] border border-slate-200 bg-white p-3 shadow-sm lg:flex-row lg:items-center lg:justify-between">
-          <div className="px-2">
-            <h1 className="text-xl font-black text-slate-950">Auditorías</h1>
-            <p className="mt-1 text-sm text-slate-500">
+        <section className="enterprise-card p-0">
+          <div className="border-b border-[var(--tcdx-color-border)] px-5 py-4">
+            <div className="text-xs font-black uppercase tracking-[0.16em] text-[var(--tcdx-color-primary)]">
+              Flujo de auditoría
+            </div>
+            <p className="mt-1 text-sm text-[var(--tcdx-color-text-secondary)]">
               {canUseAiAuditor
-                ? 'Programa, preauditoría e IA auditora en un solo espacio operativo.'
-                : 'Programa, preauditoría y preparación documental en un solo espacio operativo.'}
+                ? 'Selecciona programa, preparación, preauditoría o asistencia IA según el contrato activo.'
+                : 'Selecciona programa, preparación o preauditoría según el contrato activo.'}
             </p>
           </div>
 
-          <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-4">
+          <div className="flex gap-2 overflow-x-auto p-3 tcdx-scrollbar">
             {availableTabs.map((tab) => {
               const active = activeView === tab.value;
 
@@ -274,10 +287,11 @@ function AuditoriasWorkspaceContent() {
                   key={tab.value}
                   type="button"
                   onClick={() => setActiveView(tab.value)}
-                  className={`rounded-2xl px-4 py-3 text-sm font-black transition ${
+                  aria-current={active ? 'page' : undefined}
+                  className={`min-h-11 flex-none whitespace-nowrap rounded-[var(--tcdx-radius-tecdex-sm)] px-4 py-2 text-sm font-black transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--tcdx-color-primary)] ${
                     active
-                      ? 'bg-slate-950 text-white shadow-sm'
-                      : 'border border-slate-200 bg-slate-50 text-slate-600 hover:border-slate-300 hover:bg-white'
+                      ? 'bg-[var(--tcdx-color-primary)] text-white shadow-sm'
+                      : 'border border-[var(--tcdx-color-border)] bg-white text-[var(--tcdx-color-text-secondary)] hover:bg-[var(--tcdx-color-surface-muted)] hover:text-[var(--tcdx-color-text-ink)]'
                   }`}
                 >
                   {tab.label}
@@ -314,6 +328,7 @@ function AuditoriasWorkspaceContent() {
         )}
         <GrcPhase1Panel mode="audit" />
       </div>
+      </EnterpriseDomainWorkspaceShell>
     </AppLayout>
   );
 }
@@ -1142,7 +1157,7 @@ function AuditProgramPanel() {
   if (!loadingStandards && operationalStandards.length === 0) {
     return (
       <div className="mx-auto max-w-[1800px] space-y-4 p-6">
-        <h1 className="text-2xl font-bold">{t('audits.title')}</h1>
+        <h2 className="text-2xl font-bold">{t('audits.title')}</h2>
 
         <div className="rounded-[28px] border border-yellow-200 bg-yellow-50 p-6 shadow-sm">
           <h2 className="mb-2 text-lg font-semibold">
@@ -1159,7 +1174,7 @@ function AuditProgramPanel() {
 
   return (
     <div className="mx-auto max-w-[1800px] space-y-6">
-        <section className="overflow-hidden rounded-[34px] border border-white/70 bg-[linear-gradient(135deg,#ffffff_0%,#f8fbff_55%,#edf4ff_100%)] p-6 shadow-[0_20px_60px_rgba(15,23,42,0.08)]">
+        <section className="overflow-hidden rounded-md border border-[var(--tcdx-color-border)] bg-white p-5 shadow-sm">
           <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
             <div className="max-w-4xl">
               <div className="flex flex-wrap items-center gap-3">
@@ -1171,9 +1186,9 @@ function AuditProgramPanel() {
                 </span>
               </div>
 
-              <h1 className="mt-4 text-4xl font-bold tracking-tight text-slate-900 md:text-5xl">
-                {t('audits.title')}
-              </h1>
+              <h2 className="mt-4 text-xl font-bold tracking-tight text-slate-900">
+                {t('audits.badge')}
+              </h2>
 
               {isReadOnly && (
                 <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-700">
@@ -1181,7 +1196,7 @@ function AuditProgramPanel() {
                 </div>
               )}
 
-              <p className="mt-3 text-base leading-7 text-slate-600 md:text-lg">
+              <p className="mt-3 text-sm leading-6 text-slate-600">
                 {t('audits.subtitle')}
               </p>
 

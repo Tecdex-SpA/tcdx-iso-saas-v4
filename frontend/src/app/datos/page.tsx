@@ -4,6 +4,7 @@ import Link from 'next/link';
 export default function DatosPage() {
   return (
     <Phase5Workspace
+      domainWorkspace="data"
       title="Datos"
       description="Gobierno de datos, dominios, elementos, calidad, freshness, lineage e impacto GRC."
       endpoint="/api/data/domains"

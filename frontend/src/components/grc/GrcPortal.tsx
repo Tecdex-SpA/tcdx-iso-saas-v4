@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
+import EnterpriseDomainWorkspaceShell from '@/components/enterprise-domain/EnterpriseDomainWorkspaceShell';
 import { ApiClientError, apiRequestJson } from '@/utils/apiClient';
 import GrcDecisionCenter from '@/components/math-governance/GrcDecisionCenter';
 import OfficialAnalyticsPanel from '@/components/math-governance/OfficialAnalyticsPanel';
@@ -126,26 +127,24 @@ export default function GrcPortal() {
   const blocks = MODULES.map(([label, href, key]) => ({ label, href, key, block: overview?.[key as keyof GrcOverview] as Block | undefined }));
 
   return (
-    <main className="min-h-full bg-[var(--tcdx-color-surface)] px-4 py-6 text-[var(--tcdx-color-text-ink)] sm:px-6">
-      <section className="rounded-[var(--tcdx-radius-tecdex-lg)] border border-[var(--tcdx-color-border)] bg-white p-6 shadow-[var(--tcdx-shadow-tecdex-sm)]">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[var(--tcdx-color-primary)]">Portal GRC</p>
-            <h1 className="mt-2 text-2xl font-semibold">Estado operativo y analítico</h1>
-            <p className="mt-2 max-w-3xl text-sm text-[var(--tcdx-color-text-secondary)]">
-              Consolida datos, métricas, riesgos, controles, evidencias, assurance, pérdidas, BI y reportes con trazabilidad y confianza.
-            </p>
-          </div>
+    <EnterpriseDomainWorkspaceShell
+      domain="intelligence"
+      eyebrow="Inteligencia GRC"
+      title="Inteligencia operativa y analítica"
+      description="Consolida datos, métricas, riesgos, controles, evidencias, assurance, pérdidas, BI y reportes con trazabilidad y confianza."
+      actions={
           <button
             type="button"
             onClick={load}
-            className="rounded-md border border-[var(--tcdx-color-border)] px-4 py-2 text-sm font-semibold"
+            className="inline-flex min-h-10 items-center rounded-md border border-[var(--tcdx-color-border)] bg-white px-4 text-sm font-semibold text-[var(--tcdx-color-text-ink)] hover:bg-[var(--tcdx-color-surface-subtle)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--tcdx-color-focus)]"
           >
             Actualizar
           </button>
-        </div>
-
-        {loading && <div className="mt-6 rounded-md border border-dashed p-6 text-sm">Cargando portal…</div>}
+      }
+    >
+      <main className="space-y-6 text-[var(--tcdx-color-text-ink)]">
+        <section className="rounded-[var(--tcdx-radius-tecdex-md)] border border-[var(--tcdx-color-border)] bg-white p-5 shadow-[var(--tcdx-shadow-tecdex-sm)]">
+        {loading && <div className="rounded-md border border-dashed p-6 text-sm">Cargando portal…</div>}
 
         {!loading && error && (
           <div className="mt-6 rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-800" role="alert">
@@ -219,7 +218,8 @@ export default function GrcPortal() {
             </div>
           </>
         )}
-      </section>
-    </main>
+        </section>
+      </main>
+    </EnterpriseDomainWorkspaceShell>
   );
 }

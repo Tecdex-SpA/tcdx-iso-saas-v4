@@ -3,13 +3,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import AppLayout from '@/components/AppLayout';
 import CompanyProfileImpactPanel from '@/components/company-profile/CompanyProfileImpactPanel';
+import EnterpriseDomainWorkspaceShell from '@/components/enterprise-domain/EnterpriseDomainWorkspaceShell';
 import IntelligenceEmptyState from '@/components/intelligence/IntelligenceEmptyState';
 import IntelligenceErrorState from '@/components/intelligence/IntelligenceErrorState';
 import MetricExplanationPanel from '@/components/intelligence/MetricExplanationPanel';
-import {
-  EnterpriseButton,
-  EnterprisePageHeader,
-} from '@/components/ui/enterprise';
+import { EnterpriseButton } from '@/components/ui/enterprise';
 import { useTranslation } from '@/hooks/useTranslation';
 import useIntelligenceBrief from '@/hooks/useIntelligenceBrief';
 import { getUserFromToken } from '@/utils/auth';
@@ -1556,8 +1554,43 @@ export default function HealthDashboardPage() {
       }));
   }, [sprintProcesses, selectedStandardCode]);
 
+  const healthActions = (
+    <>
+      {summaries.length > 1 && (
+        <select
+          value={selectedTenantId}
+          onChange={(e) => handleTenantChange(e.target.value)}
+          className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm text-gray-700 shadow-sm"
+        >
+          {summaries.map((tenant) => (
+            <option key={tenant.tenant_id} value={tenant.tenant_id}>
+              {tenant.tenant_name}
+            </option>
+          ))}
+        </select>
+      )}
+
+      <EnterpriseButton
+        type="button"
+        onClick={refreshHealth}
+        disabled={refreshing || !canRefreshHealth}
+        title={!canRefreshHealth ? 'No tienes permisos para recalcular o administrar Health ISO.' : undefined}
+        className="disabled:opacity-60"
+      >
+        {refreshing ? t('health.recalculating') : t('health.recalculateHealth')}
+      </EnterpriseButton>
+    </>
+  );
+
   return (
     <AppLayout>
+      <EnterpriseDomainWorkspaceShell
+        domain="compliance"
+        eyebrow="Health ISO"
+        title={t('health.title')}
+        description={t('health.subtitle')}
+        actions={healthActions}
+      >
       <div className="space-y-6">
         {loading && summaries.length === 0 && loadingSprintHealth ? (
           <div className="enterprise-card">
@@ -1565,38 +1598,6 @@ export default function HealthDashboardPage() {
           </div>
         ) : (
           <>
-            <EnterprisePageHeader
-              title={t('health.title')}
-              subtitle={t('health.subtitle')}
-              actions={
-                <>
-                {summaries.length > 1 && (
-                  <select
-                  value={selectedTenantId}
-                  onChange={(e) => handleTenantChange(e.target.value)}
-                    className="rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm text-gray-700 shadow-sm"
-                  >
-                    {summaries.map((tenant) => (
-                      <option key={tenant.tenant_id} value={tenant.tenant_id}>
-                        {tenant.tenant_name}
-                      </option>
-                    ))}
-                  </select>
-                )}
-
-                <EnterpriseButton
-                  type="button"
-                  onClick={refreshHealth}
-                  disabled={refreshing || !canRefreshHealth}
-                  title={!canRefreshHealth ? 'No tienes permisos para recalcular o administrar Health ISO.' : undefined}
-                  className="disabled:opacity-60"
-                >
-                  {refreshing ? t('health.recalculating') : t('health.recalculateHealth')}
-                </EnterpriseButton>
-                </>
-              }
-            />
-
             {error && (
               <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
                 {error}
@@ -3131,6 +3132,7 @@ export default function HealthDashboardPage() {
           </>
         )}
       </div>
+      </EnterpriseDomainWorkspaceShell>
     </AppLayout>
   );
 }

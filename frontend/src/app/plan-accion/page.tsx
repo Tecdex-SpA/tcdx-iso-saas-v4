@@ -1,8 +1,9 @@
 'use client';
 
-import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useSearchParams } from 'next/navigation';
 import AppLayout from '@/components/AppLayout';
+import EnterpriseDomainWorkspaceShell from '@/components/enterprise-domain/EnterpriseDomainWorkspaceShell';
 import CompanyProfileImpactPanel from '@/components/company-profile/CompanyProfileImpactPanel';
 import { EnterpriseScrollPanel } from '@/components/ui/enterprise';
 import { getUserFromToken } from '@/utils/auth';
@@ -1063,21 +1064,32 @@ function PlanAccionPageContent() {
     return 'Plan de acción manual';
   };
 
+  const renderAuditShell = (children: ReactNode, actions?: ReactNode) => (
+    <AppLayout>
+      <EnterpriseDomainWorkspaceShell
+        domain="audit"
+        eyebrow={t('actionPlan.eyebrow')}
+        title={t('actionPlan.title')}
+        description={t('actionPlan.subtitle')}
+        actions={actions}
+      >
+        {children}
+      </EnterpriseDomainWorkspaceShell>
+    </AppLayout>
+  );
+
   if (loadingStandards) {
-    return (
-      <AppLayout>
-        <div className="p-6">{t('actionPlan.loadingStandards')}</div>
-      </AppLayout>
+    return renderAuditShell(
+      <div className="rounded-md border border-dashed border-[var(--tcdx-color-border)] bg-white p-6 text-sm text-[var(--tcdx-color-text-secondary)]">
+        {t('actionPlan.loadingStandards')}
+      </div>
     );
   }
 
   if (!loadingStandards && operationalStandards.length === 0) {
-    return (
-      <AppLayout>
-        <div className="p-6 space-y-4">
-          <h1 className="text-2xl font-bold">{t('actionPlan.title')}</h1>
-
-          <div className="rounded-[28px] border border-yellow-200 bg-yellow-50 p-6 shadow-sm">
+    return renderAuditShell(
+        <div className="space-y-4">
+          <div className="rounded-md border border-yellow-200 bg-yellow-50 p-6 shadow-sm">
             <h2 className="mb-2 text-lg font-semibold">
               {t('actionPlan.noOperationalStandards')}
             </h2>
@@ -1087,43 +1099,31 @@ function PlanAccionPageContent() {
             </p>
           </div>
         </div>
-      </AppLayout>
     );
   }
 
-  return (
-    <AppLayout>
+  const metricActions = (
+    <div className="grid min-w-[320px] grid-cols-1 gap-3 md:grid-cols-3">
+      <MetricCard title={t('common.all')} value={metrics.total} tone="slate" />
+      <MetricCard title={t('actionPlan.statuses.inProgress')} value={metrics.progreso} tone="blue" />
+      <MetricCard
+        title={t('actionPlan.pendingApproval')}
+        value={metrics.aprobacionPendiente}
+        tone="amber"
+      />
+    </div>
+  );
+
+  return renderAuditShell(
       <div className="mx-auto max-w-[1700px] space-y-6">
-        <section className="overflow-hidden rounded-[34px] border border-white/70 bg-[linear-gradient(135deg,#ffffff_0%,#f8fbff_55%,#edf4ff_100%)] p-6 shadow-[0_20px_60px_rgba(15,23,42,0.08)]">
-          <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
-            <div className="max-w-4xl">
-              <div className="flex flex-wrap items-center gap-3">
-                <span className="rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-indigo-700">
-                  {t('actionPlan.eyebrow')}
-                </span>
-                <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
-                  {t('actionPlan.badge')}
-                </span>
-              </div>
-
-              <h1 className="mt-4 text-4xl font-bold tracking-tight text-slate-900 md:text-5xl">
-                {t('actionPlan.title')}
-              </h1>
-
-              <p className="mt-3 text-base leading-7 text-slate-600 md:text-lg">
-                {t('actionPlan.subtitle')}
-              </p>
-            </div>
-
-            <div className="grid min-w-[320px] grid-cols-1 gap-3 md:grid-cols-3">
-              <MetricCard title={t('common.all')} value={metrics.total} tone="slate" />
-              <MetricCard title={t('actionPlan.statuses.inProgress')} value={metrics.progreso} tone="blue" />
-              <MetricCard
-                title={t('actionPlan.pendingApproval')}
-                value={metrics.aprobacionPendiente}
-                tone="amber"
-              />
-            </div>
+        <section className="overflow-hidden rounded-md border border-[var(--tcdx-color-border)] bg-white p-5 shadow-sm">
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-indigo-700">
+              {t('actionPlan.badge')}
+            </span>
+            <span className="text-sm font-semibold text-slate-600">
+              {metrics.total} planes · {metrics.abiertos} abiertos · {metrics.bloqueados} bloqueados
+            </span>
           </div>
 
           <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-4 xl:grid-cols-5">
@@ -1612,7 +1612,7 @@ function PlanAccionPageContent() {
           </EnterpriseScrollPanel>
         )}
       </div>
-    </AppLayout>
+  , metricActions
   );
 }
 

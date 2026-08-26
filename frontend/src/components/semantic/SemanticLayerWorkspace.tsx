@@ -76,7 +76,7 @@ function statusLabel(status?: string) {
   return labels[String(status || '')] || String(status || 'Sin estado');
 }
 
-export default function SemanticLayerWorkspace() {
+export default function SemanticLayerWorkspace({ compactHeader = false }: { compactHeader?: boolean }) {
   const [role, setRole] = useState('');
   const [contracts, setContracts] = useState<Contract[]>([]);
   const [selectedId, setSelectedId] = useState('');
@@ -218,12 +218,12 @@ export default function SemanticLayerWorkspace() {
   }
 
   return (
-    <main className="min-h-full bg-[var(--tcdx-color-surface)] px-4 py-6 text-[var(--tcdx-color-text-ink)] sm:px-6">
-      <header className="border-b border-[var(--tcdx-color-border)] pb-5">
+    <section className="min-h-full text-[var(--tcdx-color-text-ink)]">
+      {!compactHeader && <header className="border-b border-[var(--tcdx-color-border)] pb-5">
         <p className="text-xs font-semibold text-[var(--tcdx-color-primary)]">Gobierno de datos</p>
         <h1 className="mt-2 text-2xl font-semibold">Capa semántica GRC</h1>
         <p className="mt-2 max-w-3xl text-sm text-[var(--tcdx-color-text-secondary)]">Administra disponibilidad, calidad, vigencia y trazabilidad de las fuentes usadas por métricas oficiales.</p>
-      </header>
+      </header>}
 
       {error && <div role="alert" className="mt-4 border border-red-300 bg-red-50 p-3 text-sm text-red-800">{error}</div>}
       {notice && <div role="status" className="mt-4 border border-emerald-300 bg-emerald-50 p-3 text-sm text-emerald-900">{notice}</div>}
@@ -337,6 +337,6 @@ export default function SemanticLayerWorkspace() {
           </form>
         </section>
       )}
-    </main>
+    </section>
   );
 }

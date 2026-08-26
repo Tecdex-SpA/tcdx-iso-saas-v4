@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import Link from 'next/link';
+import EnterpriseDomainWorkspaceShell, { type EnterpriseDomainWorkspaceKey } from '@/components/enterprise-domain/EnterpriseDomainWorkspaceShell';
 import { ApiClientError, apiRequestJson } from '@/utils/apiClient';
 import OfficialAnalyticsPanel from '@/components/math-governance/OfficialAnalyticsPanel';
 
@@ -17,6 +18,7 @@ type Phase5WorkspaceProps = {
   capabilityLabel?: string;
   analyticsDomain?: string;
   loadCollection?: boolean;
+  domainWorkspace?: EnterpriseDomainWorkspaceKey;
   children?: ReactNode;
 };
 
@@ -68,6 +70,7 @@ export default function Phase5Workspace({
   capabilityLabel,
   analyticsDomain,
   loadCollection = true,
+  domainWorkspace,
   children,
 }: Phase5WorkspaceProps) {
   const [rows, setRows] = useState<Phase5Item[]>([]);
@@ -131,20 +134,27 @@ export default function Phase5Workspace({
     }, 0);
   };
 
-  return (
-    <main className="min-h-full bg-[var(--tcdx-color-surface)] px-4 py-6 text-[var(--tcdx-color-text-ink)] sm:px-6">
-      <section className="rounded-[var(--tcdx-radius-tecdex-lg)] border border-[var(--tcdx-color-border)] bg-white p-6 shadow-[var(--tcdx-shadow-tecdex-sm)]">
+  const loadStatusPanel = (
+    <div className="rounded-[var(--tcdx-radius-tecdex-sm)] border border-[var(--tcdx-color-border)] bg-[var(--tcdx-color-surface)] px-4 py-3 text-xs text-[var(--tcdx-color-text-secondary)]">
+      <div className="font-semibold text-[var(--tcdx-color-text-primary)]">{capabilityLabel || primaryLabel}</div>
+      <div>Última carga: {lastLoadedAt || 'pendiente'}</div>
+    </div>
+  );
+
+  const workspaceContent = (
+    <div className="space-y-5">
+      {!domainWorkspace && (
+        <section className="rounded-[var(--tcdx-radius-tecdex-lg)] border border-[var(--tcdx-color-border)] bg-white p-6 shadow-[var(--tcdx-shadow-tecdex-sm)]">
         <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[var(--tcdx-color-primary)]">Gobierno analítico GRC</p>
             <h1 className="mt-2 text-2xl font-semibold">{title}</h1>
             <p className="mt-2 max-w-3xl text-sm text-[var(--tcdx-color-text-secondary)]">{description}</p>
           </div>
-          <div className="rounded-[var(--tcdx-radius-tecdex-sm)] border border-[var(--tcdx-color-border)] bg-[var(--tcdx-color-surface)] px-4 py-3 text-xs text-[var(--tcdx-color-text-secondary)]">
-            <div className="font-semibold text-[var(--tcdx-color-text-primary)]">{capabilityLabel || primaryLabel}</div>
-            <div>Última carga: {lastLoadedAt || 'pendiente'}</div>
-          </div>
+          {loadStatusPanel}
         </div>
+        </section>
+      )}
 
         {children && (
           <div className="mt-6 grid gap-4">
@@ -163,13 +173,13 @@ export default function Phase5Workspace({
         )}
 
         {loading && (
-          <div className="mt-6 rounded-[var(--tcdx-radius-tecdex-sm)] border border-dashed border-[var(--tcdx-color-border)] p-6 text-sm">
+          <div className="rounded-[var(--tcdx-radius-tecdex-sm)] border border-dashed border-[var(--tcdx-color-border)] bg-white p-6 text-sm">
             Cargando información gobernada…
           </div>
         )}
 
         {!loading && error && (
-          <div className="mt-6 rounded-[var(--tcdx-radius-tecdex-sm)] border border-red-200 bg-red-50 p-4 text-sm text-red-800" role="alert">
+          <div className="rounded-[var(--tcdx-radius-tecdex-sm)] border border-red-200 bg-red-50 p-4 text-sm text-red-800" role="alert">
             <div className="font-semibold">
               {error.code === 'TENANT_REQUIRED'
                 ? 'Selecciona una empresa'
@@ -198,13 +208,13 @@ export default function Phase5Workspace({
         )}
 
         {loadCollection && !loading && !error && rows.length === 0 && (
-          <div className="mt-6 rounded-[var(--tcdx-radius-tecdex-sm)] border border-dashed border-[var(--tcdx-color-border)] p-6 text-sm text-[var(--tcdx-color-text-secondary)]">
+          <div className="rounded-[var(--tcdx-radius-tecdex-sm)] border border-dashed border-[var(--tcdx-color-border)] bg-white p-6 text-sm text-[var(--tcdx-color-text-secondary)]">
             {emptyMessage}
           </div>
         )}
 
         {loadCollection && !loading && !error && rows.length > 0 && (
-          <div className="mt-6 overflow-x-auto rounded-[var(--tcdx-radius-tecdex-sm)] border border-[var(--tcdx-color-border)]">
+          <div className="overflow-x-auto rounded-[var(--tcdx-radius-tecdex-sm)] border border-[var(--tcdx-color-border)] bg-white">
             <table className="min-w-full divide-y divide-[var(--tcdx-color-border)] text-sm">
               <thead className="bg-[var(--tcdx-color-surface)]">
                 <tr>
@@ -262,7 +272,23 @@ export default function Phase5Workspace({
             </table>
           </div>
         )}
-      </section>
+      </div>
+  );
+
+  return (
+    <main className="min-h-full bg-[var(--tcdx-color-surface)] px-4 py-6 text-[var(--tcdx-color-text-ink)] sm:px-6">
+      {domainWorkspace ? (
+        <EnterpriseDomainWorkspaceShell
+          domain={domainWorkspace}
+          title={title}
+          description={description}
+          actions={loadStatusPanel}
+        >
+          {workspaceContent}
+        </EnterpriseDomainWorkspaceShell>
+      ) : (
+        workspaceContent
+      )}
     </main>
   );
 }

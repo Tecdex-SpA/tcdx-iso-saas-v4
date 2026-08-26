@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import AppLayout from '@/components/AppLayout';
+import EnterpriseDomainWorkspaceShell from '@/components/enterprise-domain/EnterpriseDomainWorkspaceShell';
 import DataQualityWarnings from '@/components/intelligence/DataQualityWarnings';
 import IntelligenceConfidenceBadge from '@/components/intelligence/IntelligenceConfidenceBadge';
 import IntelligenceErrorState from '@/components/intelligence/IntelligenceErrorState';
@@ -748,30 +749,17 @@ export default function IaCompliancePage() {
 
   return (
     <AppLayout>
-      <div className="tcdx-ai-compliance-refresh min-h-screen bg-[#f5f7fb] p-6 space-y-6">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-bold text-slate-900">{copy.title}</h1>
-            <p className="mt-1 text-sm text-slate-500">
-              {copy.subtitle}
-            </p>
-            {healthContext?.tenant_name && (
-              <p className="mt-2 text-sm text-slate-700">
-                {copy.company}: <span className="font-semibold">{healthContext.tenant_name}</span>
-              </p>
-            )}
-            <p className="mt-3 max-w-3xl rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-800">
-              {locale === 'en'
-                ? 'AI suggestions require human review before evidence approval, findings closure, lifecycle progress or executive reporting.'
-                : 'Las sugerencias IA requieren revisión humana antes de aprobar evidencias, cerrar hallazgos, avanzar ciclo de vida o emitir reportes ejecutivos.'}
-            </p>
-          </div>
-
-          <div className="flex flex-nowrap gap-2 overflow-x-auto">
+      <EnterpriseDomainWorkspaceShell
+        domain="intelligence"
+        eyebrow={locale === 'en' ? 'Contextual intelligence' : 'Inteligencia contextual'}
+        title={copy.title}
+        description={copy.subtitle}
+        actions={
+          <div className="flex max-w-full flex-nowrap gap-2 overflow-x-auto">
             <button
               type="button"
               onClick={loadAll}
-              className="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 whitespace-nowrap shadow-sm hover:bg-slate-50"
+              className="inline-flex min-h-10 items-center justify-center whitespace-nowrap rounded-md border border-[var(--tcdx-color-border)] bg-white px-4 text-sm font-semibold text-[var(--tcdx-color-text-ink)] shadow-sm hover:bg-[var(--tcdx-color-surface-subtle)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--tcdx-color-focus)]"
             >
               {copy.refresh}
             </button>
@@ -779,7 +767,7 @@ export default function IaCompliancePage() {
             <button
               type="button"
               onClick={() => intelligence.refresh({ bypassCache: true })}
-              className="inline-flex items-center justify-center rounded-xl border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700 whitespace-nowrap shadow-sm hover:bg-blue-100"
+              className="inline-flex min-h-10 items-center justify-center whitespace-nowrap rounded-md border border-[var(--tcdx-color-border)] bg-white px-4 text-sm font-semibold text-[var(--tcdx-color-text-ink)] shadow-sm hover:bg-[var(--tcdx-color-surface-subtle)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--tcdx-color-focus)]"
             >
               {intelligence.loading ? copy.refreshingAnalysis : copy.refreshAnalysis}
             </button>
@@ -787,11 +775,23 @@ export default function IaCompliancePage() {
             <button
               type="button"
               onClick={loadExecutiveBrief}
-              className="inline-flex items-center justify-center rounded-xl bg-violet-600 px-4 py-2 text-sm font-semibold text-white whitespace-nowrap shadow-sm hover:bg-violet-700"
+              className="inline-flex min-h-10 items-center justify-center whitespace-nowrap rounded-md bg-[var(--tcdx-color-action-primary)] px-4 text-sm font-semibold text-white shadow-sm hover:bg-[var(--tcdx-color-action-primary-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--tcdx-color-focus)]"
             >
               {briefLoading ? copy.generating : copy.executiveBrief}
             </button>
           </div>
+        }
+      >
+      <div className="tcdx-ai-compliance-refresh space-y-6">
+        <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-800">
+          {healthContext?.tenant_name && (
+            <p className="mb-1 text-amber-950">
+              {copy.company}: <span className="font-semibold">{healthContext.tenant_name}</span>
+            </p>
+          )}
+          {locale === 'en'
+            ? 'AI suggestions require human review before evidence approval, findings closure, lifecycle progress or executive reporting.'
+            : 'Las sugerencias IA requieren revisión humana antes de aprobar evidencias, cerrar hallazgos, avanzar ciclo de vida o emitir reportes ejecutivos.'}
         </div>
 
         {error && (
@@ -1146,6 +1146,7 @@ export default function IaCompliancePage() {
             </div>
         </>
       </div>
+      </EnterpriseDomainWorkspaceShell>
     </AppLayout>
   );
 }

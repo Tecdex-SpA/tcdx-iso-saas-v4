@@ -4,6 +4,7 @@ import type { ReactNode } from 'react';
 import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import AppLayout from '@/components/AppLayout';
+import EnterpriseDomainWorkspaceShell from '@/components/enterprise-domain/EnterpriseDomainWorkspaceShell';
 import { getUserFromToken } from '@/utils/auth';
 import { useTranslation } from '@/hooks/useTranslation';
 import { translateDisplayText, translateStatusLabel, translateClauseLabel } from '@/i18n/displayText';
@@ -194,40 +195,40 @@ function AuditExecutionContent() {
   if (!auditId) {
     return (
       <AppLayout>
-        <div className="p-6">{t('auditExecution.missingAuditId')}</div>
+        <EnterpriseDomainWorkspaceShell
+          domain="audit"
+          eyebrow={t('auditExecution.eyebrow')}
+          title={t('auditExecution.title')}
+          description={t('auditExecution.subtitle')}
+        >
+          <div className="rounded-md border border-dashed border-[var(--tcdx-color-border)] bg-white p-6 text-sm text-[var(--tcdx-color-text-secondary)]">
+            {t('auditExecution.missingAuditId')}
+          </div>
+        </EnterpriseDomainWorkspaceShell>
       </AppLayout>
     );
   }
 
   return (
     <AppLayout>
+      <EnterpriseDomainWorkspaceShell
+        domain="audit"
+        eyebrow={t('auditExecution.eyebrow')}
+        title={t('auditExecution.title')}
+        description={t('auditExecution.subtitle')}
+        actions={
+          <button
+            onClick={() => window.location.href = '/auditorias'}
+            className="inline-flex min-h-10 items-center rounded-md border border-[var(--tcdx-color-border)] bg-white px-4 text-sm font-semibold text-[var(--tcdx-color-text-ink)] hover:bg-[var(--tcdx-color-surface-subtle)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--tcdx-color-focus)]"
+          >
+            {t('auditExecution.backToAudits')}
+          </button>
+        }
+      >
       <div className="mx-auto max-w-[1700px] space-y-6">
-        <section className="rounded-[34px] border border-white/70 bg-white p-6 shadow-[0_20px_60px_rgba(15,23,42,0.08)]">
-          <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-            <div>
-              <span className="rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.16em] text-indigo-700">
-                {t('auditExecution.eyebrow')}
-              </span>
-
-              <h1 className="mt-4 text-4xl font-bold tracking-tight text-slate-900">
-                {t('auditExecution.title')}
-              </h1>
-
-              <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-600">
-                {t('auditExecution.subtitle')}
-              </p>
-            </div>
-
-            <button
-              onClick={() => window.location.href = '/auditorias'}
-              className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-            >
-              {t('auditExecution.backToAudits')}
-            </button>
-          </div>
-
+        <section className="rounded-md border border-[var(--tcdx-color-border)] bg-white p-5 shadow-sm">
           {audit && (
-            <div className="mt-5 grid grid-cols-2 gap-3 md:grid-cols-6">
+            <div className="grid grid-cols-2 gap-3 md:grid-cols-6">
               <Metric label="ISO" value={translateDisplayText(audit.iso || '-', locale, 'standard')} />
               <Metric label={t('auditExecution.metrics.total')} value={summary.total} />
               <Metric label={t('auditExecution.metrics.compliant')} value={summary.conformes} />
@@ -313,6 +314,7 @@ function AuditExecutionContent() {
           </section>
         )}
       </div>
+      </EnterpriseDomainWorkspaceShell>
     </AppLayout>
   );
 }

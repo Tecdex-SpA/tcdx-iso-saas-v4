@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import AppLayout from '@/components/AppLayout';
+import EnterpriseDomainWorkspaceShell from '@/components/enterprise-domain/EnterpriseDomainWorkspaceShell';
 import { getUserFromToken } from '@/utils/auth';
 import ObjectivesPanel from '@/components/objectives/ObjectivesPanel';
 import { useTranslation } from '@/hooks/useTranslation';
@@ -851,8 +852,14 @@ export default function CicloVidaPage() {
 
   return (
     <AppLayout>
+      <EnterpriseDomainWorkspaceShell
+        domain="compliance"
+        eyebrow={t('lifecycle.operationalKanban')}
+        title={t('lifecycle.title')}
+        description={t('lifecycle.subtitle')}
+      >
       <div className="mx-auto max-w-[1900px] space-y-6">
-        <div className="overflow-hidden rounded-[34px] border border-white/70 bg-[linear-gradient(135deg,#ffffff_0%,#f8fbff_55%,#edf4ff_100%)] p-6 shadow-[0_20px_60px_rgba(15,23,42,0.08)]">
+        <div className="overflow-hidden rounded-md border border-[var(--tcdx-color-border)] bg-white p-5 shadow-sm">
           <div className="flex flex-col gap-4">
             <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
               <div className="max-w-4xl">
@@ -865,11 +872,11 @@ export default function CicloVidaPage() {
                   </span>
                 </div>
 
-                <h1 className="mt-4 text-4xl font-bold tracking-tight text-slate-900 md:text-5xl">
-                  {t('lifecycle.title')}
-                </h1>
+                <h2 className="mt-4 text-xl font-bold tracking-tight text-slate-900">
+                  {t('lifecycle.realScope')}
+                </h2>
 
-                <p className="mt-3 text-base leading-7 text-slate-600 md:text-lg">
+                <p className="mt-3 text-sm leading-6 text-slate-600">
                   {t('lifecycle.subtitle')}
                 </p>
 
@@ -1779,6 +1786,7 @@ export default function CicloVidaPage() {
           </div>
         ) : null}
       </div>
+      </EnterpriseDomainWorkspaceShell>
     </AppLayout>
   );
 }
