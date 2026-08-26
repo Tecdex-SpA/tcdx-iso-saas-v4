@@ -3,7 +3,7 @@
 Actualizado: 2026-08-26
 Repositorio: `Tecdex-SpA/tcdx-iso-saas-v4`
 Remote/base `main` verificado para F6.14-A: `e6b431df521300119efaf9194d3ff4d8e56d7004`
-Fuente: repositorio `main` + handoffs runtime cerrados + evidencia runtime validada por el responsable del proyecto + cierre runtime F6.11-A + cierre runtime F6.11-B + cierre runtime F6.12-A + cierre runtime F6.13-A.
+Fuente: repositorio `main` + handoffs runtime cerrados + evidencia runtime validada por el responsable del proyecto + cierre runtime F6.11-A + cierre runtime F6.11-B + cierre runtime F6.12-A + cierre runtime F6.13-A + cierre local UI-04.
 
 ## Estado del programa
 
@@ -26,6 +26,7 @@ Fuente: repositorio `main` + handoffs runtime cerrados + evidencia runtime valid
 - PRE_UI_DATA_TRUTH_GATE: PASS.
 - PRE-UI: CLOSED.
 - UI enterprise: UI-02 COMPLETE con Etapas oficiales 1-5 COMPLETE en branch `codex/ui02-stage1-foundation` sobre HEAD local `12a1342877d806267a82e3572bd7483dcfe01fdf`. Secuencia oficial: Etapa 4 = Estados universales/Data Trust y Etapa 5 = replicacion controlada por dominios; orden real ejecutado: Domain Replication fue cerrada primero como "Etapa 4" operativa y Universal States/Data Trust se cerro posteriormente para alinear la referencia original. Arquitectura aprobada: App Shell + `RiskControlWorkspaceShell` + `EnterpriseDomainWorkspaceShell` + enterprise primitives + Universal Data States + `DataTrustIndicator`. Rutas App Router 97->97; RBAC/`mvpPermissions.ts` preservado; backend/API/BD/contratos/Math Governance/Data Trust logico sin cambios por UI-02. Validacion consolidada local PASS: lint, typecheck, sidebar/RBAC, responsive, Stage 3 Risk-Control, Stage 4/5 Domain Workspaces, `UI02_UNIVERSAL_DATA_STATES_CONTRACT_PASS`, build y git diff --check. Evidencia reutilizada: `artifacts/ui02-stage3-risk-control-workspace/`, `artifacts/ui02-stage4-enterprise-domain-workspaces/`, `artifacts/ui02-universal-data-states/`. Deuda remanente clasificada como POLISH BACKLOG; siguiente gate = siguiente bloque de Plan Maestro, no mas propagacion UI-02.
+- UI-04: REMEDIATED_AND_APPROVED_LOCAL en branch `codex/ui02-stage1-foundation` sobre HEAD `7d16d534d8f442041569783e247b6d8bd8f72456` sin commit por instruccion. Product Design review final completada: se detecto un `MAJOR` mobile/evidencia porque `Requiere atención` y las secciones Data Trust/Data Gap no quedaban visibles en las capturas objetivo; se remedio adelantando prioridades en mobile sin cambiar el orden desktop y ajustando el harness para capturar secciones `scroll_target`. Centro Ejecutivo aprobado sobre la ruta existente `/dashboard`: KPI strip, prioridades "Requiere atención", riesgo/cumplimiento, auditoría/acciones, tendencia oficial comparable y Data Trust ejecutivo reutilizando `UniversalStateBlock`, `UniversalStateBadge` y `DataTrustIndicator`. No crea `/centro-ejecutivo`, `/executive-center`, endpoint ejecutivo, scoring nuevo, source of truth nuevo, cambios backend/API/BD/IA ni cambios RBAC. Contrato focal PASS: `UI04_EXECUTIVE_COMMAND_CENTER_CONTRACT_PASS route=/dashboard routes=97->97 rbac=unchanged`. Evidencia visual PASS actualizada: `artifacts/ui04-executive-command-center/` con cinco PNG y `manifest.json`. Validacion local PASS: lint, typecheck, sidebar/RBAC, responsive, UI-04 contract, build y git diff --check. DATA_GAP documentado: si snapshots no publican histórico suficiente o Data Trust, la UI muestra `Datos insuficientes`, `No disponible`, `Sin datos` o `No calculable` sin convertir ausencia a cero.
 - Fase 6 ampliada 6.8-6.14: LOCAL_CLOSED_PENDING_RUNTIME_VALIDATION.
 - 6.8-01-HF1: CLOSED (reconciliación Observation: `grc_observations` + `grc_observation_relations` son el modelo canónico del Semantic Layer; `grcObservation.service.js` queda como fachada GRC; tabla paralela de 6.8-01 migrada/removida si existía).
 - 6.8-01-HF2: CLOSED / PASS_RUNTIME (deploy validado por el usuario en production/main `5c40dcc0cad8ff98a207ee92b6465648b1a8a3f2`; `schema_migrations` registra `20260818_f6_8_01_hf2_manual_observation_contract_bootstrap` aplicado, `grc.manual_observations@v1` existe published, `current_version_id` correcto, sin duplicados globales/versiones ni contratos tenant-specific).
@@ -118,10 +119,10 @@ El usuario realiza CI/merge/deploy y decide si un fallo requiere un work package
 
 ## Próxima acción
 
-1. Usuario revisa diff y screenshots de `UI-02` Etapa 4 en `artifacts/ui02-stage4-enterprise-domain-workspaces/`.
-2. Product Design review decide ajustes visuales finos sobre los cinco dominios enterprise antes de iniciar otra etapa UI.
-3. Usuario mantiene push/PR/CI/merge/deploy manual si corresponde.
-4. Mantener cerrados PUI-01..PUI-09, F6.8-01/F6.8-02/F6.8-03, 6.9-01..6.9-03, 6.10-01..6.10-05, F6.11-A/B, F6.12-A, F6.13-A y F6.14-A salvo evidencia objetiva nueva.
+1. UI-04 queda listo para cierre Git/revision humana sobre `artifacts/ui04-executive-command-center/`.
+2. Usuario mantiene push/PR/CI/merge/deploy manual si corresponde.
+3. No iniciar UI-05 desde este cierre.
+4. Mantener cerrados PUI-01..PUI-09, F6.8-01/F6.8-02/F6.8-03, 6.9-01..6.9-03, 6.10-01..6.10-05, F6.11-A/B, F6.12-A, F6.13-A, F6.14-A, UI-02 y UI-04 salvo evidencia objetiva nueva.
 
 ## Handoff relevante
 
@@ -173,5 +174,6 @@ El usuario realiza CI/merge/deploy y decide si un fallo requiere un work package
 - `docs/codex/handoffs/6.13-A.md`
 - `docs/codex/handoffs/6.13-A-RUNTIME-CLOSURE.md`
 - `docs/codex/handoffs/6.14-A.md`
+- `docs/codex/handoffs/UI-04.md`
 - `docs/codex/PHASE6_EXPANDED_CLOSURE.md`
 - `docs/architecture/grc_relationship_inventory.md`
