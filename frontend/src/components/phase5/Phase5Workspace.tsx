@@ -5,6 +5,7 @@ import Link from 'next/link';
 import EnterpriseDomainWorkspaceShell, { type EnterpriseDomainWorkspaceKey } from '@/components/enterprise-domain/EnterpriseDomainWorkspaceShell';
 import { ApiClientError, apiRequestJson } from '@/utils/apiClient';
 import OfficialAnalyticsPanel from '@/components/math-governance/OfficialAnalyticsPanel';
+import { DataTrustIndicator, UniversalStateBlock } from '@/components/ui/enterprise';
 
 type Phase5Item = Record<string, unknown>;
 
@@ -35,6 +36,10 @@ function isWarning(item: Phase5Item) {
   return ['stale', 'expired', 'unavailable', 'unknown'].includes(freshness) ||
     ['rejected', 'unknown'].includes(quality) ||
     ['attention', 'untrusted', 'unknown'].includes(trust);
+}
+
+function stringList(value: unknown) {
+  return Array.isArray(value) ? value.map((item) => String(item)).filter(Boolean) : [];
 }
 
 function normalizeRows(payload: unknown): Phase5Item[] {
@@ -173,24 +178,22 @@ export default function Phase5Workspace({
         )}
 
         {loading && (
-          <div className="rounded-[var(--tcdx-radius-tecdex-sm)] border border-dashed border-[var(--tcdx-color-border)] bg-white p-6 text-sm">
-            Cargando información gobernada…
-          </div>
+          <UniversalStateBlock state="loading" title="Cargando información gobernada" />
         )}
 
         {!loading && error && (
-          <div className="rounded-[var(--tcdx-radius-tecdex-sm)] border border-red-200 bg-red-50 p-4 text-sm text-red-800" role="alert">
-            <div className="font-semibold">
-              {error.code === 'TENANT_REQUIRED'
-                ? 'Selecciona una empresa'
-                : error.code === 'CAPABILITY_NOT_INCLUDED'
-                  ? 'Capacidad no incluida en el plan'
-                  : error.code === 'PERMISSION_DENIED'
-                    ? 'Permiso insuficiente'
-                    : 'No fue posible cargar la información'}
-            </div>
-            <p className="mt-1">{error.message}</p>
-            <div className="mt-3 flex flex-wrap gap-2">
+          <UniversalStateBlock
+            state={error.code === 'CAPABILITY_NOT_INCLUDED' || error.code === 'PERMISSION_DENIED' ? 'not_available' : 'error'}
+            title={error.code === 'TENANT_REQUIRED'
+              ? 'Selecciona una empresa'
+              : error.code === 'CAPABILITY_NOT_INCLUDED'
+                ? 'Capacidad no incluida en el plan'
+                : error.code === 'PERMISSION_DENIED'
+                  ? 'Permiso insuficiente'
+                  : 'No fue posible cargar la información'}
+            description={error.message}
+            action={(
+              <div className="flex flex-wrap gap-2">
               {error.code === 'TENANT_REQUIRED' && (
                 <Link className="rounded-md bg-[var(--tcdx-color-primary)] px-3 py-2 text-xs font-semibold text-white" href="/admin-saas">
                   Seleccionar empresa
@@ -203,14 +206,13 @@ export default function Phase5Workspace({
               >
                 Reintentar
               </button>
-            </div>
-          </div>
+              </div>
+            )}
+          />
         )}
 
         {loadCollection && !loading && !error && rows.length === 0 && (
-          <div className="rounded-[var(--tcdx-radius-tecdex-sm)] border border-dashed border-[var(--tcdx-color-border)] bg-white p-6 text-sm text-[var(--tcdx-color-text-secondary)]">
-            {emptyMessage}
-          </div>
+          <UniversalStateBlock state="empty" title="Sin datos" description={emptyMessage} />
         )}
 
         {loadCollection && !loading && !error && rows.length > 0 && (
@@ -237,15 +239,14 @@ export default function Phase5Workspace({
                       </td>
                     ))}
                     <td className="px-4 py-3 align-top">
-                      {isWarning(row) ? (
-                        <span className="rounded-full bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-900">
-                          Requiere atención
-                        </span>
-                      ) : (
-                        <span className="rounded-full bg-emerald-100 px-2 py-1 text-xs font-semibold text-emerald-900">
-                          Sin alerta visible
-                        </span>
-                      )}
+                      <DataTrustIndicator
+                        status={String(row.trust_status || row.quality_status || '')}
+                        coverage={typeof row.coverage === 'number' || typeof row.coverage === 'string' ? row.coverage : null}
+                        freshness={typeof row.freshness_status === 'string' ? row.freshness_status : null}
+                        source={typeof row.source_status === 'string' ? row.source_status : null}
+                        warnings={stringList(row.warnings)}
+                        label={isWarning(row) ? 'Data Trust con advertencias' : 'Data Trust'}
+                      />
                     </td>
                     <td className="px-4 py-3 align-top text-xs">
                       <div className="font-semibold">{text(row.formula_code || row.official_formula_code || row.result_code)}</div>

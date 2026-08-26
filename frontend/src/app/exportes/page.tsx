@@ -365,8 +365,9 @@ function getCoverageBadgeClass(severity?: string) {
 }
 
 function formatCoveragePct(value?: number) {
-  const n = Number(value || 0);
-  if (!Number.isFinite(n)) return '0%';
+  if (value === null || value === undefined) return 'Sin datos';
+  const n = Number(value);
+  if (!Number.isFinite(n)) return 'No disponible';
   return `${Math.round(n * 10) / 10}%`;
 }
 

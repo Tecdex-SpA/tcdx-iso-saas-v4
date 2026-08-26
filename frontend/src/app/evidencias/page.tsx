@@ -819,7 +819,11 @@ function EvidenciasPageContent() {
     return Number.isFinite(n) ? n : 0;
   };
 
-  const toPercent = (value: unknown) => `${Math.round(toNumber(value))}%`;
+  const toPercent = (value: unknown) => {
+    if (value === null || value === undefined || value === '') return 'Sin datos';
+    const n = Number(value);
+    return Number.isFinite(n) ? `${Math.round(n)}%` : 'No disponible';
+  };
 
   const parseArray = (value: unknown): string[] => {
     if (Array.isArray(value)) return value.map((item) => String(item));

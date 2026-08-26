@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react
 import Link from 'next/link';
 import { apiRequestJson, ApiClientError } from '@/utils/apiClient';
 import { getUserRoleFromToken } from '@/utils/auth';
+import { DataTrustIndicator, UniversalStateBadge, UniversalStateBlock, type UniversalDataState } from '@/components/ui/enterprise';
 
 type ContractVersion = {
   id: string;
@@ -74,6 +75,28 @@ function statusLabel(status?: string) {
     draft: 'Borrador', reviewed: 'Revisada', approved: 'Aprobada', published: 'Publicada', retired: 'Retirada', active: 'Activa',
   };
   return labels[String(status || '')] || String(status || 'Sin estado');
+}
+
+function dataTrustStatusFromPreview(preview: Preview | null) {
+  if (!preview) return null;
+  if (preview.status) return preview.status;
+  if (preview.quality?.status) return preview.quality.status;
+  return null;
+}
+
+function dataTrustState(status?: string): UniversalDataState {
+  const raw = String(status || '').toLowerCase();
+  if (['source_ready', 'fresh', 'valid', 'sufficient'].includes(raw)) return 'measured';
+  if (['source_ready_with_warnings', 'attention'].includes(raw)) return 'partial';
+  if (['insufficient_data', 'quality_failed'].includes(raw)) return 'insufficient';
+  if (['stale_source', 'stale'].includes(raw)) return 'stale';
+  if (['source_unavailable', 'unknown'].includes(raw)) return 'not_available';
+  if (['failed', 'error', 'schema_incompatible'].includes(raw)) return 'error';
+  return 'not_available';
+}
+
+function countLabel(value: number | null | undefined) {
+  return value === null || value === undefined ? 'No disponible' : String(value);
 }
 
 export default function SemanticLayerWorkspace({ compactHeader = false }: { compactHeader?: boolean }) {
@@ -225,7 +248,7 @@ export default function SemanticLayerWorkspace({ compactHeader = false }: { comp
         <p className="mt-2 max-w-3xl text-sm text-[var(--tcdx-color-text-secondary)]">Administra disponibilidad, calidad, vigencia y trazabilidad de las fuentes usadas por métricas oficiales.</p>
       </header>}
 
-      {error && <div role="alert" className="mt-4 border border-red-300 bg-red-50 p-3 text-sm text-red-800">{error}</div>}
+      {error && <UniversalStateBlock className="mt-4" state="error" title="Error en capa semántica" description={error} />}
       {notice && <div role="status" className="mt-4 border border-emerald-300 bg-emerald-50 p-3 text-sm text-emerald-900">{notice}</div>}
 
       <div className="mt-6 grid min-w-0 gap-6 xl:grid-cols-[minmax(260px,0.8fr)_minmax(0,2.2fr)]">
@@ -235,7 +258,7 @@ export default function SemanticLayerWorkspace({ compactHeader = false }: { comp
             <button type="button" onClick={() => void loadContracts()} className="min-h-10 border border-[var(--tcdx-color-border)] px-3 text-xs font-semibold">Actualizar</button>
           </div>
           {reconciliation && <p className="mt-2 text-xs text-[var(--tcdx-color-text-secondary)]">Reconciliación: {reconciliation.equivalent + reconciliation.adapted}/{reconciliation.total} contratos compatibles{reconciliation.missing ? ` · ${reconciliation.missing} pendientes` : ''}.</p>}
-          {loading ? <p className="mt-4 text-sm">Cargando fuentes…</p> : (
+          {loading ? <UniversalStateBlock className="mt-4" state="loading" title="Cargando fuentes" /> : (
             <div className="mt-3 grid gap-2">
               {contracts.map((item) => (
                 <button key={item.id} type="button" onClick={() => setSelectedId(item.id)} aria-current={selectedId === item.id ? 'page' : undefined} className={`min-h-12 border px-3 py-2 text-left text-sm ${selectedId === item.id ? 'border-[var(--tcdx-color-primary)] bg-white' : 'border-[var(--tcdx-color-border)]'}`}>
@@ -243,13 +266,13 @@ export default function SemanticLayerWorkspace({ compactHeader = false }: { comp
                   <span className="block text-xs text-[var(--tcdx-color-text-secondary)]">{statusLabel(item.status)}</span>
                 </button>
               ))}
-              {!contracts.length && <p className="text-sm text-[var(--tcdx-color-text-secondary)]">No hay fuentes configuradas.</p>}
+              {!contracts.length && <UniversalStateBlock state="empty" title="Sin datos" description="No hay fuentes configuradas." />}
             </div>
           )}
         </aside>
 
         <section className="min-w-0">
-          {!selected && !loading && <p className="text-sm">Seleccione una fuente para consultar su estado.</p>}
+          {!selected && !loading && <UniversalStateBlock state="empty" title="Sin datos" description="Seleccione una fuente para consultar su estado." />}
           {selected && (
             <>
               <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
@@ -263,9 +286,17 @@ export default function SemanticLayerWorkspace({ compactHeader = false }: { comp
               </div>
 
               <div className="mt-5 grid gap-3 sm:grid-cols-3">
-                <div className="border border-[var(--tcdx-color-border)] bg-white p-4"><p className="text-xs text-[var(--tcdx-color-text-secondary)]">Disponibilidad</p><p className="mt-1 font-semibold">{statusLabel(preview?.status || 'unknown')}</p></div>
+                <div className="border border-[var(--tcdx-color-border)] bg-white p-4"><p className="text-xs text-[var(--tcdx-color-text-secondary)]">Disponibilidad</p><p className="mt-1"><UniversalStateBadge state={dataTrustState(preview?.status || 'unknown')} label={statusLabel(preview?.status || 'unknown')} /></p></div>
                 <div className="border border-[var(--tcdx-color-border)] bg-white p-4"><p className="text-xs text-[var(--tcdx-color-text-secondary)]">Cobertura</p><p className="mt-1 font-semibold">{preview?.sufficiency ? `${Math.round(preview.sufficiency.coverage * 100)}%` : 'Sin medición'}</p></div>
-                <div className="border border-[var(--tcdx-color-border)] bg-white p-4"><p className="text-xs text-[var(--tcdx-color-text-secondary)]">Calidad y vigencia</p><p className="mt-1 font-semibold">{preview ? `${statusLabel(preview.quality?.status)} · ${statusLabel(preview.freshness?.status)}` : 'Sin medición'}</p></div>
+                <DataTrustIndicator
+                  variant="panel"
+                  status={dataTrustStatusFromPreview(preview)}
+                  confidence={preview?.quality?.score ?? null}
+                  coverage={preview?.sufficiency?.coverage ?? null}
+                  freshness={preview?.freshness?.status ? statusLabel(preview.freshness.status) : null}
+                  warnings={preview?.warnings?.map((warning) => typeof warning === 'string' ? warning : warning.message || warning.code || null) || null}
+                  label="Calidad y vigencia"
+                />
               </div>
 
               {canManage && currentVersion && (
@@ -294,7 +325,7 @@ export default function SemanticLayerWorkspace({ compactHeader = false }: { comp
               {preview && (
                 <div className="mt-6 border-t border-[var(--tcdx-color-border)] pt-5">
                   <h3 className="text-base font-semibold">Resultado de validación</h3>
-                  <p className="mt-2 text-sm">{statusLabel(preview.status)}. {preview.sufficiency?.usable_rows || 0} de {preview.sufficiency?.sample_size || 0} registros utilizables.</p>
+                  <p className="mt-2 text-sm">{statusLabel(preview.status)}. {countLabel(preview.sufficiency?.usable_rows)} de {countLabel(preview.sufficiency?.sample_size)} registros utilizables.</p>
                   {preview.warnings?.length ? <ul className="mt-3 list-disc pl-5 text-sm">{preview.warnings.map((warning, index) => <li key={index}>{typeof warning === 'string' ? warning : `${warning.field || 'Fuente'}: ${warning.message || warning.code}`}</li>)}</ul> : null}
                 </div>
               )}
