@@ -278,7 +278,7 @@ function AuditoriasWorkspaceContent() {
             </p>
           </div>
 
-          <div className="flex gap-2 overflow-x-auto p-3 tcdx-scrollbar">
+          <div className="enterprise-tab-scroll flex gap-2 overflow-x-auto p-3 tcdx-scrollbar" aria-label="Vistas de auditoría">
             {availableTabs.map((tab) => {
               const active = activeView === tab.value;
 
@@ -288,7 +288,7 @@ function AuditoriasWorkspaceContent() {
                   type="button"
                   onClick={() => setActiveView(tab.value)}
                   aria-current={active ? 'page' : undefined}
-                  className={`min-h-11 flex-none whitespace-nowrap rounded-[var(--tcdx-radius-tecdex-sm)] px-4 py-2 text-sm font-black transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--tcdx-color-primary)] ${
+                  className={`min-h-11 flex-none whitespace-nowrap rounded-[var(--tcdx-radius-tecdex-sm)] px-4 py-2 text-sm font-black transition focus-visible:ring-2 focus-visible:ring-[var(--tcdx-color-primary)] ${
                     active
                       ? 'bg-[var(--tcdx-color-primary)] text-white shadow-sm'
                       : 'border border-[var(--tcdx-color-border)] bg-white text-[var(--tcdx-color-text-secondary)] hover:bg-[var(--tcdx-color-surface-muted)] hover:text-[var(--tcdx-color-text-ink)]'

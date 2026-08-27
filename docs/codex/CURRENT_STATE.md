@@ -104,6 +104,10 @@ Fuente: repositorio `main` + handoffs runtime cerrados + evidencia runtime valid
 - PUI-07-HF5 se ejecutó sobre branch `fix/pui-07-hf5-severity-index-schema-compatibility` desde base local `44821f736f73efaf417683991faef63b7a8a43fd`.
 - PUI-07-HF5 corrigió la incompatibilidad física remanente de `F5_5_SEVERITY_INDEX`: el adapter canónico `audit_findings_actions` ya no consulta `grc_readiness_snapshots.source_as_of`, columna inexistente en el schema productor; usa sólo `period_start`, `period_end` y `generated_at`.
 - PUI-07-HF5 versionó `audit_findings_actions` v8→v9 porque el payload gobernado eliminó `source_as_of` de `columns`, `source_time_fields` y `valid_from_fields`; no modificó fórmulas, pesos, unidades, precisión, Maturity, GRC Health, Data Trust ni Package3.
+- UI-09 se ejecutó sobre branch `codex/ui02-stage1-foundation` desde base local `f401f7ba3d1dbdb0a76b3f446d73b288aeaaba4e`.
+- UI-09 cerró responsive/accesibilidad focal final: focus visible global, contraste de disabled, affordance de tabs horizontales, regiones de tabla scrolleables con `role=region`/`tabIndex=0`, conteo de filtros con `aria-live`, header con Escape/focus-return/roles, y ajuste focal de `/matriz-riesgo` para tabla local mobile.
+- UI-09 preservó rutas `97 -> 97`, `frontend/src/utils/mvpPermissions.ts` sin diff, Universal States, Data Trust, RBAC, tenants dinámicos, sin endpoints/mutaciones/backend nuevos y sin `null -> 0`.
+- Evidencia UI-09 generada en `artifacts/ui09-responsive-accessibility/` con 6 PNG y `manifest.json`; contrato `frontend/scripts/check-ui09-responsive-accessibility-contract.mjs` reporta `UI09_RESPONSIVE_ACCESSIBILITY_CONTRACT_PASS`.
 
 ## Ownership fijo
 
@@ -122,10 +126,10 @@ El usuario realiza CI/merge/deploy y decide si un fallo requiere un work package
 
 ## Próxima acción
 
-1. UI-07 queda listo para revision humana sobre `artifacts/ui07-enterprise-tables/`.
+1. UI-09 queda listo para revision humana sobre `artifacts/ui09-responsive-accessibility/`.
 2. Usuario mantiene push/PR/CI/merge/deploy/manual runtime validation si corresponde.
 3. No continuar al siguiente bloque desde este cierre.
-4. Mantener cerrados PUI-01..PUI-09, F6.8-01/F6.8-02/F6.8-03, 6.9-01..6.9-03, 6.10-01..6.10-05, F6.11-A/B, F6.12-A, F6.13-A, F6.14-A, UI-02, UI-04, UI-05 material, UI-06 y UI-07 salvo evidencia objetiva nueva.
+4. Mantener cerrados PUI-01..PUI-09, F6.8-01/F6.8-02/F6.8-03, 6.9-01..6.9-03, 6.10-01..6.10-05, F6.11-A/B, F6.12-A, F6.13-A, F6.14-A, UI-02, UI-04, UI-05 material, UI-06, UI-07 y UI-09 salvo evidencia objetiva nueva.
 
 ## Handoff relevante
 
@@ -180,5 +184,6 @@ El usuario realiza CI/merge/deploy y decide si un fallo requiere un work package
 - `docs/codex/handoffs/UI-04.md`
 - `docs/codex/handoffs/UI-06.md`
 - `docs/codex/handoffs/UI-07.md`
+- `docs/codex/handoffs/UI-09.md`
 - `docs/codex/PHASE6_EXPANDED_CLOSURE.md`
 - `docs/architecture/grc_relationship_inventory.md`

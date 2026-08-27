@@ -755,11 +755,11 @@ export default function IaCompliancePage() {
         title={copy.title}
         description={copy.subtitle}
         actions={
-          <div className="flex max-w-full flex-nowrap gap-2 overflow-x-auto">
+          <div className="enterprise-tab-scroll flex max-w-full flex-nowrap gap-2 overflow-x-auto tcdx-scrollbar" aria-label="Acciones de IA Compliance">
             <button
               type="button"
               onClick={loadAll}
-              className="inline-flex min-h-10 items-center justify-center whitespace-nowrap rounded-md border border-[var(--tcdx-color-border)] bg-white px-4 text-sm font-semibold text-[var(--tcdx-color-text-ink)] shadow-sm hover:bg-[var(--tcdx-color-surface-subtle)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--tcdx-color-focus)]"
+              className="inline-flex min-h-10 items-center justify-center whitespace-nowrap rounded-md border border-[var(--tcdx-color-border)] bg-white px-4 text-sm font-semibold text-[var(--tcdx-color-text-ink)] shadow-sm hover:bg-[var(--tcdx-color-surface-subtle)] focus-visible:ring-2 focus-visible:ring-[var(--tcdx-color-focus)]"
             >
               {copy.refresh}
             </button>
@@ -767,7 +767,7 @@ export default function IaCompliancePage() {
             <button
               type="button"
               onClick={() => intelligence.refresh({ bypassCache: true })}
-              className="inline-flex min-h-10 items-center justify-center whitespace-nowrap rounded-md border border-[var(--tcdx-color-border)] bg-white px-4 text-sm font-semibold text-[var(--tcdx-color-text-ink)] shadow-sm hover:bg-[var(--tcdx-color-surface-subtle)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--tcdx-color-focus)]"
+              className="inline-flex min-h-10 items-center justify-center whitespace-nowrap rounded-md border border-[var(--tcdx-color-border)] bg-white px-4 text-sm font-semibold text-[var(--tcdx-color-text-ink)] shadow-sm hover:bg-[var(--tcdx-color-surface-subtle)] focus-visible:ring-2 focus-visible:ring-[var(--tcdx-color-focus)]"
             >
               {intelligence.loading ? copy.refreshingAnalysis : copy.refreshAnalysis}
             </button>
@@ -775,7 +775,7 @@ export default function IaCompliancePage() {
             <button
               type="button"
               onClick={loadExecutiveBrief}
-              className="inline-flex min-h-10 items-center justify-center whitespace-nowrap rounded-md bg-[var(--tcdx-color-action-primary)] px-4 text-sm font-semibold text-white shadow-sm hover:bg-[var(--tcdx-color-action-primary-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--tcdx-color-focus)]"
+              className="inline-flex min-h-10 items-center justify-center whitespace-nowrap rounded-md bg-[var(--tcdx-color-primary)] px-4 text-sm font-semibold text-white shadow-sm hover:bg-[var(--tcdx-color-primary-hover)] focus-visible:ring-2 focus-visible:ring-[var(--tcdx-color-focus)]"
             >
               {briefLoading ? copy.generating : copy.executiveBrief}
             </button>

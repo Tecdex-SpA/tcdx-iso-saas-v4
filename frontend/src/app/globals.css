@@ -205,14 +205,15 @@ a:focus-visible,
 input:focus-visible,
 select:focus-visible,
 textarea:focus-visible {
-  outline: none;
+  outline: 2px solid rgba(240, 114, 29, 0.82);
+  outline-offset: 2px;
   box-shadow: var(--tcdx-shadow-tecdex-focus);
 }
 
 button:disabled,
 [aria-disabled="true"] {
   cursor: not-allowed;
-  opacity: 0.62;
+  opacity: 0.74;
 }
 
 button,
@@ -440,6 +441,12 @@ a[class*="flex"] {
   box-shadow: none;
 }
 
+.enterprise-table [data-ui09-scroll-region]:focus-visible {
+  outline: 2px solid rgba(240, 114, 29, 0.82);
+  outline-offset: -2px;
+  box-shadow: inset 0 0 0 2px rgba(240, 114, 29, 0.22);
+}
+
 .enterprise-table :is(th, td) {
   height: 44px;
   padding-inline: 0.75rem;
@@ -478,6 +485,26 @@ a[class*="flex"] {
 .enterprise-table tbody tr[data-selected="true"] {
   background: rgba(240, 114, 29, 0.08);
   box-shadow: inset 3px 0 0 var(--tcdx-color-primary);
+}
+
+.enterprise-tab-scroll {
+  position: relative;
+}
+
+.enterprise-tab-scroll::after {
+  content: "";
+  position: absolute;
+  inset-block: 1px;
+  right: 1px;
+  width: 2rem;
+  pointer-events: none;
+  border-radius: 0 var(--tcdx-radius-tecdex-md) var(--tcdx-radius-tecdex-md) 0;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0), var(--tcdx-color-white) 78%);
+}
+
+.enterprise-tab-scroll:focus-within {
+  outline: 2px solid rgba(240, 114, 29, 0.72);
+  outline-offset: 2px;
 }
 
 .enterprise-button-primary,
@@ -876,7 +903,11 @@ a[class*="flex"] {
 
 .tcdx-premium-view :is(button, a)[disabled],
 .tcdx-premium-view button:disabled {
+  border-color: var(--tcdx-color-border) !important;
+  background: var(--tcdx-color-surface-muted) !important;
   box-shadow: none !important;
+  color: var(--tcdx-color-text-secondary) !important;
+  opacity: 0.82 !important;
 }
 
 .tcdx-premium-view [class*="border-dashed"] {
@@ -1124,8 +1155,15 @@ a[class*="flex"] {
 .tcdx-reports-refresh :is(button, a, input, select, textarea):focus-visible,
 .tcdx-ai-compliance-refresh :is(button, a, input, select, textarea):focus-visible,
 .tcdx-settings-refresh :is(button, a, input, select, textarea):focus-visible {
-  outline: none !important;
+  outline: 2px solid rgba(240, 114, 29, 0.82) !important;
+  outline-offset: 2px !important;
   box-shadow: var(--tcdx-shadow-tecdex-focus) !important;
+}
+
+@media (min-width: 1024px) {
+  .enterprise-tab-scroll::after {
+    display: none;
+  }
 }
 
 .tcdx-reports-refresh :is([class*="bg-blue-50"], [class*="bg-indigo-50"], [class*="bg-violet-50"], [class*="bg-sky-50"]),

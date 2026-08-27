@@ -46,34 +46,41 @@ const viewCopy: Record<RiskControlViewKey, { titleKey: string; descriptionKey: s
 export function RiskControlWorkspaceTabs({ compact = false }: { compact?: boolean }) {
   const pathname = usePathname();
   const { t } = useTranslation();
+  const scrollHelpId = 'risk-control-tabs-scroll-help';
 
   return (
-    <nav
-      aria-label={t('riskControlWorkspace.tabsLabel')}
-      className="overflow-x-auto rounded-[var(--tcdx-radius-tecdex-md)] border border-[var(--tcdx-color-border)] bg-white shadow-[var(--tcdx-shadow-card)] tcdx-scrollbar"
-    >
-      <div className="flex min-w-max items-center gap-1 p-1" role="list">
-        {RISK_CONTROL_WORKSPACE_TABS.map((tab) => {
-          const active = pathname === tab.href || pathname.startsWith(`${tab.href}/`);
-          return (
-            <Link
-              key={tab.href}
-              href={tab.href}
-              aria-current={active ? 'page' : undefined}
-              className={[
-                'min-h-11 flex-none whitespace-nowrap rounded-[var(--tcdx-radius-tecdex-sm)] px-3 py-2 text-xs font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--tcdx-color-primary)] sm:px-4 sm:text-sm',
-                compact ? 'px-3 text-xs sm:text-sm' : '',
-                active
-                  ? 'bg-[var(--tcdx-color-primary)] text-white shadow-sm'
-                  : 'text-[var(--tcdx-color-text-secondary)] hover:bg-[var(--tcdx-color-surface-muted)] hover:text-[var(--tcdx-color-text-ink)]',
-              ].join(' ')}
-            >
-              {t(tab.labelKey)}
-            </Link>
-          );
-        })}
-      </div>
-    </nav>
+    <>
+      <span id={scrollHelpId} className="sr-only">
+        Las pestañas pueden desplazarse horizontalmente en pantallas estrechas.
+      </span>
+      <nav
+        aria-describedby={scrollHelpId}
+        aria-label={t('riskControlWorkspace.tabsLabel')}
+        className="enterprise-tab-scroll overflow-x-auto rounded-[var(--tcdx-radius-tecdex-md)] border border-[var(--tcdx-color-border)] bg-white shadow-[var(--tcdx-shadow-card)] tcdx-scrollbar"
+      >
+        <div className="flex min-w-max items-center gap-1 p-1" role="list">
+          {RISK_CONTROL_WORKSPACE_TABS.map((tab) => {
+            const active = pathname === tab.href || pathname.startsWith(`${tab.href}/`);
+            return (
+              <Link
+                key={tab.href}
+                href={tab.href}
+                aria-current={active ? 'page' : undefined}
+                className={[
+                  'min-h-11 flex-none whitespace-nowrap rounded-[var(--tcdx-radius-tecdex-sm)] px-3 py-2 text-xs font-bold transition focus-visible:ring-2 focus-visible:ring-[var(--tcdx-color-primary)] sm:px-4 sm:text-sm',
+                  compact ? 'px-3 text-xs sm:text-sm' : '',
+                  active
+                    ? 'bg-[var(--tcdx-color-primary)] text-white shadow-sm'
+                    : 'text-[var(--tcdx-color-text-secondary)] hover:bg-[var(--tcdx-color-surface-muted)] hover:text-[var(--tcdx-color-text-ink)]',
+                ].join(' ')}
+              >
+                {t(tab.labelKey)}
+              </Link>
+            );
+          })}
+        </div>
+      </nav>
+    </>
   );
 }
 

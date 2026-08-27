@@ -27,7 +27,10 @@ export default function EnterpriseFilterBar({
       {(actions || count) && (
         <div className="flex min-w-0 flex-wrap items-center gap-2 lg:justify-end">
           {count && (
-            <div className="rounded-[var(--tcdx-radius-tecdex-sm)] bg-[var(--tcdx-color-surface-muted)] px-3 py-2 text-xs font-semibold text-[var(--tcdx-color-text-secondary)]">
+            <div
+              aria-live="polite"
+              className="rounded-[var(--tcdx-radius-tecdex-sm)] bg-[var(--tcdx-color-surface-muted)] px-3 py-2 text-xs font-semibold text-[var(--tcdx-color-text-secondary)]"
+            >
               {count}
             </div>
           )}
