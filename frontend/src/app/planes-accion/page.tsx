@@ -5,6 +5,7 @@ import MvpViewShell from '@/components/mvp/MvpViewShell';
 export default function PlanesAccionPage() {
   return (
     <MvpViewShell
+      domainWorkspace="audit"
       eyebrow="Gestión operacional"
       title="Planes de acción"
       description="Seguimiento de planes reales y acciones recomendadas, con revisión humana antes de convertir sugerencias en trabajo operativo."

@@ -1,29 +1,20 @@
-'use client';
-
-import MvpViewShell from '@/components/mvp/MvpViewShell';
+import { Suspense } from 'react';
+import AppLayout from '@/components/AppLayout';
+import RiskRegisterWorkspace from '@/components/risk-control/RiskRegisterWorkspace';
 
 export default function RiesgosPage() {
   return (
-    <MvpViewShell
-      eyebrow="Gestión operacional"
-      title="Riesgos"
-      description="Entrada operacional para matriz de riesgos, simulación de riesgo operacional y riesgos asociados a activos del tenant."
-      links={[
-        {
-          href: '/matriz-riesgo',
-          title: 'Matriz de riesgos',
-          description: 'Heatmap ISO, priorización por impacto/probabilidad y simulación operativa Beta-PERT.',
-          feature: 'risks.functional_subflows.read',
-          tone: 'amber',
-        },
-        {
-          href: '/activos',
-          title: 'Activos',
-          description: 'Inventario, criticidad y riesgos asociados a activos, amenazas y controles.',
-          feature: 'risks.functional_subflows.read',
-          tone: 'slate',
-        },
-      ]}
-    />
+    <AppLayout>
+      <Suspense
+        fallback={
+          <div className="space-y-4" aria-busy="true">
+            <div className="h-28 animate-pulse rounded-[var(--tcdx-radius-tecdex-lg)] bg-[var(--tcdx-color-surface-muted)]" />
+            <div className="h-48 animate-pulse rounded-[var(--tcdx-radius-tecdex-lg)] bg-[var(--tcdx-color-surface-muted)]" />
+          </div>
+        }
+      >
+        <RiskRegisterWorkspace />
+      </Suspense>
+    </AppLayout>
   );
 }

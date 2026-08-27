@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import AppLayout from '@/components/AppLayout';
+import EnterpriseDomainWorkspaceShell from '@/components/enterprise-domain/EnterpriseDomainWorkspaceShell';
 import { useTranslation } from '@/hooks/useTranslation';
 import { getComplianceStatusLabel } from '@/i18n/statusLabels';
 import { translateDisplayText, translateClauseLabel } from '@/i18n/displayText';
@@ -1175,16 +1176,16 @@ export default function DiagnosticoPage() {
 
   return (
     <AppLayout>
-      <div className="space-y-6 px-3 py-4 sm:p-6">
-        <section className="rounded-lg border border-slate-200 bg-[linear-gradient(135deg,#ffffff_0%,#f8fbff_55%,#edf4ff_100%)] p-6 shadow-[0_18px_50px_rgba(15,23,42,0.08)]">
+      <EnterpriseDomainWorkspaceShell
+        domain="compliance"
+        eyebrow="Diagnóstico ISO"
+        title={copy.title}
+        description="Evaluación rápida de controles, brechas y preparación operativa por norma contratada."
+      >
+      <div className="space-y-6">
+        <section className="rounded-md border border-slate-200 bg-white p-5 shadow-sm">
           <div className="flex flex-wrap justify-between items-center gap-4">
-            <div>
-              <p className="text-xs font-bold uppercase tracking-[0.18em] text-blue-700">Diagnóstico ISO</p>
-              <h1 className="mt-2 text-3xl font-bold text-slate-950">{copy.title}</h1>
-              <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-                Evaluación rápida de controles, brechas y preparación operativa por norma contratada.
-              </p>
-            </div>
+            <div className="text-sm font-semibold text-slate-700">Alcance del diagnóstico</div>
 
             <div className="flex gap-2 flex-wrap">
             <select
@@ -1399,6 +1400,7 @@ export default function DiagnosticoPage() {
           )}
         </div>
       </div>
+      </EnterpriseDomainWorkspaceShell>
     </AppLayout>
   );
 }

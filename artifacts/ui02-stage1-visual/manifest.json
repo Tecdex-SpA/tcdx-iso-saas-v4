@@ -1,0 +1,42 @@
+{
+  "createdAt": "2026-08-24T19:25:23.160Z",
+  "server": "next start :3001",
+  "shots": [
+    {
+      "name": "dashboard-1440",
+      "url": "/dashboard",
+      "width": 1440,
+      "height": 900,
+      "status": 200,
+      "file": "/Users/andresbarouh/repos/tcdx-iso-saas-v4/artifacts/ui02-stage1-visual/dashboard-1440.png",
+      "title": "TCDX Compliance | ISO SaaS"
+    },
+    {
+      "name": "dashboard-1280",
+      "url": "/dashboard",
+      "width": 1280,
+      "height": 832,
+      "status": 200,
+      "file": "/Users/andresbarouh/repos/tcdx-iso-saas-v4/artifacts/ui02-stage1-visual/dashboard-1280.png",
+      "title": "TCDX Compliance | ISO SaaS"
+    },
+    {
+      "name": "dashboard-mobile-390",
+      "url": "/dashboard",
+      "width": 390,
+      "height": 844,
+      "status": 200,
+      "file": "/Users/andresbarouh/repos/tcdx-iso-saas-v4/artifacts/ui02-stage1-visual/dashboard-mobile-390.png",
+      "title": "TCDX Compliance | ISO SaaS"
+    },
+    {
+      "name": "riesgos-1440",
+      "url": "/riesgos",
+      "width": 1440,
+      "height": 900,
+      "status": 200,
+      "file": "/Users/andresbarouh/repos/tcdx-iso-saas-v4/artifacts/ui02-stage1-visual/riesgos-1440.png",
+      "title": "TCDX Compliance | ISO SaaS"
+    }
+  ]
+}

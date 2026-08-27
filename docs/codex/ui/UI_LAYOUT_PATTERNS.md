@@ -1,19 +1,30 @@
-# UI_LAYOUT_PATTERNS
+# UI LAYOUT PATTERNS
 
-## Patron A — Centro Ejecutivo
-Sidebar + header + KPI strip + charts principales + actividad/alertas.
+## A. Centro Ejecutivo
 
-## Patron B — Workspace operacional
-Sidebar + titulo/tabs + filtros + tabla principal + panel lateral de detalle.
+App shell + header contextual + KPI strip + franja de prioridades + tendencias relevantes + alertas/actividad + Data Trust. No usar un mosaico de graficos decorativos.
 
-## Patron C — Dashboard analitico
-KPI strip + matriz/heatmap + distribucion + tendencia temporal.
+## B. Workspace operacional
 
-## Patron D — Cumplimiento
-Tabs de dominio + filtros + tabla de obligaciones/controles + detalle contextual.
+App shell + workspace header + acciones + KPIs compactos + tabs + filter bar + tabla principal + drawer de detalle. Es el patron de referencia para Riesgo y Control.
 
-## Patron E — Tablas y graficos
-Tabla avanzada como superficie primaria; graficos secundarios para explicar distribucion/tendencia.
+## C. Analisis GRC
 
-## Restriccion
-No sustituir estos patrones por mosaicos genericos de cards. La eleccion del patron depende de la funcion de la vista.
+Header + contexto/filtros + KPIs + una visualizacion principal + tabla o desglose verificable + Data Trust. Heatmap, matriz o tendencia solo cuando responde una pregunta operacional.
+
+## D. Cumplimiento e ISO
+
+Contexto normativo + tabs + filtros compartidos + obligaciones/controles/evidencias + detalle trazable. Los estados de cumplimiento y Data Trust permanecen separados.
+
+## E. Detail view
+
+Resumen + clasificacion + relaciones + controles + evidencias + acciones + actividad + IA contextual. Usar drawer si preservar la lista mejora el flujo; usar ruta dedicada cuando el objeto requiere deep link o trabajo extenso.
+
+## Responsive
+
+- 1440: shell completo y drawer persistente cuando hay espacio.
+- 1280: reducir anchos y columnas secundarias; conservar acciones principales.
+- Tablet: sidebar colapsable, filtros resumidos, drawer overlay y tabla con scroll/columnas priorizadas.
+- Mobile: consulta y tareas basicas mediante lista adaptada o detalle; no comprimir una tabla enterprise completa.
+
+No sustituir estos patrones por landing pages, hero sections ni mosaicos genericos de cards.

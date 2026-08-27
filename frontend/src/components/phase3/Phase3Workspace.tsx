@@ -3,6 +3,9 @@
 import Link from 'next/link';
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import AppLayout from '@/components/AppLayout';
+import EnterpriseDomainWorkspaceShell, { type EnterpriseDomainWorkspaceKey } from '@/components/enterprise-domain/EnterpriseDomainWorkspaceShell';
+import RiskControlWorkspaceShell from '@/components/risk-control/RiskControlWorkspaceShell';
+import { EnterpriseFilterBar, EnterpriseRowActions, EnterpriseTableShell } from '@/components/ui/enterprise';
 import Phase3Nav from './Phase3Nav';
 import {
   Phase3Entity360,
@@ -551,9 +554,11 @@ function columnLabel(config: ViewConfig, column: string) {
 export default function Phase3Workspace({
   view,
   entityId,
+  domainWorkspace,
 }: {
   view: ViewKey;
   entityId?: string;
+  domainWorkspace?: EnterpriseDomainWorkspaceKey;
 }) {
   const config = configs[view];
   const [meta, setMeta] = useState<Phase3Meta | null>(null);
@@ -643,63 +648,79 @@ export default function Phase3Workspace({
   }
 
   if (loading) {
+    const loadingContent = (
+      <section aria-busy="true" className="space-y-5">
+        {view === 'quantitative_risks' ? <RiskControlWorkspaceShell activeView="quantitative" compactHeader /> : !domainWorkspace && <Phase3Nav />}
+        <div className="h-32 animate-pulse rounded-[var(--tcdx-radius-tecdex-lg)] bg-[var(--tcdx-color-surface-alt)]" />
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+          {[0, 1, 2].map(item => (
+            <div
+              key={item}
+              className="h-28 animate-pulse rounded-[var(--tcdx-radius-tecdex-lg)] bg-[var(--tcdx-color-surface-alt)]"
+            />
+          ))}
+        </div>
+      </section>
+    );
+
     return (
       <AppLayout>
-        <section aria-busy="true" className="space-y-5">
-          <Phase3Nav />
-          <div className="h-32 animate-pulse rounded-[var(--tcdx-radius-tecdex-lg)] bg-[var(--tcdx-color-surface-alt)]" />
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-            {[0, 1, 2].map(item => (
-              <div
-                key={item}
-                className="h-28 animate-pulse rounded-[var(--tcdx-radius-tecdex-lg)] bg-[var(--tcdx-color-surface-alt)]"
-              />
-            ))}
-          </div>
-        </section>
+        {domainWorkspace ? (
+          <EnterpriseDomainWorkspaceShell domain={domainWorkspace} title={config.title} description={config.description}>
+            {loadingContent}
+          </EnterpriseDomainWorkspaceShell>
+        ) : (
+          loadingContent
+        )}
       </AppLayout>
     );
   }
 
-  return (
-    <AppLayout>
-    <section className="space-y-6">
-      <nav aria-label="Migas de pan" className="text-sm text-[var(--tcdx-color-text-secondary)]">
-        <Link href="/dashboard" className="hover:text-[var(--tcdx-color-primary)]">Inicio</Link>
-        <span aria-hidden="true" className="mx-2">/</span>
-        <Link href="/operaciones-grc" className="hover:text-[var(--tcdx-color-primary)]">Operación GRC</Link>
-        {view !== 'operations' && (
-          <>
-            <span aria-hidden="true" className="mx-2">/</span>
-            <span aria-current="page">{config.title}</span>
-          </>
-        )}
-      </nav>
-      <Phase3Nav />
+  const createRecordAction = !entityId && !config.overview && canManage ? (
+    <button
+      type="button"
+      onClick={() => setFormOpen(value => !value)}
+      aria-expanded={formOpen}
+      className="min-h-10 rounded-[var(--tcdx-radius-tecdex-sm)] bg-[var(--tcdx-color-primary)] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[var(--tcdx-color-primary-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--tcdx-color-primary)]"
+    >
+      {formOpen ? 'Cerrar formulario' : 'Nuevo registro'}
+    </button>
+  ) : null;
 
-      <header className="flex flex-col gap-4 border-b border-[var(--tcdx-color-border)] pb-5 lg:flex-row lg:items-end lg:justify-between">
-        <div className="min-w-0">
-          <p className="text-xs font-semibold uppercase tracking-normal text-[var(--tcdx-color-primary)]">
-            Operación y GRC
-          </p>
-          <h1 className="mt-1 text-2xl font-bold text-[var(--tcdx-color-text-primary)]">
-            {config.title}
-          </h1>
-          <p className="mt-2 max-w-3xl text-sm text-[var(--tcdx-color-text-secondary)]">
-            {config.description}
-          </p>
-        </div>
-        {!entityId && !config.overview && canManage && (
-          <button
-            type="button"
-            onClick={() => setFormOpen(value => !value)}
-            aria-expanded={formOpen}
-            className="min-h-10 rounded-[var(--tcdx-radius-tecdex-sm)] bg-[var(--tcdx-color-primary)] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[var(--tcdx-color-primary-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--tcdx-color-primary)]"
-          >
-            {formOpen ? 'Cerrar formulario' : 'Nuevo registro'}
-          </button>
-        )}
-      </header>
+  const workspaceContent = (
+    <section className="space-y-6">
+      {view === 'quantitative_risks' && <RiskControlWorkspaceShell activeView="quantitative" compactHeader />}
+      {!domainWorkspace && (
+        <>
+          <nav aria-label="Migas de pan" className="text-sm text-[var(--tcdx-color-text-secondary)]">
+            <Link href="/dashboard" className="hover:text-[var(--tcdx-color-primary)]">Inicio</Link>
+            <span aria-hidden="true" className="mx-2">/</span>
+            <Link href="/operaciones-grc" className="hover:text-[var(--tcdx-color-primary)]">Operación GRC</Link>
+            {view !== 'operations' && (
+              <>
+                <span aria-hidden="true" className="mx-2">/</span>
+                <span aria-current="page">{config.title}</span>
+              </>
+            )}
+          </nav>
+          <Phase3Nav />
+
+          <header className="flex flex-col gap-4 border-b border-[var(--tcdx-color-border)] pb-5 lg:flex-row lg:items-end lg:justify-between">
+            <div className="min-w-0">
+              <p className="text-xs font-semibold uppercase tracking-normal text-[var(--tcdx-color-primary)]">
+                Operación y GRC
+              </p>
+              <h1 className="mt-1 text-2xl font-bold text-[var(--tcdx-color-text-primary)]">
+                {config.title}
+              </h1>
+              <p className="mt-2 max-w-3xl text-sm text-[var(--tcdx-color-text-secondary)]">
+                {config.description}
+              </p>
+            </div>
+            {createRecordAction}
+          </header>
+        </>
+      )}
 
       {error && (
         <div
@@ -824,23 +845,45 @@ export default function Phase3Workspace({
               setOffset(0);
               setSearch(searchDraft.trim());
             }}
-            className="flex max-w-xl gap-2"
             role="search"
           >
-            <label className="sr-only" htmlFor={`phase3-search-${view}`}>Buscar</label>
-            <input
-              id={`phase3-search-${view}`}
-              value={searchDraft}
-              onChange={event => setSearchDraft(event.target.value)}
-              placeholder="Buscar por código o nombre"
-              className="min-h-10 min-w-0 flex-1 rounded-[var(--tcdx-radius-tecdex-sm)] border border-[var(--tcdx-border-strong)] bg-white px-3 py-2 text-sm"
-            />
-            <button
-              type="submit"
-              className="min-h-10 rounded-[var(--tcdx-radius-tecdex-sm)] border border-[var(--tcdx-border-strong)] bg-white px-4 py-2 text-sm font-semibold text-[var(--tcdx-color-text-primary)]"
+            <EnterpriseFilterBar
+              count={`${records.length} ${records.length === 1 ? 'registro' : 'registros'} en esta página`}
+              actions={
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="submit"
+                    className="min-h-10 rounded-[var(--tcdx-radius-tecdex-sm)] bg-[var(--tcdx-color-primary)] px-4 py-2 text-sm font-semibold text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--tcdx-color-primary)]"
+                  >
+                    Buscar
+                  </button>
+                  {search && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSearch('');
+                        setSearchDraft('');
+                        setOffset(0);
+                      }}
+                      className="min-h-10 rounded-[var(--tcdx-radius-tecdex-sm)] border border-[var(--tcdx-border-strong)] bg-white px-4 py-2 text-sm font-semibold text-[var(--tcdx-color-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--tcdx-color-primary)]"
+                    >
+                      Limpiar
+                    </button>
+                  )}
+                </div>
+              }
             >
-              Buscar
-            </button>
+              <label className="sm:col-span-2">
+                <span className="text-xs font-bold text-[var(--tcdx-color-text-secondary)]">Buscar</span>
+                <input
+                  id={`phase3-search-${view}`}
+                  value={searchDraft}
+                  onChange={event => setSearchDraft(event.target.value)}
+                  placeholder="Buscar por código o nombre"
+                  className="mt-1 min-h-10 w-full rounded-[var(--tcdx-radius-tecdex-sm)] border border-[var(--tcdx-border-strong)] bg-white px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--tcdx-color-primary)]"
+                />
+              </label>
+            </EnterpriseFilterBar>
           </form>
 
           {records.length === 0 ? (
@@ -853,62 +896,62 @@ export default function Phase3Workspace({
               </p>
             </div>
           ) : (
-            <div className="overflow-x-auto rounded-[var(--tcdx-radius-tecdex-lg)] border border-[var(--tcdx-color-border)] bg-white">
-              <table className="min-w-full border-collapse text-left text-sm">
-                <thead className="bg-[var(--tcdx-color-surface-alt)] text-[var(--tcdx-color-text-secondary)]">
+            <EnterpriseTableShell density="compact" maxHeight="620px">
+              <table className="min-w-[920px] w-full table-fixed text-left text-sm">
+                <thead>
                   <tr>
-                    {config.columns?.map(column => (
-                      <th key={column} scope="col" className="px-4 py-3 font-semibold">
+                    {config.columns?.map((column, index) => (
+                      <th key={column} scope="col" className={index === 0 ? 'w-[24%] px-3 py-3 font-semibold' : 'px-3 py-3 font-semibold'}>
                         {columnLabel(config, column)}
                       </th>
                     ))}
-                    {config.detailBase && <th scope="col" className="px-4 py-3 text-right">Acciones</th>}
+                    {config.detailBase && <th scope="col" className="w-[150px] px-3 py-3 text-right">Acciones</th>}
                   </tr>
                 </thead>
-                <tbody>
+                <tbody className="bg-white">
                   {records.map(record => (
                     <tr
                       key={record.id}
-                      className="border-t border-[var(--tcdx-color-border)] hover:bg-[var(--tcdx-color-surface-alt)]"
+                      className="hover:bg-[var(--tcdx-color-surface-alt)]"
                     >
                       {config.columns?.map(column => (
-                        <td key={column} className="max-w-xs px-4 py-3 text-[var(--tcdx-color-text-primary)]">
+                        <td key={column} className="max-w-xs px-3 py-3 text-[var(--tcdx-color-text-primary)]">
                           <span className="line-clamp-2" title={String(record[column] ?? '')}>
                             {valueLabel(record[column])}
                           </span>
                         </td>
                       ))}
                       {config.detailBase && (
-                        <td className="px-4 py-3">
-                          <div className="flex min-w-44 flex-col items-end gap-1">
+                        <td className="px-3 py-3">
+                          <EnterpriseRowActions className="min-w-32">
                           <Link
                             href={`${config.detailBase}/${record.id}`}
-                            className="font-semibold text-[var(--tcdx-color-primary)] hover:underline"
+                            className="rounded-[var(--tcdx-radius-tecdex-sm)] border border-[var(--tcdx-color-border)] bg-white px-2 py-1 text-xs font-semibold text-[var(--tcdx-color-primary)] hover:bg-[var(--tcdx-color-surface-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--tcdx-color-primary)]"
                           >
-                            Ver detalle
+                            Detalle
                           </Link>
                           <Link
                             href={`${config.detailBase}/${record.id}#vista-360`}
-                            className="font-semibold text-[var(--tcdx-color-primary)] hover:underline"
+                            className="rounded-[var(--tcdx-radius-tecdex-sm)] border border-[var(--tcdx-color-border)] bg-white px-2 py-1 text-xs font-semibold text-[var(--tcdx-color-primary)] hover:bg-[var(--tcdx-color-surface-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--tcdx-color-primary)]"
                           >
-                            Ver vista 360
+                            360
                           </Link>
                           {canManage && (
                             <Link
                               href={`${config.detailBase}/${record.id}#editar`}
-                              className="font-semibold text-[var(--tcdx-color-primary)] hover:underline"
+                              className="rounded-[var(--tcdx-radius-tecdex-sm)] border border-[var(--tcdx-color-border)] bg-white px-2 py-1 text-xs font-semibold text-[var(--tcdx-color-primary)] hover:bg-[var(--tcdx-color-surface-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--tcdx-color-primary)]"
                             >
                               Editar
                             </Link>
                           )}
-                          </div>
+                          </EnterpriseRowActions>
                         </td>
                       )}
                     </tr>
                   ))}
                 </tbody>
               </table>
-            </div>
+            </EnterpriseTableShell>
           )}
           <nav aria-label="Paginación" className="flex items-center justify-between gap-3">
             <button
@@ -947,6 +990,22 @@ export default function Phase3Workspace({
       )}
       <Phase3Glossary />
     </section>
+  );
+
+  return (
+    <AppLayout>
+      {domainWorkspace ? (
+        <EnterpriseDomainWorkspaceShell
+          domain={domainWorkspace}
+          title={config.title}
+          description={config.description}
+          actions={createRecordAction}
+        >
+          {workspaceContent}
+        </EnterpriseDomainWorkspaceShell>
+      ) : (
+        workspaceContent
+      )}
     </AppLayout>
   );
 }

@@ -59,7 +59,7 @@ function getResponseMessage(status: number, fallback: string) {
   return fallback;
 }
 
-export default function RecommendedActionsDashboard() {
+export default function RecommendedActionsDashboard({ compactHeader = false }: { compactHeader?: boolean }) {
   const [token, setToken] = useState<string | null>(null);
   const [tenantId, setTenantId] = useState<string | null>(null);
   const [role, setRole] = useState<string>('');
@@ -405,21 +405,33 @@ export default function RecommendedActionsDashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-[#f6f8fb] px-4 py-6 text-gray-950 lg:px-8">
-      <div className="mx-auto max-w-7xl space-y-6">
+    <div className="text-gray-950">
+      <div className="space-y-6">
         <section className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
           <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-            <div className="max-w-3xl">
-              <p className="text-xs font-semibold uppercase tracking-wide text-blue-700">
-                Inteligencia ISO operativa
-              </p>
-              <h1 className="mt-2 text-3xl font-semibold text-gray-950">
-                Acciones Recomendadas ISO
-              </h1>
-              <p className="mt-2 text-sm text-gray-600">
-                Convierte diagnosticos, riesgos, documentos y controles ISO en trabajo operativo gestionable, con revision humana antes de crear registros.
-              </p>
-            </div>
+            {!compactHeader && (
+              <div className="max-w-3xl">
+                <p className="text-xs font-semibold uppercase tracking-wide text-blue-700">
+                  Inteligencia ISO operativa
+                </p>
+                <h1 className="mt-2 text-3xl font-semibold text-gray-950">
+                  Acciones Recomendadas ISO
+                </h1>
+                <p className="mt-2 text-sm text-gray-600">
+                  Convierte diagnosticos, riesgos, documentos y controles ISO en trabajo operativo gestionable, con revision humana antes de crear registros.
+                </p>
+              </div>
+            )}
+            {compactHeader && (
+              <div className="max-w-3xl">
+                <p className="text-xs font-semibold uppercase tracking-wide text-blue-700">
+                  Bandeja de revisión
+                </p>
+                <p className="mt-2 text-sm text-gray-600">
+                  Las sugerencias se mantienen pendientes hasta que un usuario autorizado las convierta.
+                </p>
+              </div>
+            )}
             <div className="flex flex-nowrap gap-2 overflow-x-auto lg:justify-end">
               <button
                 type="button"

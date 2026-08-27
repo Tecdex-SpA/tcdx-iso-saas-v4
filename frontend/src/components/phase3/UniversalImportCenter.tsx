@@ -1,6 +1,5 @@
 'use client';
 
-import Link from 'next/link';
 import {
   ChangeEvent,
   DragEvent,
@@ -10,8 +9,8 @@ import {
   useState,
 } from 'react';
 import AppLayout from '@/components/AppLayout';
+import EnterpriseDomainWorkspaceShell from '@/components/enterprise-domain/EnterpriseDomainWorkspaceShell';
 import TcdxIcon from '@/components/icons/TcdxIcon';
-import Phase3Nav from './Phase3Nav';
 import { getApiBaseUrl, readJsonResponse } from '@/utils/apiClient';
 import { getStoredValidToken } from '@/utils/auth';
 
@@ -286,29 +285,19 @@ export default function UniversalImportCenter() {
 
   return (
     <AppLayout>
-      <main className="space-y-6">
-        <nav aria-label="Migas de pan" className="text-sm text-[var(--tcdx-color-text-secondary)]">
-          <Link href="/dashboard">Inicio</Link><span className="mx-2">/</span>
-          <Link href="/operaciones-grc">Operación GRC</Link><span className="mx-2">/</span>
-          <span aria-current="page">Importaciones</span>
-        </nav>
-        <Phase3Nav />
-
-        <header className="flex flex-col gap-3 border-b border-[var(--tcdx-color-border)] pb-5 lg:flex-row lg:items-end lg:justify-between">
-          <div className="min-w-0">
-            <p className="text-xs font-semibold uppercase text-[var(--tcdx-color-primary)]">Gestión de datos</p>
-            <h1 className="mt-1 text-2xl font-bold text-[var(--tcdx-color-text-primary)]">
-              Importaciones
-            </h1>
-            <p className="mt-2 max-w-3xl text-sm text-[var(--tcdx-color-text-secondary)]">
-              Descarga una plantilla Excel con catálogos de esta empresa, carga el archivo y revisa la previsualización antes de confirmar.
-            </p>
-          </div>
+      <EnterpriseDomainWorkspaceShell
+        domain="data"
+        eyebrow="Gestión de datos"
+        title="Importaciones"
+        description="Descarga una plantilla Excel con catálogos de esta empresa, carga el archivo y revisa la previsualización antes de confirmar."
+        actions={
           <div className="flex items-center gap-2 text-sm text-[var(--tcdx-color-text-secondary)]">
             <TcdxIcon name="shield" className="h-5 w-5" aria-hidden="true" />
             <span>Relaciones por código y correo, sin UUID</span>
           </div>
-        </header>
+        }
+      >
+        <main className="space-y-6">
 
         {error && (
           <div role="alert" className="border-l-4 border-red-600 bg-red-50 px-4 py-3 text-sm text-red-900">
@@ -625,7 +614,8 @@ export default function UniversalImportCenter() {
             </table>
           </div>
         </section>
-      </main>
+        </main>
+      </EnterpriseDomainWorkspaceShell>
     </AppLayout>
   );
 }

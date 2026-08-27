@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import AppLayout from '@/components/AppLayout';
+import EnterpriseDomainWorkspaceShell from '@/components/enterprise-domain/EnterpriseDomainWorkspaceShell';
 import { useLanguage } from '@/context/LanguageContext';
 import { getUserFromToken } from '@/utils/auth';
 import { translateDisplayText, translateClauseLabel, translateStatusLabel } from '@/i18n/displayText';
@@ -905,21 +906,19 @@ export default function SoAPage() {
 
   return (
     <AppLayout>
-      <div className="space-y-6 px-3 py-4 sm:p-6">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <p className="text-xs font-black uppercase tracking-[0.2em] text-blue-700">Statement of Applicability</p>
-            <h1 className="mt-1 text-3xl font-black text-slate-950">SoA</h1>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
-              Define aplicabilidad, exclusiones justificadas, estado de implementación, responsable y revisión para controles de seguridad y privacidad.
-            </p>
-            {isReadOnly && (
-              <div className="mt-2 text-sm font-semibold text-blue-800">
-                Modo solo lectura para auditor.
-              </div>
-            )}
+      <EnterpriseDomainWorkspaceShell
+        domain="compliance"
+        eyebrow="Statement of Applicability"
+        title="SoA"
+        description="Define aplicabilidad, exclusiones justificadas, estado de implementación, responsable y revisión para controles de seguridad y privacidad."
+      >
+      <div className="space-y-6">
+        {isReadOnly && (
+          <div className="rounded-md border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-semibold text-blue-800">
+            Modo solo lectura para auditor.
           </div>
-
+        )}
+        <div className="flex flex-wrap items-start justify-between gap-4 rounded-md border border-slate-200 bg-white p-5 shadow-sm">
           <div className="flex flex-wrap items-center gap-3">
             <select
               value={selectedISO}
@@ -1353,6 +1352,7 @@ export default function SoAPage() {
           )}
         </div>
       </div>
+      </EnterpriseDomainWorkspaceShell>
     </AppLayout>
   );
 }

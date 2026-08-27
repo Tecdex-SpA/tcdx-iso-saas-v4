@@ -1,6 +1,14 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type ReactNode,
+} from 'react';
 import { usePathname } from 'next/navigation';
 import Sidebar from './Sidebar';
 import Header from './Header';
@@ -81,6 +89,9 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   const [accessDeniedMessage, setAccessDeniedMessage] = useState('');
   const [moduleMap, setModuleMap] = useState<NonNullable<ModuleAccessResponse['module_map']>>({});
   const [accessRole, setAccessRole] = useState('');
+  const mobileMenuButtonRef = useRef<HTMLButtonElement | null>(null);
+  const mobileDrawerRef = useRef<HTMLDivElement | null>(null);
+  const shouldRestoreMobileMenuFocusRef = useRef(false);
 
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => {
@@ -97,6 +108,62 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       return next;
     });
   };
+
+  const openMobileSidebar = useCallback(() => {
+    setMobileSidebarOpen(true);
+  }, []);
+
+  const closeMobileSidebar = useCallback(() => {
+    shouldRestoreMobileMenuFocusRef.current = true;
+    setMobileSidebarOpen(false);
+  }, []);
+
+  const getMobileDrawerFocusableElements = useCallback(() => {
+    const drawer = mobileDrawerRef.current;
+    if (!drawer) return [];
+
+    return Array.from(
+      drawer.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+      )
+    ).filter(
+      (element) =>
+        element.tabIndex >= 0 &&
+        element.getAttribute('aria-hidden') !== 'true'
+    );
+  }, []);
+
+  const handleMobileDrawerKeyDown = useCallback(
+    (event: ReactKeyboardEvent<HTMLDivElement>) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        closeMobileSidebar();
+        return;
+      }
+
+      if (event.key !== 'Tab') return;
+
+      const focusableElements = getMobileDrawerFocusableElements();
+      if (focusableElements.length === 0) {
+        event.preventDefault();
+        mobileDrawerRef.current?.focus();
+        return;
+      }
+
+      const firstElement = focusableElements[0];
+      const lastElement = focusableElements[focusableElements.length - 1];
+      const activeElement = document.activeElement;
+
+      if (event.shiftKey && activeElement === firstElement) {
+        event.preventDefault();
+        lastElement.focus();
+      } else if (!event.shiftKey && activeElement === lastElement) {
+        event.preventDefault();
+        firstElement.focus();
+      }
+    },
+    [closeMobileSidebar, getMobileDrawerFocusableElements]
+  );
 
   const routeRules = useMemo(() => {
     return {
@@ -504,6 +571,34 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     return () => window.cancelAnimationFrame(frame);
   }, [pathname]);
 
+  useEffect(() => {
+    if (!mobileSidebarOpen) return;
+
+    const previousBodyOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    const frame = window.requestAnimationFrame(() => {
+      const focusableElements = getMobileDrawerFocusableElements();
+      (focusableElements[0] || mobileDrawerRef.current)?.focus();
+    });
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+      document.body.style.overflow = previousBodyOverflow;
+    };
+  }, [getMobileDrawerFocusableElements, mobileSidebarOpen]);
+
+  useEffect(() => {
+    if (mobileSidebarOpen || !shouldRestoreMobileMenuFocusRef.current) return;
+
+    shouldRestoreMobileMenuFocusRef.current = false;
+    const frame = window.requestAnimationFrame(() => {
+      mobileMenuButtonRef.current?.focus();
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [mobileSidebarOpen]);
+
   if (checkingAccess) {
     return (
       <div className="flex h-screen items-center justify-center bg-[var(--tcdx-color-surface)] text-[var(--tcdx-color-text-ink)]">
@@ -563,23 +658,33 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       </div>
 
       {mobileSidebarOpen && (
-        <div id="mobile-sidebar-drawer" className="fixed inset-0 z-40 lg:hidden">
+        <div
+          id="mobile-sidebar-drawer"
+          ref={mobileDrawerRef}
+          className="fixed inset-0 z-40 lg:hidden"
+          role="dialog"
+          aria-modal="true"
+          aria-label={t('navigation.mobileDrawer')}
+          tabIndex={-1}
+          onKeyDown={handleMobileDrawerKeyDown}
+        >
           <button
             type="button"
             aria-label={t('common.close')}
             className="absolute inset-0 bg-[rgba(43,57,68,0.58)] backdrop-blur-sm"
-            onClick={() => setMobileSidebarOpen(false)}
+            onClick={closeMobileSidebar}
+            tabIndex={-1}
           />
 
           <div className="absolute inset-y-0 left-0 max-w-[86vw]">
-            <Sidebar collapsed={false} onToggle={() => setMobileSidebarOpen(false)} moduleMap={moduleMap} role={accessRole} />
+            <Sidebar collapsed={false} onToggle={closeMobileSidebar} moduleMap={moduleMap} role={accessRole} />
           </div>
         </div>
       )}
 
       <div className="flex min-w-0 flex-1 flex-col bg-[linear-gradient(180deg,#ffffff_0%,var(--tcdx-color-surface)_48%,var(--tcdx-color-surface-alt)_100%)]">
         <div className="sticky top-0 z-30">
-          <Header onMenuClick={() => setMobileSidebarOpen(true)} mobileMenuOpen={mobileSidebarOpen} />
+          <Header onMenuClick={openMobileSidebar} mobileMenuOpen={mobileSidebarOpen} menuButtonRef={mobileMenuButtonRef} />
         </div>
 
         <main className="enterprise-main tcdx-premium-main tcdx-scrollbar min-w-0 flex-1 overflow-auto px-3 py-4 sm:px-5 sm:py-5 lg:px-8 lg:py-7">

@@ -1,0 +1,79 @@
+{
+  "verdict": "PASS",
+  "locale": "es-CL",
+  "generated_at": "2026-08-27T13:33:51.306Z",
+  "route_count": {
+    "before": 97,
+    "after": 97,
+    "expected": "97 -> 97"
+  },
+  "context": "UI-06 data visualization focal evidence",
+  "source": "Playwright fixtures confined to this script; product code consumes existing endpoints only",
+  "captures": [
+    {
+      "file": "charts-dashboard-1440.png",
+      "route": "/dashboard",
+      "viewport": {
+        "width": 1440,
+        "height": 1080
+      },
+      "locale": "es-CL",
+      "chart_type": "donut/bar/line",
+      "source": "official snapshots and existing dashboard domain summaries via Playwright route fixtures",
+      "data_condition": "sufficient",
+      "universal_state": "measured",
+      "data_trust": "trusted_with_warnings",
+      "assertions": [
+        "Centro ejecutivo",
+        "Tendencia",
+        "Distribución de señales ISO activas",
+        "Data Trust ejecutivo"
+      ],
+      "scroll_target": "Distribución de señales ISO activas",
+      "routes": "97 -> 97"
+    },
+    {
+      "file": "charts-metrics-1440.png",
+      "route": "/metricas/ISO-HEALTH",
+      "viewport": {
+        "width": 1440,
+        "height": 980
+      },
+      "locale": "es-CL",
+      "chart_type": "line",
+      "source": "official snapshots and existing dashboard domain summaries via Playwright route fixtures",
+      "data_condition": "sufficient_history_with_one_absent_snapshot",
+      "universal_state": "measured",
+      "data_trust": "trusted_with_warnings",
+      "assertions": [
+        "Tendencia oficial publicada",
+        "snapshots oficiales calculados",
+        "Unidad: %",
+        "Data Trust"
+      ],
+      "scroll_target": null,
+      "routes": "97 -> 97"
+    },
+    {
+      "file": "charts-mobile-390.png",
+      "route": "/metricas/ISO-HEALTH",
+      "viewport": {
+        "width": 390,
+        "height": 940
+      },
+      "locale": "es-CL",
+      "chart_type": "line",
+      "source": "official snapshots and existing dashboard domain summaries via Playwright route fixtures",
+      "data_condition": "mobile_compact",
+      "universal_state": "measured",
+      "data_trust": "trusted_with_warnings",
+      "assertions": [
+        "Tendencia oficial publicada",
+        "Unidad: %",
+        "Resultado oficial"
+      ],
+      "scroll_target": "Tendencia oficial publicada",
+      "routes": "97 -> 97"
+    }
+  ]
+}

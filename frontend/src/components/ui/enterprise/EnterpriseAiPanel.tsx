@@ -24,13 +24,13 @@ export default function EnterpriseAiPanel({
         <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex min-w-0 items-start gap-3">
             {icon && (
-              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-blue-200 bg-white text-blue-700 shadow-sm">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[var(--tcdx-radius-tecdex-md)] border border-[#B8D7F3] bg-white text-[#1B75D0]">
                 {icon}
               </span>
             )}
             <div className="min-w-0">
-              {title && <h2 className="text-lg font-black tracking-tight text-slate-950">{title}</h2>}
-              {subtitle && <p className="mt-1 text-sm leading-6 text-slate-600">{subtitle}</p>}
+              {title && <h2 className="text-[15px] font-bold tracking-normal text-[var(--tcdx-color-text-ink)]">{title}</h2>}
+              {subtitle && <p className="mt-1 text-sm leading-6 text-[var(--tcdx-color-text-secondary)]">{subtitle}</p>}
             </div>
           </div>
           {actions && <div className="shrink-0">{actions}</div>}

@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import AppLayout from '@/components/AppLayout';
+import EnterpriseDomainWorkspaceShell from '@/components/enterprise-domain/EnterpriseDomainWorkspaceShell';
 import { getUserFromToken } from '@/utils/auth';
 import { useTenantEntitlements } from '@/hooks/useTenantEntitlements';
 
@@ -290,66 +291,62 @@ function AuditoriasIaContent() {
   if (!auditId) {
     return (
       <AppLayout>
-        <div className="p-6">Falta id de auditoría.</div>
+        <EnterpriseDomainWorkspaceShell
+          domain="audit"
+          eyebrow="Auditorías · IA Auditor"
+          title="IA Auditor contextual"
+          description="Analiza auditorías con contexto real y revisión humana obligatoria."
+        >
+          <div className="rounded-md border border-dashed border-[var(--tcdx-color-border)] bg-white p-6 text-sm text-[var(--tcdx-color-text-secondary)]">
+            Falta id de auditoría.
+          </div>
+        </EnterpriseDomainWorkspaceShell>
       </AppLayout>
     );
   }
 
   return (
     <AppLayout>
+      <EnterpriseDomainWorkspaceShell
+        domain="audit"
+        eyebrow="Auditorías · IA Auditor"
+        title="IA Auditor contextual"
+        description="Analiza esta auditoría con contexto real: checklist por control, evidencia disponible, hallazgos, acciones asociadas, estado de revisión y brechas."
+        actions={
+          <div className="flex max-w-full flex-nowrap gap-2 overflow-x-auto">
+            <button
+              onClick={() => window.location.href = `/auditorias/ejecucion?id=${auditId}`}
+              className="inline-flex min-h-10 items-center whitespace-nowrap rounded-md border border-[var(--tcdx-color-border)] bg-white px-4 text-sm font-bold text-[var(--tcdx-color-text-ink)] hover:bg-[var(--tcdx-color-surface-subtle)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--tcdx-color-focus)]"
+            >
+              Abrir checklist
+            </button>
+
+            <button
+              onClick={() => window.location.href = '/auditorias'}
+              className="inline-flex min-h-10 items-center whitespace-nowrap rounded-md border border-[var(--tcdx-color-border)] bg-white px-4 text-sm font-bold text-[var(--tcdx-color-text-ink)] hover:bg-[var(--tcdx-color-surface-subtle)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--tcdx-color-focus)]"
+            >
+              Volver
+            </button>
+
+            <button
+              onClick={analyze}
+              disabled={analyzing || loading}
+              className="inline-flex min-h-10 items-center whitespace-nowrap rounded-md bg-[var(--tcdx-color-action-primary)] px-4 text-sm font-bold text-white shadow-sm hover:bg-[var(--tcdx-color-action-primary-hover)] disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--tcdx-color-focus)]"
+            >
+              {analyzing ? 'Analizando...' : 'Ejecutar IA Auditor'}
+            </button>
+          </div>
+        }
+      >
       <div className="mx-auto max-w-[1700px] space-y-6">
-        <section className="rounded-[34px] border border-white/70 bg-white p-6 shadow-[0_20px_60px_rgba(15,23,42,0.08)]">
-          <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-            <div>
-              <span className="rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.16em] text-indigo-700">
-                Auditorías · IA Auditor
-              </span>
-
-              <h1 className="mt-4 text-4xl font-bold tracking-tight text-slate-900">
-                IA Auditor contextual
-              </h1>
-
-              <p className="mt-3 max-w-4xl text-sm leading-6 text-slate-600">
-                Analiza esta auditoría con contexto real: checklist por control, evidencia disponible,
-                hallazgos, acciones asociadas, estado de revisión y brechas. Las recomendaciones no crean
-                registros automáticamente; deben ser aprobadas por un usuario autorizado.
-              </p>
-
-              <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">
+        <section className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">
                 IA Auditor no reemplaza al auditor humano; sus sugerencias requieren aprobación.
-              </div>
 
               {context?.audit && (
-                <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+                <div className="mt-3 rounded-md border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700">
                   <strong>{context.audit.iso}</strong> · {context.audit.auditor_name || 'Auditor no informado'} · Estado: {context.audit.status || 'pendiente'}
                 </div>
               )}
-            </div>
-
-            <div className="flex flex-wrap gap-2">
-              <button
-                onClick={() => window.location.href = `/auditorias/ejecucion?id=${auditId}`}
-                className="rounded-2xl border border-indigo-200 bg-indigo-50 px-4 py-2 text-sm font-bold text-indigo-700 hover:bg-indigo-100"
-              >
-                Abrir checklist
-              </button>
-
-              <button
-                onClick={() => window.location.href = '/auditorias'}
-                className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50"
-              >
-                Volver
-              </button>
-
-              <button
-                onClick={analyze}
-                disabled={analyzing || loading}
-                className="rounded-2xl bg-indigo-600 px-5 py-2 text-sm font-bold text-white shadow-sm hover:bg-indigo-700 disabled:opacity-50"
-              >
-                {analyzing ? 'Analizando...' : 'Ejecutar IA Auditor'}
-              </button>
-            </div>
-          </div>
         </section>
 
         <section className="grid grid-cols-2 gap-4 md:grid-cols-6">
@@ -533,6 +530,7 @@ function AuditoriasIaContent() {
           </section>
         )}
       </div>
+      </EnterpriseDomainWorkspaceShell>
     </AppLayout>
   );
 }

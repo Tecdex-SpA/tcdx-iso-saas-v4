@@ -8,16 +8,22 @@ import {
   useState,
   type ReactNode,
 } from 'react';
+import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { getUserFromToken, getUserRoleFromToken } from '@/utils/auth';
 import AppLayout from '@/components/AppLayout';
 import GrcPhase1Panel from '@/components/grc/GrcPhase1Panel';
+import GrcDecisionCenter from '@/components/math-governance/GrcDecisionCenter';
 import CompanyProfileImpactPanel from '@/components/company-profile/CompanyProfileImpactPanel';
 import TcdxIcon from '@/components/icons/TcdxIcon';
 import {
+  DataTrustIndicator,
   EnterpriseKpiCard,
   EnterprisePageHeader,
   ResponsiveChartFrame,
+  UniversalStateBadge,
+  UniversalStateBlock,
+  type UniversalDataState,
 } from '@/components/ui/enterprise';
 import { useTranslation } from '@/hooks/useTranslation';
 import {
@@ -261,16 +267,35 @@ type ActionPlanItem = {
 
 type LatestSnapshot = {
   id?: string;
+  snapshot_id?: string;
   standard_code?: string | null;
   value?: number | string | null;
   numerator_value?: number | string | null;
   denominator_value?: number | string | null;
   status_color?: 'green' | 'yellow' | 'red' | 'gray' | string | null;
+  state?: string | null;
+  coverage?: number | string | null;
+  trust?: SnapshotTrust | null;
+  freshness?: string | { status?: string | null } | null;
+  sufficiency?: string | { status?: string | null } | null;
   period_type?: string | null;
   period_start?: string | null;
   period_end?: string | null;
   calculated_at?: string | null;
+  updated_at?: string | null;
+  checksum?: string | null;
   breakdown_json?: JsonValue;
+};
+
+type SnapshotTrust = {
+  status?: string | null;
+  score?: number | string | null;
+  confidence?: number | string | null;
+  coverage?: number | string | null;
+  freshness?: string | null;
+  source?: string | null;
+  timestamp?: string | null;
+  warnings?: string[] | null;
 };
 
 type OfficialActionableComponent = {
@@ -363,9 +388,54 @@ type OperationalChartDatum = {
   fill?: string;
 };
 
+type ExecutiveAttentionItem = {
+  id: string;
+  label: string;
+  title: string;
+  detail: string;
+  href: string;
+  value: string | number;
+  state: UniversalDataState;
+};
+
 function numberOrZero(value: unknown) {
   const n = Number(value);
   return Number.isFinite(n) ? n : 0;
+}
+
+function numberOrNull(value: unknown) {
+  if (value === null || value === undefined || value === '') return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+function formatChartNumber(value: unknown, unit = 'registros') {
+  const n = numberOrNull(value);
+  if (n === null) return 'Sin dato';
+  const formatted = new Intl.NumberFormat('es-CL', { maximumFractionDigits: 2 }).format(n);
+  if (unit === '%' || unit === 'porcentaje') return `${formatted}%`;
+  return `${formatted} ${unit}`;
+}
+
+function formatChartPeriodLabel(value: unknown) {
+  if (!value) return 'Sin período';
+  const text = String(value);
+  const date = new Date(text);
+  if (!Number.isNaN(date.getTime())) {
+    return date.toLocaleDateString('es-CL', { month: 'short', year: 'numeric' });
+  }
+  return text;
+}
+
+function formatChartTooltip(unit = 'registros') {
+  return (value: unknown, name: unknown) => [formatChartNumber(value, unit), String(name || 'Valor')];
+}
+
+function getChartSummary(data: OperationalChartDatum[], unit = 'registros') {
+  if (!data.length) return 'Sin datos registrados para graficar.';
+  const total = data.reduce((acc, item) => acc + item.value, 0);
+  const leader = [...data].sort((a, b) => b.value - a.value)[0];
+  return `${leader.name}: ${formatChartNumber(leader.value, unit)}. Total visible: ${formatChartNumber(total, unit)}.`;
 }
 
 function unwrapApiData(payload: unknown): unknown {
@@ -433,8 +503,59 @@ function summarizeOfficialRecalculateResponse(payload: unknown): OfficialRecalcu
 function getSnapshotOfficialState(snapshot?: LatestSnapshot | null): string {
   const breakdown = asRecord(snapshot?.breakdown_json);
   return normalizeOfficialState(
-    breakdown.state ?? breakdown.official_state ?? breakdown.sufficiency_status
+    snapshot?.state ?? breakdown.state ?? breakdown.official_state ?? breakdown.sufficiency_status
   );
+}
+
+function stringOrNull(value: unknown): string | null {
+  if (value === null || value === undefined || value === '') return null;
+  return String(value);
+}
+
+function scalarOrNull(value: unknown): number | string | null {
+  if (value === null || value === undefined || value === '') return null;
+  return typeof value === 'number' || typeof value === 'string' ? value : null;
+}
+
+function getNestedStatus(value: unknown): string | null {
+  if (typeof value === 'string') return value;
+  const record = asRecord(value);
+  return stringOrNull(record.status);
+}
+
+function normalizeSnapshotTrust(raw: UnknownRecord, breakdown: UnknownRecord): SnapshotTrust | null {
+  const trust = asRecord(raw.trust ?? raw.data_trust ?? breakdown.trust ?? breakdown.data_trust);
+  if (!Object.keys(trust).length) return null;
+
+  return {
+    status: stringOrNull(trust.status ?? trust.trust_status ?? trust.state),
+    score: scalarOrNull(trust.score ?? trust.confidence),
+    confidence: scalarOrNull(trust.confidence ?? trust.score),
+    coverage: scalarOrNull(trust.coverage ?? raw.coverage ?? breakdown.coverage),
+    freshness: stringOrNull(trust.freshness ?? getNestedStatus(raw.freshness ?? breakdown.freshness)),
+    source: stringOrNull(trust.source ?? trust.source_code ?? breakdown.source_code),
+    timestamp: stringOrNull(trust.timestamp ?? raw.updated_at ?? raw.calculated_at),
+    warnings: toStringList(trust.warnings ?? breakdown.warnings),
+  };
+}
+
+function mapOfficialStateToUniversal(snapshot?: LatestSnapshot | null): UniversalDataState {
+  if (!snapshot) return 'empty';
+
+  const state = getSnapshotOfficialState(snapshot);
+  const freshness = getNestedStatus(snapshot.freshness);
+  const sufficiency = getNestedStatus(snapshot.sufficiency);
+
+  if (snapshot.value === 0 || snapshot.value === '0') return 'zero';
+  if (state === 'failed' || state === 'error') return 'error';
+  if (state === 'source_unavailable' || state === 'not_available') return 'not_available';
+  if (state === 'dependency_pending' || state === 'not_calculable') return 'not_calculable';
+  if (state === 'partial') return 'partial';
+  if (freshness === 'stale') return 'stale';
+  if (sufficiency === 'insufficient_data' || state === 'insufficient_data' || state === 'insufficient') return 'insufficient';
+  if (snapshot.value === null || snapshot.value === undefined || snapshot.value === '') return 'not_calculable';
+
+  return 'measured';
 }
 
 function getSnapshotActionableState(snapshot?: LatestSnapshot | null): OfficialActionableState | null {
@@ -473,8 +594,11 @@ function buildOfficialTrend(item: KpiDashboardItem) {
   return snapshots
     .filter((snapshot) => snapshot.value !== null && snapshot.value !== undefined)
     .map((snapshot, index) => ({
-      name: snapshot.period_end || snapshot.period_start || snapshot.period_type || `t-${snapshots.length - index - 1}`,
+      name: formatChartPeriodLabel(
+        snapshot.period_end || snapshot.period_start || snapshot.period_type || `Punto ${snapshots.length - index}`
+      ),
       value: Number(snapshot.value),
+      source: snapshot.snapshot_id || snapshot.checksum || item.code,
     }))
     .filter((point) => Number.isFinite(point.value));
 }
@@ -532,18 +656,28 @@ async function fetchJson(url: string, token: string): Promise<unknown> {
 function normalizeLatestSnapshot(snapshot: unknown): LatestSnapshot | null {
   if (!isRecord(snapshot)) return null;
   const raw = snapshot;
+  const breakdown = asRecord(raw.breakdown_json);
+  const normalizedTrust = normalizeSnapshotTrust(raw, breakdown);
 
   return {
     id: raw.id === undefined || raw.id === null ? undefined : String(raw.id),
+    snapshot_id: raw.snapshot_id === undefined || raw.snapshot_id === null ? undefined : String(raw.snapshot_id),
     standard_code: raw.standard_code === undefined || raw.standard_code === null ? null : String(raw.standard_code),
     value: typeof raw.value === 'number' || typeof raw.value === 'string' ? raw.value : null,
     numerator_value: typeof raw.numerator_value === 'number' || typeof raw.numerator_value === 'string' ? raw.numerator_value : null,
     denominator_value: typeof raw.denominator_value === 'number' || typeof raw.denominator_value === 'string' ? raw.denominator_value : null,
     status_color: raw.status_color === undefined || raw.status_color === null ? null : String(raw.status_color),
+    state: stringOrNull(raw.state ?? raw.official_state ?? breakdown.state ?? breakdown.official_state),
+    coverage: scalarOrNull(raw.coverage ?? breakdown.coverage),
+    trust: normalizedTrust,
+    freshness: getNestedStatus(raw.freshness ?? breakdown.freshness),
+    sufficiency: getNestedStatus(raw.sufficiency ?? breakdown.sufficiency),
     period_type: raw.period_type === undefined || raw.period_type === null ? null : String(raw.period_type),
     period_start: raw.period_start === undefined || raw.period_start === null ? null : String(raw.period_start),
     period_end: raw.period_end === undefined || raw.period_end === null ? null : String(raw.period_end),
     calculated_at: raw.calculated_at === undefined || raw.calculated_at === null ? null : String(raw.calculated_at),
+    updated_at: stringOrNull(raw.updated_at),
+    checksum: stringOrNull(raw.checksum),
     breakdown_json: raw.breakdown_json as JsonValue,
   };
 }
@@ -769,7 +903,15 @@ function DashboardPageContent() {
     router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
   }, [pathname, router, searchParams]);
 
+  const currentUser = getUserFromToken();
+  const currentUserRecord = asRecord(currentUser);
   const currentRole = getUserRoleFromToken();
+  const organizationName =
+    stringOrNull(
+      currentUserRecord.tenant_name ??
+        currentUserRecord.company_name ??
+        asRecord(currentUserRecord.tenant).name
+    ) || 'Organización';
 
   const canManageKpis = [
     'superadmin',
@@ -1260,6 +1402,16 @@ function DashboardPageContent() {
     effectiveTotalActiveControls > 0 ? effectiveCompliesControls : cumple;
   const executiveTotalControls =
     effectiveTotalActiveControls > 0 ? effectiveTotalActiveControls : totalControls;
+  const hasExecutiveControlBasis = executiveTotalControls > 0;
+  const executiveComplianceDisplay = hasExecutiveControlBasis
+    ? `${executiveComplianceValue}%`
+    : 'Sin medición';
+  const executiveHealthyControlsDisplay = hasExecutiveControlBasis
+    ? `${executiveHealthyControls} / ${executiveTotalControls}`
+    : 'Sin datos';
+  const executiveControlChange = hasExecutiveControlBasis
+    ? t('dashboard.ofTotal', { value: executiveComplianceValue })
+    : 'Sin controles evaluados';
 
   const auditTimelineItems = useMemo(() => {
     const recent = Array.isArray(auditSummary?.recent_audits)
@@ -1314,6 +1466,116 @@ function DashboardPageContent() {
       level: risk.level === 'alto' ? 'Crítico' : risk.level === 'medio' ? 'Alto' : 'Medio',
     }));
   }, [controls, riskSummary]);
+
+  const executiveAttentionItems = useMemo<ExecutiveAttentionItem[]>(() => {
+    const items: ExecutiveAttentionItem[] = [];
+
+    if (overdueActionPlans > 0) {
+      items.push({
+        id: 'overdue-actions',
+        label: 'Acciones',
+        title: 'Acciones vencidas',
+        detail: `${activeActionPlans} acciones activas requieren seguimiento operacional.`,
+        href: '/plan-accion',
+        value: overdueActionPlans,
+        state: 'stale',
+      });
+    }
+
+    if (highRisks > 0) {
+      items.push({
+        id: 'critical-risks',
+        label: 'Riesgo',
+        title: 'Riesgos altos o críticos',
+        detail: `${mediumRisks} riesgos medios acompañan la presión actual.`,
+        href: '/matriz-riesgo',
+        value: highRisks,
+        state: 'measured',
+      });
+    }
+
+    if (openNcCount > 0) {
+      items.push({
+        id: 'open-nonconformities',
+        label: 'Auditoría',
+        title: 'No conformidades abiertas',
+        detail: 'Revisar tratamiento, responsables y plazos antes del siguiente ciclo.',
+        href: '/no-conformidades',
+        value: openNcCount,
+        state: 'measured',
+      });
+    }
+
+    const openFindings = numberOrZero(summary?.open_findings);
+    const auditFindings = numberOrZero(auditSummary?.summary?.hallazgos);
+    const findingsTotal = Math.max(openFindings, auditFindings);
+    if (findingsTotal > 0) {
+      items.push({
+        id: 'open-findings',
+        label: 'Hallazgos',
+        title: 'Hallazgos abiertos',
+        detail: 'Mantener trazabilidad hacia acciones correctivas y evidencia.',
+        href: '/hallazgos',
+        value: findingsTotal,
+        state: 'partial',
+      });
+    }
+
+    if (pendingKpis > 0) {
+      items.push({
+        id: 'official-kpis-without-data',
+        label: 'Datos',
+        title: 'Indicadores oficiales sin datos',
+        detail: 'La lectura ejecutiva conserva ausencia como Sin datos, no como cero.',
+        href: '/metricas',
+        value: pendingKpis,
+        state: 'insufficient',
+      });
+    }
+
+    if (systemHealthDashboard?.data_quality_warnings?.length) {
+      items.push({
+        id: 'data-quality-warnings',
+        label: 'Data Trust',
+        title: 'Advertencias de calidad de información',
+        detail: systemHealthDashboard.data_quality_warnings[0] || 'Existen advertencias de calidad publicadas por el servicio.',
+        href: '/datos/calidad',
+        value: systemHealthDashboard.data_quality_warnings.length,
+        state: 'partial',
+      });
+    }
+
+    if (!items.length && !loading && !loadingKpis && !systemHealthLoading) {
+      items.push({
+        id: 'no-priority-signal',
+        label: 'Estado',
+        title: 'Sin prioridades críticas visibles',
+        detail: 'No hay señales críticas publicadas por las fuentes ejecutivas cargadas.',
+        href: '/dashboard',
+        value: 0,
+        state: 'zero',
+      });
+    }
+
+    return items.slice(0, 6);
+  }, [
+    activeActionPlans,
+    auditSummary,
+    highRisks,
+    loading,
+    loadingKpis,
+    mediumRisks,
+    openNcCount,
+    overdueActionPlans,
+    pendingKpis,
+    summary,
+    systemHealthDashboard,
+    systemHealthLoading,
+  ]);
+
+  const executiveTrendItem = useMemo(() => {
+    return kpiItems.find((item) => buildOfficialTrend(item).length > 1) || null;
+  }, [kpiItems]);
 
   const controlStatusChartData = useMemo<OperationalChartDatum[]>(() => {
     const counts = controls.reduce(
@@ -1435,66 +1697,71 @@ function DashboardPageContent() {
       <div className="tcdx-dashboard-refinement space-y-6">
         <div className="space-y-6">
           <EnterprisePageHeader
+            eyebrow="Centro ejecutivo"
             title={t('dashboard.title')}
-            subtitle={t('dashboard.subtitle')}
+            subtitle={
+              <span>
+                {organizationName} · {t('dashboard.subtitle')}
+              </span>
+            }
             actions={
-              <>
-              <div className="enterprise-toolbar inline-flex flex-wrap p-1">
-                <button
-                  type="button"
-                  onClick={() => handleViewChange('executive')}
-                  className={[
-                    'rounded-[var(--tcdx-radius-tecdex-sm)] px-4 py-2 text-sm font-semibold transition focus-visible:shadow-[var(--tcdx-shadow-tecdex-focus)]',
-                    activeView === 'executive'
-                      ? 'bg-[var(--tcdx-color-primary)] text-white shadow-sm'
-                      : 'text-[var(--tcdx-color-text-primary)] hover:bg-[var(--tcdx-color-surface)]',
-                  ].join(' ')}
-                >
-                  {t('dashboard.executiveView')}
-                </button>
+              <div className="flex w-full flex-wrap items-center gap-3 sm:w-auto sm:justify-end">
+                <div className="enterprise-toolbar grid w-full grid-cols-1 gap-1 p-1 sm:w-auto sm:grid-cols-3">
+                  <button
+                    type="button"
+                    onClick={() => handleViewChange('executive')}
+                    className={[
+                      'flex min-h-10 w-full items-center justify-center whitespace-nowrap rounded-[var(--tcdx-radius-tecdex-sm)] px-3 py-2 text-sm font-semibold transition focus-visible:shadow-[var(--tcdx-shadow-tecdex-focus)]',
+                      activeView === 'executive'
+                        ? 'bg-[var(--tcdx-color-primary)] text-white shadow-sm'
+                        : 'text-[var(--tcdx-color-text-primary)] hover:bg-[var(--tcdx-color-surface)]',
+                    ].join(' ')}
+                  >
+                    {t('dashboard.executiveView')}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleViewChange('kpi')}
+                    className={[
+                      'flex min-h-10 w-full items-center justify-center whitespace-nowrap rounded-[var(--tcdx-radius-tecdex-sm)] px-3 py-2 text-sm font-semibold transition focus-visible:shadow-[var(--tcdx-shadow-tecdex-focus)]',
+                      activeView === 'kpi'
+                        ? 'bg-[var(--tcdx-color-primary)] text-white shadow-sm'
+                        : 'text-[var(--tcdx-color-text-primary)] hover:bg-[var(--tcdx-color-surface)]',
+                    ].join(' ')}
+                  >
+                    {t('dashboard.kpiView')}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleViewChange('iso')}
+                    className={[
+                      'flex min-h-10 w-full items-center justify-center whitespace-nowrap rounded-[var(--tcdx-radius-tecdex-sm)] px-3 py-2 text-sm font-semibold transition focus-visible:shadow-[var(--tcdx-shadow-tecdex-focus)]',
+                      activeView === 'iso'
+                        ? 'bg-[var(--tcdx-color-primary)] text-white shadow-sm'
+                        : 'text-[var(--tcdx-color-text-primary)] hover:bg-[var(--tcdx-color-surface)]',
+                    ].join(' ')}
+                  >
+                    {t('dashboard.systemHealthView')}
+                  </button>
+                </div>
+
+                <div className="enterprise-button-secondary flex-1 justify-center border-[var(--tcdx-color-border)] text-[var(--tcdx-color-text-primary)] sm:flex-none">
+                  <TcdxIcon name="calendar" className="h-4 w-4 text-[var(--tcdx-color-primary)]" />
+                  {latestSyncText}
+                </div>
 
                 <button
                   type="button"
-                  onClick={() => handleViewChange('kpi')}
-                  className={[
-                    'rounded-[var(--tcdx-radius-tecdex-sm)] px-4 py-2 text-sm font-semibold transition focus-visible:shadow-[var(--tcdx-shadow-tecdex-focus)]',
-                    activeView === 'kpi'
-                      ? 'bg-[var(--tcdx-color-primary)] text-white shadow-sm'
-                      : 'text-[var(--tcdx-color-text-primary)] hover:bg-[var(--tcdx-color-surface)]',
-                  ].join(' ')}
+                  onClick={handleRefreshDashboard}
+                  disabled={refreshingExecutive}
+                  className="enterprise-button-secondary flex-1 justify-center border-[var(--tcdx-color-border)] text-[var(--tcdx-color-text-primary)] disabled:opacity-60 sm:flex-none"
                 >
-                  {t('dashboard.kpiView')}
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => handleViewChange('iso')}
-                  className={[
-                    'rounded-[var(--tcdx-radius-tecdex-sm)] px-4 py-2 text-sm font-semibold transition focus-visible:shadow-[var(--tcdx-shadow-tecdex-focus)]',
-                    activeView === 'iso'
-                      ? 'bg-[var(--tcdx-color-primary)] text-white shadow-sm'
-                      : 'text-[var(--tcdx-color-text-primary)] hover:bg-[var(--tcdx-color-surface)]',
-                  ].join(' ')}
-                >
-                  Salud del sistema
+                  <TcdxIcon name="refresh" className="h-4 w-4" />
+                  {refreshingExecutive ? t('common.refreshing') : t('common.refresh')}
                 </button>
               </div>
-
-              <div className="enterprise-button-secondary border-[var(--tcdx-color-border)] text-[var(--tcdx-color-text-primary)]">
-                <TcdxIcon name="calendar" className="h-4 w-4 text-[var(--tcdx-color-primary)]" />
-                {latestSyncText}
-              </div>
-
-              <button
-                type="button"
-                onClick={handleRefreshDashboard}
-                disabled={refreshingExecutive}
-                className="enterprise-button-secondary border-[var(--tcdx-color-border)] text-[var(--tcdx-color-text-primary)] disabled:opacity-60"
-              >
-                <TcdxIcon name="refresh" className="h-4 w-4" />
-                {refreshingExecutive ? t('common.refreshing') : t('common.refresh')}
-              </button>
-              </>
             }
           />
 
@@ -1507,71 +1774,74 @@ function DashboardPageContent() {
           {activeView === 'executive' && (
             <>
               {loading && (
-                <div className="rounded-[var(--tcdx-radius-tecdex-sm)] border border-[var(--tcdx-color-border)] bg-white p-8 text-[var(--tcdx-color-text-secondary)] shadow-[var(--tcdx-shadow-tecdex-sm)]">
-                  {t('dashboard.loadingData')}
-                </div>
+                <UniversalStateBlock
+                  state="loading"
+                  title={t('dashboard.loadingData')}
+                  description="Cargando señales ejecutivas desde fuentes existentes."
+                />
               )}
 
               {!loading && controls.length === 0 && !dashboardHasSummaryData && effectiveActiveRows.length === 0 && !effectiveHealthLoading && (
-                <div className="rounded-[var(--tcdx-radius-tecdex-sm)] border border-amber-200 bg-[linear-gradient(135deg,#fffdf5_0%,#fdf8e8_100%)] p-8 shadow-[var(--tcdx-shadow-tecdex-sm)]">
-                  <h2 className="mb-3 text-3xl font-bold text-[var(--tcdx-color-text-ink)]">
-                    {t('dashboard.initialControlsTitle')}
-                  </h2>
-
-                  <p className="mb-4 text-lg text-[var(--tcdx-color-text-primary)]">
-                    {t('dashboard.initialControlsSubtitle')}
-                  </p>
-
-                  <div className="text-base text-[var(--tcdx-color-text-secondary)]">
-                    {t('dashboard.initialControlsNext')}
-                  </div>
-                </div>
+                <UniversalStateBlock
+                  state="empty"
+                  title={t('dashboard.initialControlsTitle')}
+                  description={
+                    <>
+                      {t('dashboard.initialControlsSubtitle')} {t('dashboard.initialControlsNext')}
+                    </>
+                  }
+                />
               )}
 
               {!loading && (controls.length > 0 || dashboardHasSummaryData || effectiveHealthLoading || effectiveActiveRows.length > 0) && (
                 <>
-                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2 2xl:grid-cols-4">
-                    <TopCard
-                      title={t('dashboard.globalCompliance')}
-                      value={`${executiveComplianceValue}%`}
-                      subtitle={t('dashboard.globalComplianceSubtitle')}
-                      accent="indigo"
-                      change={`ISO ${mapEffectiveHealthLabel(effectiveGlobalStatus)}`}
-                      changeHint="Lectura efectiva en alcance"
-                      icon={<TcdxIcon name="shield" className="h-6 w-6" />}
-                      ringValue={executiveComplianceValue}
-                    />
+                  <div className="flex flex-col gap-4">
+                    <div className="order-2 grid grid-cols-1 gap-4 md:grid-cols-2 lg:order-1 2xl:grid-cols-4">
+                      <TopCard
+                        title={t('dashboard.globalCompliance')}
+                        value={executiveComplianceDisplay}
+                        subtitle={t('dashboard.globalComplianceSubtitle')}
+                        accent="indigo"
+                        change={`ISO ${mapEffectiveHealthLabel(effectiveGlobalStatus)}`}
+                        changeHint="Lectura efectiva en alcance"
+                        icon={<TcdxIcon name="shield" className="h-6 w-6" />}
+                        ringValue={hasExecutiveControlBasis ? executiveComplianceValue : undefined}
+                      />
 
-                    <TopCard
-                      title={t('dashboard.healthyControls')}
-                      value={`${executiveHealthyControls} / ${executiveTotalControls || 0}`}
-                      subtitle={t('dashboard.healthyControlsSubtitle')}
-                      accent="indigo"
-                      change={t('dashboard.ofTotal', { value: executiveComplianceValue })}
-                      changeHint="Controles activos en alcance"
-                      icon={<TcdxIcon name="activity" className="h-6 w-6" />}
-                    />
+                      <TopCard
+                        title={t('dashboard.healthyControls')}
+                        value={executiveHealthyControlsDisplay}
+                        subtitle={t('dashboard.healthyControlsSubtitle')}
+                        accent="indigo"
+                        change={executiveControlChange}
+                        changeHint="Controles activos en alcance"
+                        icon={<TcdxIcon name="activity" className="h-6 w-6" />}
+                      />
 
-                    <TopCard
-                      title={t('dashboard.criticalRisks')}
-                      value={highRisks}
-                      subtitle={t('dashboard.criticalRisksSubtitle')}
-                      accent="red"
-                      change={t('dashboard.mediumCountPlural', { count: mediumRisks })}
-                      changeHint={t('dashboard.currentOverview')}
-                      icon={<TcdxIcon name="alert" className="h-6 w-6" />}
-                    />
+                      <TopCard
+                        title={t('dashboard.criticalRisks')}
+                        value={highRisks}
+                        subtitle={t('dashboard.criticalRisksSubtitle')}
+                        accent="red"
+                        change={t('dashboard.mediumCountPlural', { count: mediumRisks })}
+                        changeHint={t('dashboard.currentOverview')}
+                        icon={<TcdxIcon name="alert" className="h-6 w-6" />}
+                      />
 
-                    <TopCard
-                      title={t('dashboard.actionPlans')}
-                      value={activeActionPlans}
-                      subtitle={t('dashboard.actionPlansSubtitle')}
-                      accent="green"
-                      change={t('dashboard.overdueCount', { count: overdueActionPlans })}
-                      changeHint={t('dashboard.operationalFocus')}
-                      icon={<TcdxIcon name="plan" className="h-6 w-6" />}
-                    />
+                      <TopCard
+                        title={t('dashboard.actionPlans')}
+                        value={activeActionPlans}
+                        subtitle={t('dashboard.actionPlansSubtitle')}
+                        accent="green"
+                        change={t('dashboard.overdueCount', { count: overdueActionPlans })}
+                        changeHint={t('dashboard.operationalFocus')}
+                        icon={<TcdxIcon name="plan" className="h-6 w-6" />}
+                      />
+                    </div>
 
+                    <div className="order-1 lg:order-2">
+                      <ExecutiveAttentionPanel items={executiveAttentionItems} />
+                    </div>
                   </div>
 
                   <CompanyProfileImpactPanel
@@ -1601,6 +1871,15 @@ function DashboardPageContent() {
                       health={kpiSummary?.health_kpis || healthKpiItems.length}
                     />
                   )}
+
+                  <div className="grid grid-cols-1 gap-4 2xl:grid-cols-[1.05fr_0.95fr]">
+                    <ExecutiveTrendPanel item={executiveTrendItem} loading={loadingKpis} />
+                    <ExecutiveDataTrustPanel
+                      items={kpiItems}
+                      healthWarnings={systemHealthDashboard?.data_quality_warnings || []}
+                      loading={loadingKpis || systemHealthLoading}
+                    />
+                  </div>
 
                   <OperationalChartsPanel
                     controlStatus={controlStatusChartData}
@@ -1859,34 +2138,47 @@ function DashboardPageContent() {
 
                       <div className="grid grid-cols-1 gap-6 xl:grid-cols-[320px_minmax(0,1fr)] xl:items-center">
                         <div className="relative mx-auto w-full max-w-[300px]">
-                          <ResponsiveChartFrame className="bg-transparent" height={260}>
-                            <PieChart>
-                              <Pie
-                                data={kpiStatusData}
-                                dataKey="value"
-                                nameKey="name"
-                                innerRadius={62}
-                                outerRadius={95}
-                                paddingAngle={3}
-                                stroke="#ffffff"
-                                strokeWidth={4}
-                              >
-                                {kpiStatusData.map((entry, index) => (
-                                  <Cell key={index} fill={entry.fill} />
-                                ))}
-                              </Pie>
-                              <Tooltip formatter={(value: unknown, name: unknown) => [String(value), String(name)]} />
-                            </PieChart>
-                          </ResponsiveChartFrame>
+                          {hasChartData(kpiStatusData) ? (
+                            <ResponsiveChartFrame
+                              ariaDescription={`Distribución de estados KPI. ${getChartSummary(kpiStatusData, 'KPI')}`}
+                              ariaLabel="Distribución de estados KPI"
+                              className="bg-transparent"
+                              height={260}
+                            >
+                              <PieChart>
+                                <Pie
+                                  data={kpiStatusData}
+                                  dataKey="value"
+                                  nameKey="name"
+                                  innerRadius={62}
+                                  outerRadius={95}
+                                  paddingAngle={3}
+                                  stroke="#ffffff"
+                                  strokeWidth={4}
+                                >
+                                  {kpiStatusData.map((entry, index) => (
+                                    <Cell key={index} fill={entry.fill} />
+                                  ))}
+                                </Pie>
+                                <Tooltip formatter={formatChartTooltip('KPI')} />
+                              </PieChart>
+                            </ResponsiveChartFrame>
+                          ) : (
+                            <UniversalStateBlock
+                              state="insufficient"
+                              title="Datos insuficientes"
+                              description="No hay estados KPI publicados para graficar esta distribución."
+                            />
+                          )}
 
-                          <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+                          {hasChartData(kpiStatusData) ? <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
                             <div className="text-5xl font-bold tracking-tight text-[var(--tcdx-color-text-ink)]">
                               {kpiSummary?.green || 0}
                             </div>
                             <div className="mt-1 text-base font-medium text-[var(--tcdx-color-text-secondary)]">
                               {t('dashboardKpi.greenStatus')}
                             </div>
-                          </div>
+                          </div> : null}
                         </div>
 
                         <div className="space-y-5">
@@ -1936,12 +2228,17 @@ function DashboardPageContent() {
                       </div>
 
                       <div>
-                        <ResponsiveChartFrame height={300}>
-                          <BarChart data={kpiCategoryData}>
+                        {hasChartData(kpiCategoryData) ? (
+                        <ResponsiveChartFrame
+                          ariaDescription={`Comparación por categoría KPI. ${getChartSummary(kpiCategoryData, 'KPI')}`}
+                          ariaLabel="KPI por categoría"
+                          height={300}
+                        >
+                          <BarChart data={kpiCategoryData} margin={{ top: 10, right: 10, left: -12, bottom: 2 }}>
                             <CartesianGrid vertical={false} stroke="var(--tcdx-color-border)" />
-                            <XAxis dataKey="name" tickFormatter={(value) => getKpiCategoryLabel(String(value))} tickLine={false} axisLine={false} />
-                            <YAxis allowDecimals={false} tickLine={false} axisLine={false} />
-                            <Tooltip />
+                            <XAxis dataKey="name" tickFormatter={(value) => getKpiCategoryLabel(String(value))} tickLine={false} axisLine={false} fontSize={11} interval="preserveStartEnd" />
+                            <YAxis allowDecimals={false} tickFormatter={(value) => String(value)} tickLine={false} axisLine={false} fontSize={11} label={{ value: 'KPI', angle: -90, position: 'insideLeft', style: { fontSize: 11, fill: 'var(--tcdx-color-text-secondary)' } }} />
+                            <Tooltip formatter={formatChartTooltip('KPI')} labelFormatter={(label) => getKpiCategoryLabel(String(label))} />
                             <Bar
                               dataKey="value"
                               radius={[10, 10, 0, 0]}
@@ -1949,6 +2246,13 @@ function DashboardPageContent() {
                             />
                           </BarChart>
                         </ResponsiveChartFrame>
+                        ) : (
+                          <UniversalStateBlock
+                            state="insufficient"
+                            title="Datos insuficientes"
+                            description="No hay categorías KPI publicadas para comparar."
+                          />
+                        )}
                       </div>
                     </section>
                   </div>
@@ -2044,6 +2348,15 @@ function DashboardPageContent() {
             />
           )}
         </div>
+        <div className="mx-auto w-full max-w-[1720px]">
+          <GrcDecisionCenter
+            compact
+            variant="summary"
+            title={t('grcDecisionCenter.summaryTitle')}
+            ctaHref="/grc"
+            ctaLabel={t('grcDecisionCenter.cta')}
+          />
+        </div>
         <div className="mx-auto mt-6 max-w-[1720px]">
           <GrcPhase1Panel mode="dashboard" />
         </div>
@@ -2055,6 +2368,209 @@ function DashboardPageContent() {
 
 function hasChartData(items: OperationalChartDatum[]) {
   return items.some((item) => item.value > 0);
+}
+
+function ExecutiveAttentionPanel({ items }: { items: ExecutiveAttentionItem[] }) {
+  return (
+    <section className="rounded-[var(--tcdx-radius-tecdex-sm)] border border-[var(--tcdx-color-border)] bg-white p-6 shadow-[var(--tcdx-shadow-tecdex-sm)]">
+      <div className="mb-5 flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--tcdx-color-primary)]">
+            Requiere atención
+          </p>
+          <h2 className="mt-1 text-2xl font-semibold tracking-tight text-[var(--tcdx-color-text-ink)]">
+            Prioridades ejecutivas publicadas por los dominios GRC
+          </h2>
+          <p className="mt-1 max-w-3xl text-sm leading-6 text-[var(--tcdx-color-text-secondary)]">
+            Señales agrupadas desde riesgos, auditoría, acciones, no conformidades e indicadores oficiales existentes.
+          </p>
+        </div>
+        <span className="w-fit rounded-full border border-[rgba(237,111,42,0.24)] bg-[rgba(237,111,42,0.1)] px-3 py-1 text-xs font-semibold text-[var(--tcdx-color-primary)]">
+          Sin ranking fabricado
+        </span>
+      </div>
+
+      <div className="grid gap-3 lg:grid-cols-2 2xl:grid-cols-3">
+        {items.map((item) => (
+          <Link
+            key={item.id}
+            href={item.href}
+            className="group rounded-[var(--tcdx-radius-tecdex-sm)] border border-[var(--tcdx-color-border)] bg-[var(--tcdx-color-surface)] p-4 transition hover:border-[var(--tcdx-color-primary)] hover:bg-white focus-visible:shadow-[var(--tcdx-shadow-tecdex-focus)]"
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0">
+                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--tcdx-color-text-secondary)]">
+                  {item.label}
+                </p>
+                <h3 className="mt-1 text-base font-semibold text-[var(--tcdx-color-text-ink)]">
+                  {item.title}
+                </h3>
+              </div>
+              <UniversalStateBadge state={item.state} />
+            </div>
+            <div className="mt-3 flex items-end justify-between gap-3">
+              <p className="text-sm leading-6 text-[var(--tcdx-color-text-secondary)]">{item.detail}</p>
+              <span className="text-3xl font-bold tracking-tight text-[var(--tcdx-color-text-ink)]">{item.value}</span>
+            </div>
+            <div className="mt-3 inline-flex items-center gap-1 text-xs font-bold text-[var(--tcdx-color-primary)]">
+              Abrir workspace
+              <TcdxIcon name="chevronDown" className="h-4 w-4 -rotate-90 transition group-hover:translate-x-0.5" />
+            </div>
+          </Link>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function ExecutiveTrendPanel({
+  item,
+  loading,
+}: {
+  item: KpiDashboardItem | null;
+  loading: boolean;
+}) {
+  const trend = item ? buildOfficialTrend(item) : [];
+
+  return (
+    <section className="rounded-[var(--tcdx-radius-tecdex-sm)] border border-[var(--tcdx-color-border)] bg-white p-6 shadow-[var(--tcdx-shadow-tecdex-sm)]">
+      <div className="mb-5 flex items-start justify-between gap-4">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--tcdx-color-text-muted)]">
+            Tendencia
+          </p>
+          <h2 className="mt-1 text-xl font-semibold text-[var(--tcdx-color-text-ink)]">
+            Evolución oficial comparable
+          </h2>
+          <p className="mt-1 text-sm leading-6 text-[var(--tcdx-color-text-secondary)]">
+            Sólo se grafica cuando existen snapshots históricos publicados.
+          </p>
+        </div>
+        <Link href="/metricas" className="text-xs font-bold text-[var(--tcdx-color-primary)] hover:text-[var(--tcdx-color-primary-hover)]">
+          Ver métricas
+        </Link>
+      </div>
+
+      {loading ? (
+        <UniversalStateBlock state="loading" title="Cargando tendencia" />
+      ) : trend.length < 2 ? (
+        <UniversalStateBlock
+          state="insufficient"
+          title="Datos insuficientes"
+          description="No hay histórico oficial suficiente para una tendencia ejecutiva."
+        />
+      ) : (
+        <>
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <div className="text-sm font-semibold text-[var(--tcdx-color-text-ink)]">{item?.name}</div>
+              <div className="text-xs text-[var(--tcdx-color-text-secondary)]">{item?.code}</div>
+            </div>
+            <UniversalStateBadge state={mapOfficialStateToUniversal(item?.latest_snapshot)} />
+          </div>
+          <ResponsiveChartFrame
+            ariaDescription={`Tendencia de ${item?.name || 'indicador oficial'} con ${trend.length} snapshots oficiales publicados. Unidad: ${item?.unit || 'valor'}. Fuente: ${item?.code || 'snapshot oficial'}.`}
+            ariaLabel="Tendencia oficial comparable"
+            className="rounded-[var(--tcdx-radius-tecdex-sm)] bg-[var(--tcdx-color-surface)] p-2"
+            height={220}
+          >
+            <LineChart data={trend}>
+              <CartesianGrid vertical={false} stroke="var(--tcdx-color-border)" />
+              <XAxis dataKey="name" tickLine={false} axisLine={false} fontSize={11} />
+              <YAxis
+                tickLine={false}
+                axisLine={false}
+                fontSize={11}
+                label={{ value: item?.unit || 'valor', angle: -90, position: 'insideLeft', style: { fontSize: 11, fill: 'var(--tcdx-color-text-secondary)' } }}
+              />
+              <Tooltip formatter={formatChartTooltip(item?.unit || 'valor')} labelFormatter={(label) => `Período: ${String(label)}`} />
+              <Line dataKey="value" stroke="var(--tcdx-color-secondary)" strokeWidth={2.5} dot={{ r: 3 }} />
+            </LineChart>
+          </ResponsiveChartFrame>
+        </>
+      )}
+    </section>
+  );
+}
+
+function ExecutiveDataTrustPanel({
+  items,
+  healthWarnings,
+  loading,
+}: {
+  items: KpiDashboardItem[];
+  healthWarnings: string[];
+  loading: boolean;
+}) {
+  const snapshots = items
+    .map((item) => ({ item, snapshot: item.latest_snapshot }))
+    .filter((entry): entry is { item: KpiDashboardItem; snapshot: LatestSnapshot } => Boolean(entry.snapshot));
+  const trustedSnapshots = snapshots.filter((entry) => Boolean(entry.snapshot.trust?.status || entry.snapshot.coverage || entry.snapshot.freshness));
+  const selected = trustedSnapshots[0] || null;
+  const trust = selected?.snapshot.trust || null;
+  const freshness = trust?.freshness || getNestedStatus(selected?.snapshot.freshness);
+  const coverage = trust?.coverage ?? selected?.snapshot.coverage ?? null;
+  const warnings = [...(trust?.warnings || []), ...healthWarnings].filter(Boolean);
+
+  return (
+    <section className="rounded-[var(--tcdx-radius-tecdex-sm)] border border-[var(--tcdx-color-border)] bg-white p-6 shadow-[var(--tcdx-shadow-tecdex-sm)]">
+      <div className="mb-5 flex items-start justify-between gap-4">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--tcdx-color-text-muted)]">
+            Data Trust
+          </p>
+          <h2 className="mt-1 text-xl font-semibold text-[var(--tcdx-color-text-ink)]">
+            Calidad y confianza de la información
+          </h2>
+          <p className="mt-1 text-sm leading-6 text-[var(--tcdx-color-text-secondary)]">
+            Lectura visual de campos publicados por snapshots y health; no recalcula confianza.
+          </p>
+        </div>
+        <Link href="/datos/calidad" className="text-xs font-bold text-[var(--tcdx-color-primary)] hover:text-[var(--tcdx-color-primary-hover)]">
+          Ver calidad
+        </Link>
+      </div>
+
+      {loading ? (
+        <UniversalStateBlock state="loading" title="Cargando Data Trust" />
+      ) : !selected ? (
+        <UniversalStateBlock
+          state="not_available"
+          title="No disponible"
+          description="Las fuentes ejecutivas cargadas no publican Data Trust para esta vista."
+        />
+      ) : (
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_220px]">
+          <DataTrustIndicator
+            variant="panel"
+            status={trust?.status || null}
+            confidence={trust?.confidence ?? trust?.score ?? null}
+            coverage={coverage}
+            freshness={freshness}
+            source={trust?.source || selected.item.code}
+            timestamp={trust?.timestamp || selected.snapshot.updated_at || selected.snapshot.calculated_at || null}
+            provenance={
+              selected.snapshot.checksum ? (
+                <span className="break-all">Checksum: {selected.snapshot.checksum}</span>
+              ) : null
+            }
+            warnings={warnings}
+            label="Data Trust ejecutivo"
+          />
+          <div className="rounded-[var(--tcdx-radius-tecdex-sm)] border border-[var(--tcdx-color-border)] bg-[var(--tcdx-color-surface)] p-4">
+            <div className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--tcdx-color-text-secondary)]">
+              Snapshot fuente
+            </div>
+            <div className="mt-2 text-sm font-semibold text-[var(--tcdx-color-text-ink)]">{selected.item.name}</div>
+            <div className="mt-1 text-xs text-[var(--tcdx-color-text-secondary)]">{selected.item.code}</div>
+            <div className="mt-4">
+              <UniversalStateBadge state={mapOfficialStateToUniversal(selected.snapshot)} />
+            </div>
+          </div>
+        </div>
+      )}
+    </section>
+  );
 }
 
 function OperationalChartsPanel({
@@ -2153,6 +2669,8 @@ function OperationalChartCard({
   kind: 'bar' | 'donut';
 }) {
   const hasData = hasChartData(data);
+  const unit = 'registros';
+  const summary = getChartSummary(data, unit);
 
   return (
     <article className="rounded-[var(--tcdx-radius-tecdex-sm)] border border-[rgba(216,216,216,0.72)] bg-[var(--tcdx-color-surface)] p-4">
@@ -2162,11 +2680,20 @@ function OperationalChartCard({
       </div>
 
       {!hasData ? (
-        <div className="flex h-[220px] items-center justify-center rounded-[var(--tcdx-radius-tecdex-sm)] border border-dashed border-[var(--tcdx-color-border)] bg-white text-center text-sm text-[var(--tcdx-color-text-secondary)]">
-          Sin datos registrados para graficar.
-        </div>
+        <UniversalStateBlock
+          className="h-[220px] justify-center"
+          state="empty"
+          title="Sin datos"
+          description="No hay registros publicados para graficar esta distribución."
+        />
       ) : (
-        <ResponsiveChartFrame className="rounded-[var(--tcdx-radius-tecdex-sm)] bg-white p-2" height={240}>
+        <>
+          <ResponsiveChartFrame
+            ariaDescription={`${description} ${summary}`}
+            ariaLabel={title}
+            className="rounded-[var(--tcdx-radius-tecdex-sm)] bg-white p-2"
+            height={240}
+          >
             {kind === 'donut' ? (
               <PieChart>
                 <Pie
@@ -2183,14 +2710,14 @@ function OperationalChartCard({
                     <Cell key={entry.name} fill={entry.fill || 'var(--tcdx-color-secondary)'} />
                   ))}
                 </Pie>
-                <Tooltip formatter={(value: unknown, name: unknown) => [String(value), String(name)]} />
+                <Tooltip formatter={formatChartTooltip(unit)} />
               </PieChart>
             ) : (
               <BarChart data={data} margin={{ top: 10, right: 10, left: -18, bottom: 2 }}>
                 <CartesianGrid vertical={false} stroke="var(--tcdx-color-border)" />
-                <XAxis dataKey="name" tickLine={false} axisLine={false} fontSize={11} />
-                <YAxis allowDecimals={false} tickLine={false} axisLine={false} fontSize={11} />
-                <Tooltip />
+                <XAxis dataKey="name" tickLine={false} axisLine={false} fontSize={11} interval="preserveStartEnd" />
+                <YAxis allowDecimals={false} tickLine={false} axisLine={false} fontSize={11} label={{ value: 'Registros', angle: -90, position: 'insideLeft', style: { fontSize: 11, fill: 'var(--tcdx-color-text-secondary)' } }} />
+                <Tooltip formatter={formatChartTooltip(unit)} />
                 <Bar dataKey="value" radius={[8, 8, 0, 0]}>
                   {data.map((entry) => (
                     <Cell key={entry.name} fill={entry.fill || 'var(--tcdx-color-secondary)'} />
@@ -2198,7 +2725,9 @@ function OperationalChartCard({
                 </Bar>
               </BarChart>
             )}
-        </ResponsiveChartFrame>
+          </ResponsiveChartFrame>
+          <p className="mt-3 text-xs leading-5 text-[var(--tcdx-color-text-secondary)]">{summary}</p>
+        </>
       )}
     </article>
   );

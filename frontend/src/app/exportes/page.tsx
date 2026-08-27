@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Image from 'next/image';
 import AppLayout from '@/components/AppLayout';
+import EnterpriseDomainWorkspaceShell from '@/components/enterprise-domain/EnterpriseDomainWorkspaceShell';
 import { getUserRoleFromToken } from '@/utils/auth';
 import TcdxIcon, { type TcdxIconName } from '@/components/icons/TcdxIcon';
 import { useTranslation } from '@/hooks/useTranslation';
@@ -10,6 +11,12 @@ import { useTenantEntitlements } from '@/hooks/useTenantEntitlements';
 import { translateDisplayText } from '@/i18n/displayText';
 import PremiumReportsPanel from '@/components/reports/PremiumReportsPanel';
 import { fetchReportCatalogBootstrap } from '@/utils/reportCatalogBootstrap';
+import {
+  EnterpriseFilterBar,
+  EnterpriseRowActions,
+  EnterpriseTableShell,
+  UniversalStateBlock,
+} from '@/components/ui/enterprise';
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL || '';
@@ -364,8 +371,9 @@ function getCoverageBadgeClass(severity?: string) {
 }
 
 function formatCoveragePct(value?: number) {
-  const n = Number(value || 0);
-  if (!Number.isFinite(n)) return '0%';
+  if (value === null || value === undefined) return 'Sin datos';
+  const n = Number(value);
+  if (!Number.isFinite(n)) return 'No disponible';
   return `${Math.round(n * 10) / 10}%`;
 }
 
@@ -906,38 +914,23 @@ export default function ExportesPage() {
 
   return (
     <AppLayout>
+      <EnterpriseDomainWorkspaceShell
+        domain="reports"
+        eyebrow={t('exports.brand')}
+        title={t('exports.title')}
+        description="Los reportes ejecutivos se basan en salud ISO efectiva: controles activos en alcance, evidencia oficial, hallazgos, no conformidades y planes vencidos."
+        actions={
+          <a
+            href="/dashboard?view=iso"
+            className="inline-flex min-h-10 items-center gap-2 rounded-md border border-[var(--tcdx-color-border)] bg-white px-4 text-sm font-semibold text-[var(--tcdx-color-text-ink)] hover:bg-[var(--tcdx-color-surface-subtle)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--tcdx-color-focus)]"
+          >
+            Ver Centro Control ISO
+            <TcdxIcon name="chevronDown" className="h-4 w-4 -rotate-90" />
+          </a>
+        }
+      >
       <div className="tcdx-reports-refresh space-y-6">
-        <section className="overflow-hidden rounded-[34px] border border-slate-200 bg-[linear-gradient(135deg,#0B2F4F_0%,#103a61_48%,#0b2740_100%)] p-6 shadow-[0_20px_60px_rgba(15,23,42,0.16)]">
-          <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
-            <div className="max-w-3xl">
-              <div className="inline-flex items-center gap-3 rounded-full border border-white/12 bg-white/8 px-3 py-1.5 text-xs font-bold uppercase tracking-[0.18em] text-white/65">
-                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-white/10 text-white">
-                  <TcdxIcon name="export" className="h-4 w-4" />
-                </span>
-                {t('exports.brand')}
-              </div>
-
-              <h1 className="mt-2 text-3xl font-bold text-white md:text-4xl">
-                {t('exports.title')}
-              </h1>
-
-              <p className="mt-3 max-w-2xl text-sm leading-6 text-white/70">
-                Los reportes ejecutivos se basan en salud ISO efectiva: controles activos en alcance,
-                evidencia oficial, hallazgos, no conformidades y planes vencidos.
-              </p>
-
-              <a
-                href="/dashboard?view=iso"
-                className="mt-4 inline-flex w-fit items-center gap-2 rounded-2xl border border-white/15 bg-white/10 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/15"
-              >
-                Ver Centro Control ISO
-                <TcdxIcon name="chevronDown" className="h-4 w-4 -rotate-90" />
-              </a>
-
-              <div className="mt-6 h-px w-28 bg-gradient-to-r from-white/45 to-transparent" />
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-2 xl:min-w-[440px] xl:max-w-[480px]">
+        <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
               <HeroMiniStat
                 label={t('exports.reportTypesLabel')}
                 value={typeCount}
@@ -958,8 +951,6 @@ export default function ExportesPage() {
                 value={historyStats.uniqueClients}
                 helper={t('exports.accumulatedTraceability')}
               />
-            </div>
-          </div>
         </section>
 
         <section className="grid gap-4 xl:grid-cols-[1.05fr_0.95fr_1.1fr_0.95fr]">
@@ -1528,19 +1519,46 @@ export default function ExportesPage() {
               />
             </div>
 
-            <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-              <div className="grid gap-3 xl:grid-cols-[1.2fr_1fr_1fr_1fr_1fr]">
+            <EnterpriseFilterBar
+              className="mt-6"
+              count={`${exportsHistory.length} exportes visibles`}
+              actions={
+                <>
+                <button
+                  type="button"
+                  onClick={loadHistory}
+                  className="min-h-10 rounded-[var(--tcdx-radius-tecdex-sm)] bg-[#0B2F4F] px-4 text-sm font-bold text-white hover:bg-[#123d63] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--tcdx-color-primary)]"
+                >
+                  {t('exports.applyFilters')}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={clearFilters}
+                  className="min-h-10 rounded-[var(--tcdx-radius-tecdex-sm)] border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--tcdx-color-primary)]"
+                >
+                  {t('exports.clear')}
+                </button>
+                </>
+              }
+            >
+              <label className="sm:col-span-2 xl:col-span-1">
+                <span className="text-xs font-bold text-slate-500">{t('common.search')}</span>
                 <input
+                  type="search"
                   value={filterText}
                   onChange={(event) => setFilterText(event.target.value)}
                   placeholder={t('exports.searchPlaceholder')}
-                  className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-[#0B2F4F]"
+                  className="mt-1 min-h-10 w-full rounded-[var(--tcdx-radius-tecdex-sm)] border border-slate-200 bg-white px-3 text-sm outline-none focus:border-[#0B2F4F] focus-visible:ring-2 focus-visible:ring-[var(--tcdx-color-primary)]"
                 />
+              </label>
 
+              <label>
+                <span className="text-xs font-bold text-slate-500">{t('exports.report')}</span>
                 <select
                   value={filterType}
                   onChange={(event) => setFilterType(event.target.value)}
-                  className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-[#0B2F4F]"
+                  className="mt-1 min-h-10 w-full rounded-[var(--tcdx-radius-tecdex-sm)] border border-slate-200 bg-white px-3 text-sm outline-none focus:border-[#0B2F4F] focus-visible:ring-2 focus-visible:ring-[var(--tcdx-color-primary)]"
                 >
                   <option value="">{t('exports.allTypes')}</option>
                   {reportTypes.map((report) => (
@@ -1549,11 +1567,14 @@ export default function ExportesPage() {
                     </option>
                   ))}
                 </select>
+              </label>
 
+              <label>
+                <span className="text-xs font-bold text-slate-500">{t('common.client')}</span>
                 <select
                   value={filterTenant}
                   onChange={(event) => setFilterTenant(event.target.value)}
-                  className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-[#0B2F4F]"
+                  className="mt-1 min-h-10 w-full rounded-[var(--tcdx-radius-tecdex-sm)] border border-slate-200 bg-white px-3 text-sm outline-none focus:border-[#0B2F4F] focus-visible:ring-2 focus-visible:ring-[var(--tcdx-color-primary)]"
                 >
                   <option value="">{t('exports.allClients')}</option>
                   {clients.map((client) => (
@@ -1562,78 +1583,65 @@ export default function ExportesPage() {
                     </option>
                   ))}
                 </select>
+              </label>
 
+              <label>
+                <span className="text-xs font-bold text-slate-500">Desde</span>
                 <input
                   type="date"
                   value={filterDateFrom}
                   onChange={(event) => setFilterDateFrom(event.target.value)}
-                  className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-[#0B2F4F]"
+                  className="mt-1 min-h-10 w-full rounded-[var(--tcdx-radius-tecdex-sm)] border border-slate-200 bg-white px-3 text-sm outline-none focus:border-[#0B2F4F] focus-visible:ring-2 focus-visible:ring-[var(--tcdx-color-primary)]"
                 />
+              </label>
 
+              <label>
+                <span className="text-xs font-bold text-slate-500">Hasta</span>
                 <input
                   type="date"
                   value={filterDateTo}
                   onChange={(event) => setFilterDateTo(event.target.value)}
-                  className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-[#0B2F4F]"
+                  className="mt-1 min-h-10 w-full rounded-[var(--tcdx-radius-tecdex-sm)] border border-slate-200 bg-white px-3 text-sm outline-none focus:border-[#0B2F4F] focus-visible:ring-2 focus-visible:ring-[var(--tcdx-color-primary)]"
                 />
-              </div>
+              </label>
+            </EnterpriseFilterBar>
 
-              <div className="mt-4 flex flex-wrap gap-3">
-                <button
-                  type="button"
-                  onClick={loadHistory}
-                  className="rounded-xl bg-[#0B2F4F] px-4 py-2 text-sm font-bold text-white hover:bg-[#123d63]"
-                >
-                  {t('exports.applyFilters')}
-                </button>
-
-                <button
-                  type="button"
-                  onClick={clearFilters}
-                  className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50"
-                >
-                  {t('exports.clear')}
-                </button>
-              </div>
-            </div>
-
-            <div className="mt-5 overflow-hidden rounded-2xl border border-slate-200">
+            <EnterpriseTableShell className="mt-5" density="compact" maxHeight="620px">
               {historyLoading ? (
-                <div className="p-8 text-center text-sm text-slate-500">
-                  {t('exports.loadingHistory')}
-                </div>
+                <UniversalStateBlock state="loading" title={t('exports.loadingHistory')} />
               ) : exportsHistory.length === 0 ? (
-                <div className="p-8 text-center text-sm text-slate-500">
-                  {t('exports.noHistory')}
-                </div>
+                <UniversalStateBlock
+                  state="empty"
+                  title={t('exports.noHistory')}
+                  description="No hay exportes para los filtros actuales."
+                />
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="min-w-full text-left text-sm">
-                    <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+                  <table className="min-w-[980px] w-full table-fixed text-left text-sm">
+                    <thead>
                       <tr>
-                        <th className="px-4 py-3">{t('exports.report')}</th>
-                        <th className="px-4 py-3">{t('common.client')}</th>
-                        <th className="px-4 py-3">{t('exports.date')}</th>
-                        <th className="px-4 py-3">{t('common.generatedBy')}</th>
-                        <th className="px-4 py-3">{t('common.status')}</th>
-                        <th className="px-4 py-3">{t('common.file')}</th>
+                        <th scope="col" className="w-[28%] px-3 py-3">{t('exports.report')}</th>
+                        <th scope="col" className="px-3 py-3">{t('common.client')}</th>
+                        <th scope="col" className="w-[130px] px-3 py-3">{t('exports.date')}</th>
+                        <th scope="col" className="px-3 py-3">{t('common.generatedBy')}</th>
+                        <th scope="col" className="w-[130px] px-3 py-3">{t('common.status')}</th>
+                        <th scope="col" className="w-[120px] px-3 py-3 text-right">{t('common.file')}</th>
                       </tr>
                     </thead>
 
-                    <tbody className="divide-y divide-slate-100 bg-white">
+                    <tbody className="bg-white">
                       {exportsHistory.map((report) => (
                         <tr key={report.id} className="hover:bg-slate-50/70">
-                          <td className="px-4 py-3 align-top">
+                          <td className="px-3 py-3 align-top">
                             <div className="flex items-start gap-3">
-                              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-[#2563eb]">
+                              <div className="hidden h-9 w-9 flex-none items-center justify-center rounded-[var(--tcdx-radius-tecdex-sm)] bg-slate-100 text-[#2563eb] sm:flex">
                                 <TcdxIcon name={getReportIcon(report.report_type_code)} className="h-5 w-5" />
                               </div>
 
-                              <div>
-                                <div className="font-bold text-slate-800">
+                              <div className="min-w-0">
+                                <div className="line-clamp-2 font-bold text-slate-800">
                                   {translateDisplayText(report.report_type_name || report.report_title, locale, 'billing')}
                                 </div>
-                                <div className="text-xs text-slate-400">
+                                <div className="truncate text-xs text-slate-400" title={report.report_type_code}>
                                   {report.report_type_code}
                                 </div>
                                 <div className="mt-1 text-xs text-slate-500">
@@ -1643,28 +1651,28 @@ export default function ExportesPage() {
                             </div>
                           </td>
 
-                          <td className="px-4 py-3 align-top text-slate-600">
-                            <div className="font-medium text-slate-700">
+                          <td className="px-3 py-3 align-top text-slate-600">
+                            <div className="line-clamp-2 font-medium text-slate-700">
                               {translateDisplayText(report.tenant_name || '-', locale, 'adminSaas')}
                             </div>
                           </td>
 
-                          <td className="px-4 py-3 align-top text-slate-600">
+                          <td className="px-3 py-3 align-top text-slate-600">
                             {formatDate(report.generated_at, locale)}
                           </td>
 
-                          <td className="px-4 py-3 align-top">
-                            <div className="font-medium text-slate-700">
+                          <td className="px-3 py-3 align-top">
+                            <div className="line-clamp-1 font-medium text-slate-700">
                               {report.requested_by_name || '-'}
                             </div>
-                            <div className="text-xs text-slate-400">
+                            <div className="truncate text-xs text-slate-400">
                               {report.requested_by_email || ''}
                             </div>
                           </td>
 
-                          <td className="px-4 py-3 align-top">
+                          <td className="px-3 py-3 align-top">
                             <span
-                              className={`rounded-full border px-3 py-1 text-xs font-bold ${getStatusClass(
+                              className={`rounded-[var(--tcdx-radius-tecdex-sm)] border px-2 py-1 text-xs font-bold ${getStatusClass(
                                 report.status
                               )}`}
                             >
@@ -1672,7 +1680,8 @@ export default function ExportesPage() {
                             </span>
                           </td>
 
-                          <td className="px-4 py-3 align-top">
+                          <td className="px-3 py-3 align-top">
+                            <EnterpriseRowActions>
                             <button
                               type="button"
                               onClick={() => {
@@ -1682,21 +1691,22 @@ export default function ExportesPage() {
                                   setError(err.message || t('exports.loadExportsError'));
                                 });
                               }}
-                              className="font-bold text-[#0B2F4F] hover:underline"
+                              className="rounded-[var(--tcdx-radius-tecdex-sm)] border border-slate-200 bg-white px-2 py-1 text-xs font-bold text-[#0B2F4F] hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--tcdx-color-primary)]"
                             >
                               {t('exports.viewPdf')}
                             </button>
+                            </EnterpriseRowActions>
                           </td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
-                </div>
               )}
-            </div>
+            </EnterpriseTableShell>
           </section>
         )}
       </div>
+      </EnterpriseDomainWorkspaceShell>
     </AppLayout>
   );
 }

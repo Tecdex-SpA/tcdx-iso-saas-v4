@@ -10,6 +10,7 @@ import { translateClauseLabel, translateStandardLabel } from '@/i18n/displayText
 import QuantitativeRiskSimulationView from '@/components/riesgos/QuantitativeRiskSimulationView';
 import RiskViewSwitcher, { type RiskViewMode } from '@/components/riesgos/RiskViewSwitcher';
 import type { OperationalRiskSimulationRow, QuantitativeRisk } from '@/components/riesgos/riskSimulationUtils';
+import RiskControlWorkspaceShell from '@/components/risk-control/RiskControlWorkspaceShell';
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL || '';
@@ -1338,7 +1339,10 @@ function RiskMatrixPageContent() {
   if (loadingStandards) {
     return (
       <AppLayout>
-        <div className="p-6">{t('riskMatrix.loadingStandards')}</div>
+        <div className="tcdx-risk-refinement p-6 space-y-6">
+          <RiskControlWorkspaceShell activeView="matrix" compactHeader />
+          <div>{t('riskMatrix.loadingStandards')}</div>
+        </div>
       </AppLayout>
     );
   }
@@ -1347,6 +1351,7 @@ function RiskMatrixPageContent() {
     return (
       <AppLayout>
         <div className="p-6 space-y-4">
+          <RiskControlWorkspaceShell activeView="matrix" compactHeader />
           <h1 className="text-2xl font-bold">{t('riskMatrix.title')}</h1>
 
           <div className="bg-yellow-50 border border-yellow-200 p-6 rounded shadow">
@@ -1366,6 +1371,7 @@ function RiskMatrixPageContent() {
   return (
     <AppLayout>
       <div className="tcdx-risk-refinement p-6 space-y-6">
+        <RiskControlWorkspaceShell activeView="matrix" compactHeader />
         <div>
           <h1 className="text-3xl font-bold tracking-tight text-slate-950">Riesgos</h1>
           <p className="text-sm text-[var(--tcdx-color-text-secondary)] mt-1">
@@ -1596,16 +1602,22 @@ function RiskMatrixPageContent() {
                     </span>
                   </div>
 
-                  <div className="max-h-[420px] overflow-auto tcdx-scrollbar">
-                    <table className="min-w-full text-sm">
+                  <div
+                    aria-label="Riesgos priorizados de la matriz ISO"
+                    className="max-h-[420px] overflow-auto tcdx-scrollbar"
+                    data-ui09-scroll-region="true"
+                    role="region"
+                    tabIndex={0}
+                  >
+                    <table className="min-w-[920px] text-sm">
                       <thead className="bg-gray-50 text-left text-xs uppercase text-gray-500">
                         <tr>
-                          <th className="px-4 py-3">Riesgo</th>
-                          <th className="px-4 py-3">Activo</th>
-                          <th className="px-4 py-3">Inherente</th>
-                          <th className="px-4 py-3">Residual</th>
-                          <th className="px-4 py-3">Tratamiento</th>
-                          <th className="px-4 py-3">Revision</th>
+                          <th className="px-4 py-3" scope="col">Riesgo</th>
+                          <th className="px-4 py-3" scope="col">Activo</th>
+                          <th className="px-4 py-3" scope="col">Inherente</th>
+                          <th className="px-4 py-3" scope="col">Residual</th>
+                          <th className="px-4 py-3" scope="col">Tratamiento</th>
+                          <th className="px-4 py-3" scope="col">Revision</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100">
@@ -1684,7 +1696,7 @@ function RiskMatrixPageContent() {
                                     type="button"
                                     onClick={() => saveMatrixRiskInputs(item)}
                                     disabled={!draftChanged || savingMatrixRiskInputId === item.id}
-                                    className="text-xs px-2 py-1 rounded bg-gray-950 text-white disabled:bg-gray-300 disabled:text-gray-600"
+                                    className="min-h-10 rounded bg-gray-950 px-3 py-2 text-xs font-semibold text-white disabled:bg-gray-300 disabled:text-gray-600"
                                   >
                                     {savingMatrixRiskInputId === item.id ? 'Guardando...' : 'Guardar P/I'}
                                   </button>
@@ -1707,14 +1719,14 @@ function RiskMatrixPageContent() {
                                     <button
                                       type="button"
                                       onClick={() => reviewRiskItem(item.id, 'accepted')}
-                                      className="text-xs px-2 py-1 rounded bg-emerald-600 text-white hover:bg-emerald-700"
+                                      className="min-h-10 rounded bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-700"
                                     >
                                       Aceptar
                                     </button>
                                     <button
                                       type="button"
                                       onClick={() => reviewRiskItem(item.id, 'rejected')}
-                                      className="text-xs px-2 py-1 rounded border border-gray-300 hover:bg-gray-50"
+                                      className="min-h-10 rounded border border-gray-300 px-3 py-2 text-xs font-semibold hover:bg-gray-50"
                                     >
                                       Rechazar
                                     </button>

@@ -10,6 +10,7 @@ export default function ReportGenerationHistory() {
       primaryLabel="generaciones"
       emptyMessage="No hay emisiones de reporte generadas."
       analyticsDomain=""
+      domainWorkspace="reports"
       columns={[
         { key: 'generation_key', label: 'Emisión' },
         { key: 'format', label: 'Formato' },

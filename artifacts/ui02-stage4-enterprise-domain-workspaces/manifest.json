@@ -1,0 +1,398 @@
+{
+  "verdict": "PASS",
+  "locale": "es-CL",
+  "generated_at": "2026-08-25T20:39:42.563Z",
+  "tenant_context": {
+    "tenant_id": "aa297668-d589-474f-826c-5f1316dc92e2",
+    "tenant_name": "TECDEX Validacion Visual",
+    "source": "runtime UUID visual fixture"
+  },
+  "rutas": {
+    "antes": 97,
+    "despues": 97
+  },
+  "assertions_globales": [
+    "fixtures confinados al script de evidencia",
+    "sin mock productivo",
+    "sin nuevas rutas",
+    "sin modificacion de RBAC",
+    "sin datos demo persistentes"
+  ],
+  "captures": [
+    {
+      "file": "cumplimiento-1440.png",
+      "locale": "es-CL",
+      "viewport": {
+        "width": 1440,
+        "height": 1050
+      },
+      "ruta": "/cumplimiento-auditoria",
+      "dominio": "Cumplimiento",
+      "tenant_visual": "TECDEX Validacion Visual",
+      "condicion_de_datos": "fixture visual local con sesion valida y colecciones vacias/parciales segun vista",
+      "fuente": "playwright-route-fixture",
+      "assertions": [
+        "enterprise-domain-workspace visible",
+        "AppLayout/topbar visible",
+        "exactamente un AppLayout/topbar",
+        "exactamente una tab de dominio con aria-current=page",
+        "sin errores visibles de auth o tenant",
+        "sin labels conocidos EN de shell en evidencia ES",
+        "rutas App Router 97 antes/despues"
+      ],
+      "sesion_valida": true,
+      "ausencia_de_idioma_mixto": true,
+      "rutas_antes_despues": "97 -> 97"
+    },
+    {
+      "file": "cumplimiento-mobile-390.png",
+      "locale": "es-CL",
+      "viewport": {
+        "width": 390,
+        "height": 920
+      },
+      "ruta": "/cumplimiento-auditoria",
+      "dominio": "Cumplimiento",
+      "tenant_visual": "TECDEX Validacion Visual",
+      "condicion_de_datos": "fixture visual local con sesion valida y colecciones vacias/parciales segun vista",
+      "fuente": "playwright-route-fixture",
+      "assertions": [
+        "enterprise-domain-workspace visible",
+        "AppLayout/topbar visible",
+        "exactamente un AppLayout/topbar",
+        "exactamente una tab de dominio con aria-current=page",
+        "sin errores visibles de auth o tenant",
+        "sin labels conocidos EN de shell en evidencia ES",
+        "rutas App Router 97 antes/despues"
+      ],
+      "sesion_valida": true,
+      "ausencia_de_idioma_mixto": true,
+      "rutas_antes_despues": "97 -> 97"
+    },
+    {
+      "file": "diagnostico-1440.png",
+      "locale": "es-CL",
+      "viewport": {
+        "width": 1440,
+        "height": 1050
+      },
+      "ruta": "/diagnostico",
+      "dominio": "Cumplimiento",
+      "tenant_visual": "TECDEX Validacion Visual",
+      "condicion_de_datos": "fixture visual local con sesion valida y colecciones vacias/parciales segun vista",
+      "fuente": "playwright-route-fixture",
+      "assertions": [
+        "enterprise-domain-workspace visible",
+        "AppLayout/topbar visible",
+        "exactamente un AppLayout/topbar",
+        "exactamente una tab de dominio con aria-current=page",
+        "sin errores visibles de auth o tenant",
+        "sin labels conocidos EN de shell en evidencia ES",
+        "rutas App Router 97 antes/despues"
+      ],
+      "sesion_valida": true,
+      "ausencia_de_idioma_mixto": true,
+      "rutas_antes_despues": "97 -> 97"
+    },
+    {
+      "file": "auditorias-1440.png",
+      "locale": "es-CL",
+      "viewport": {
+        "width": 1440,
+        "height": 1050
+      },
+      "ruta": "/auditorias",
+      "dominio": "Auditoría",
+      "tenant_visual": "TECDEX Validacion Visual",
+      "condicion_de_datos": "fixture visual local con sesion valida y colecciones vacias/parciales segun vista",
+      "fuente": "playwright-route-fixture",
+      "assertions": [
+        "enterprise-domain-workspace visible",
+        "AppLayout/topbar visible",
+        "exactamente un AppLayout/topbar",
+        "exactamente una tab de dominio con aria-current=page",
+        "sin errores visibles de auth o tenant",
+        "sin labels conocidos EN de shell en evidencia ES",
+        "rutas App Router 97 antes/despues"
+      ],
+      "sesion_valida": true,
+      "ausencia_de_idioma_mixto": true,
+      "rutas_antes_despues": "97 -> 97"
+    },
+    {
+      "file": "auditorias-mobile-390.png",
+      "locale": "es-CL",
+      "viewport": {
+        "width": 390,
+        "height": 920
+      },
+      "ruta": "/auditorias",
+      "dominio": "Auditoría",
+      "tenant_visual": "TECDEX Validacion Visual",
+      "condicion_de_datos": "fixture visual local con sesion valida y colecciones vacias/parciales segun vista",
+      "fuente": "playwright-route-fixture",
+      "assertions": [
+        "enterprise-domain-workspace visible",
+        "AppLayout/topbar visible",
+        "exactamente un AppLayout/topbar",
+        "exactamente una tab de dominio con aria-current=page",
+        "sin errores visibles de auth o tenant",
+        "sin labels conocidos EN de shell en evidencia ES",
+        "rutas App Router 97 antes/despues"
+      ],
+      "sesion_valida": true,
+      "ausencia_de_idioma_mixto": true,
+      "rutas_antes_despues": "97 -> 97"
+    },
+    {
+      "file": "hallazgos-1440.png",
+      "locale": "es-CL",
+      "viewport": {
+        "width": 1440,
+        "height": 1050
+      },
+      "ruta": "/hallazgos",
+      "dominio": "Auditoría",
+      "tenant_visual": "TECDEX Validacion Visual",
+      "condicion_de_datos": "fixture visual local con sesion valida y colecciones vacias/parciales segun vista",
+      "fuente": "playwright-route-fixture",
+      "assertions": [
+        "enterprise-domain-workspace visible",
+        "AppLayout/topbar visible",
+        "exactamente un AppLayout/topbar",
+        "exactamente una tab de dominio con aria-current=page",
+        "sin errores visibles de auth o tenant",
+        "sin labels conocidos EN de shell en evidencia ES",
+        "rutas App Router 97 antes/despues"
+      ],
+      "sesion_valida": true,
+      "ausencia_de_idioma_mixto": true,
+      "rutas_antes_despues": "97 -> 97"
+    },
+    {
+      "file": "datos-1440.png",
+      "locale": "es-CL",
+      "viewport": {
+        "width": 1440,
+        "height": 1050
+      },
+      "ruta": "/datos",
+      "dominio": "Datos",
+      "tenant_visual": "TECDEX Validacion Visual",
+      "condicion_de_datos": "fixture visual local con sesion valida y colecciones vacias/parciales segun vista",
+      "fuente": "playwright-route-fixture",
+      "assertions": [
+        "enterprise-domain-workspace visible",
+        "AppLayout/topbar visible",
+        "exactamente un AppLayout/topbar",
+        "exactamente una tab de dominio con aria-current=page",
+        "sin errores visibles de auth o tenant",
+        "sin labels conocidos EN de shell en evidencia ES",
+        "rutas App Router 97 antes/despues"
+      ],
+      "sesion_valida": true,
+      "ausencia_de_idioma_mixto": true,
+      "rutas_antes_despues": "97 -> 97"
+    },
+    {
+      "file": "datos-mobile-390.png",
+      "locale": "es-CL",
+      "viewport": {
+        "width": 390,
+        "height": 920
+      },
+      "ruta": "/datos",
+      "dominio": "Datos",
+      "tenant_visual": "TECDEX Validacion Visual",
+      "condicion_de_datos": "fixture visual local con sesion valida y colecciones vacias/parciales segun vista",
+      "fuente": "playwright-route-fixture",
+      "assertions": [
+        "enterprise-domain-workspace visible",
+        "AppLayout/topbar visible",
+        "exactamente un AppLayout/topbar",
+        "exactamente una tab de dominio con aria-current=page",
+        "sin errores visibles de auth o tenant",
+        "sin labels conocidos EN de shell en evidencia ES",
+        "rutas App Router 97 antes/despues"
+      ],
+      "sesion_valida": true,
+      "ausencia_de_idioma_mixto": true,
+      "rutas_antes_despues": "97 -> 97"
+    },
+    {
+      "file": "evidencias-1440.png",
+      "locale": "es-CL",
+      "viewport": {
+        "width": 1440,
+        "height": 1050
+      },
+      "ruta": "/evidencias",
+      "dominio": "Datos",
+      "tenant_visual": "TECDEX Validacion Visual",
+      "condicion_de_datos": "fixture visual local con sesion valida y colecciones vacias/parciales segun vista",
+      "fuente": "playwright-route-fixture",
+      "assertions": [
+        "enterprise-domain-workspace visible",
+        "AppLayout/topbar visible",
+        "exactamente un AppLayout/topbar",
+        "exactamente una tab de dominio con aria-current=page",
+        "sin errores visibles de auth o tenant",
+        "sin labels conocidos EN de shell en evidencia ES",
+        "rutas App Router 97 antes/despues"
+      ],
+      "sesion_valida": true,
+      "ausencia_de_idioma_mixto": true,
+      "rutas_antes_despues": "97 -> 97"
+    },
+    {
+      "file": "metricas-1440.png",
+      "locale": "es-CL",
+      "viewport": {
+        "width": 1440,
+        "height": 1050
+      },
+      "ruta": "/metricas",
+      "dominio": "Inteligencia",
+      "tenant_visual": "TECDEX Validacion Visual",
+      "condicion_de_datos": "fixture visual local con sesion valida y colecciones vacias/parciales segun vista",
+      "fuente": "playwright-route-fixture",
+      "assertions": [
+        "enterprise-domain-workspace visible",
+        "AppLayout/topbar visible",
+        "exactamente un AppLayout/topbar",
+        "exactamente una tab de dominio con aria-current=page",
+        "sin errores visibles de auth o tenant",
+        "sin labels conocidos EN de shell en evidencia ES",
+        "rutas App Router 97 antes/despues"
+      ],
+      "sesion_valida": true,
+      "ausencia_de_idioma_mixto": true,
+      "rutas_antes_despues": "97 -> 97"
+    },
+    {
+      "file": "inteligencia-mobile-390.png",
+      "locale": "es-CL",
+      "viewport": {
+        "width": 390,
+        "height": 920
+      },
+      "ruta": "/grc",
+      "dominio": "Inteligencia",
+      "tenant_visual": "TECDEX Validacion Visual",
+      "condicion_de_datos": "fixture visual local con sesion valida y colecciones vacias/parciales segun vista",
+      "fuente": "playwright-route-fixture",
+      "assertions": [
+        "enterprise-domain-workspace visible",
+        "AppLayout/topbar visible",
+        "exactamente un AppLayout/topbar",
+        "exactamente una tab de dominio con aria-current=page",
+        "sin errores visibles de auth o tenant",
+        "sin labels conocidos EN de shell en evidencia ES",
+        "rutas App Router 97 antes/despues"
+      ],
+      "sesion_valida": true,
+      "ausencia_de_idioma_mixto": true,
+      "rutas_antes_despues": "97 -> 97"
+    },
+    {
+      "file": "ia-compliance-1440.png",
+      "locale": "es-CL",
+      "viewport": {
+        "width": 1440,
+        "height": 1050
+      },
+      "ruta": "/ia-compliance",
+      "dominio": "Inteligencia",
+      "tenant_visual": "TECDEX Validacion Visual",
+      "condicion_de_datos": "fixture visual local con sesion valida y colecciones vacias/parciales segun vista",
+      "fuente": "playwright-route-fixture",
+      "assertions": [
+        "enterprise-domain-workspace visible",
+        "AppLayout/topbar visible",
+        "exactamente un AppLayout/topbar",
+        "exactamente una tab de dominio con aria-current=page",
+        "sin errores visibles de auth o tenant",
+        "sin labels conocidos EN de shell en evidencia ES",
+        "rutas App Router 97 antes/despues"
+      ],
+      "sesion_valida": true,
+      "ausencia_de_idioma_mixto": true,
+      "rutas_antes_despues": "97 -> 97"
+    },
+    {
+      "file": "exportes-1440.png",
+      "locale": "es-CL",
+      "viewport": {
+        "width": 1440,
+        "height": 1050
+      },
+      "ruta": "/exportes",
+      "dominio": "Reportes",
+      "tenant_visual": "TECDEX Validacion Visual",
+      "condicion_de_datos": "fixture visual local con sesion valida y colecciones vacias/parciales segun vista",
+      "fuente": "playwright-route-fixture",
+      "assertions": [
+        "enterprise-domain-workspace visible",
+        "AppLayout/topbar visible",
+        "exactamente un AppLayout/topbar",
+        "exactamente una tab de dominio con aria-current=page",
+        "sin errores visibles de auth o tenant",
+        "sin labels conocidos EN de shell en evidencia ES",
+        "rutas App Router 97 antes/despues"
+      ],
+      "sesion_valida": true,
+      "ausencia_de_idioma_mixto": true,
+      "rutas_antes_despues": "97 -> 97"
+    },
+    {
+      "file": "reportes-mobile-390.png",
+      "locale": "es-CL",
+      "viewport": {
+        "width": 390,
+        "height": 920
+      },
+      "ruta": "/bi",
+      "dominio": "Reportes",
+      "tenant_visual": "TECDEX Validacion Visual",
+      "condicion_de_datos": "fixture visual local con sesion valida y colecciones vacias/parciales segun vista",
+      "fuente": "playwright-route-fixture",
+      "assertions": [
+        "enterprise-domain-workspace visible",
+        "AppLayout/topbar visible",
+        "exactamente un AppLayout/topbar",
+        "exactamente una tab de dominio con aria-current=page",
+        "sin errores visibles de auth o tenant",
+        "sin labels conocidos EN de shell en evidencia ES",
+        "rutas App Router 97 antes/despues"
+      ],
+      "sesion_valida": true,
+      "ausencia_de_idioma_mixto": true,
+      "rutas_antes_despues": "97 -> 97"
+    },
+    {
+      "file": "studio-1440.png",
+      "locale": "es-CL",
+      "viewport": {
+        "width": 1440,
+        "height": 1050
+      },
+      "ruta": "/reportes/studio",
+      "dominio": "Reportes",
+      "tenant_visual": "TECDEX Validacion Visual",
+      "condicion_de_datos": "fixture visual local con sesion valida y colecciones vacias/parciales segun vista",
+      "fuente": "playwright-route-fixture",
+      "assertions": [
+        "enterprise-domain-workspace visible",
+        "AppLayout/topbar visible",
+        "exactamente un AppLayout/topbar",
+        "exactamente una tab de dominio con aria-current=page",
+        "sin errores visibles de auth o tenant",
+        "sin labels conocidos EN de shell en evidencia ES",
+        "rutas App Router 97 antes/despues"
+      ],
+      "sesion_valida": true,
+      "ausencia_de_idioma_mixto": true,
+      "rutas_antes_despues": "97 -> 97"
+    }
+  ]
+}

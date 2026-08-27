@@ -1,0 +1,122 @@
+{
+  "verdict": "PASS",
+  "locale": "es-CL",
+  "generated_at": "2026-08-26T18:06:41.037Z",
+  "route_count": {
+    "before": 97,
+    "after": 97,
+    "expected": "97 -> 97"
+  },
+  "source": "mock/real: Playwright fixtures over real App Router pages; fixtures are confined to this script",
+  "assertions": {
+    "zero_vs_empty": true,
+    "insufficient": true,
+    "not_calculable": true,
+    "not_available": true,
+    "error": true,
+    "stale": true,
+    "partial": true,
+    "loading": true,
+    "data_trust": true,
+    "rbac": "mvpPermissions.ts unchanged by focal contract"
+  },
+  "captures": [
+    {
+      "file": "risk-data-states-1440.png",
+      "locale": "es-CL",
+      "viewport": {
+        "width": 1440,
+        "height": 1050
+      },
+      "route": "/riesgos",
+      "state_case": "zero_vs_insufficient",
+      "source": "playwright-route-fixture",
+      "assertions": [
+        "R-ZERO",
+        "R-INSUF"
+      ]
+    },
+    {
+      "file": "evidence-data-trust-1440.png",
+      "locale": "es-CL",
+      "viewport": {
+        "width": 1440,
+        "height": 1050
+      },
+      "route": "/evidencias",
+      "state_case": "evidence_surface_with_missing_score_guard",
+      "source": "playwright-route-fixture",
+      "assertions": [
+        "Evidencias"
+      ]
+    },
+    {
+      "file": "metrics-data-states-1440.png",
+      "locale": "es-CL",
+      "viewport": {
+        "width": 1440,
+        "height": 1050
+      },
+      "route": "/metricas",
+      "state_case": "all_universal_states",
+      "source": "playwright-route-fixture",
+      "assertions": [
+        "0",
+        "Sin datos",
+        "Datos insuficientes",
+        "No calculable",
+        "No disponible",
+        "Error",
+        "Desactualizado",
+        "Datos parciales",
+        "Data Trust"
+      ]
+    },
+    {
+      "file": "data-quality-trust-1440.png",
+      "locale": "es-CL",
+      "viewport": {
+        "width": 1440,
+        "height": 1050
+      },
+      "route": "/datos/calidad",
+      "state_case": "trusted_with_warnings_vs_low_confidence",
+      "source": "playwright-route-fixture",
+      "assertions": [
+        "Confiable con advertencias",
+        "Baja confianza"
+      ]
+    },
+    {
+      "file": "universal-states-mobile-390.png",
+      "locale": "es-CL",
+      "viewport": {
+        "width": 390,
+        "height": 920
+      },
+      "route": "/metricas",
+      "state_case": "mobile_universal_states",
+      "source": "playwright-route-fixture",
+      "assertions": [
+        "Datos insuficientes",
+        "Data Trust"
+      ]
+    },
+    {
+      "file": "data-trust-popover-1440.png",
+      "locale": "es-CL",
+      "viewport": {
+        "width": 1440,
+        "height": 1050
+      },
+      "route": "/metricas",
+      "state_case": "data_trust_accessible_details",
+      "source": "playwright-route-fixture",
+      "assertions": [
+        "Estado canónico",
+        "Cobertura",
+        "Vigencia"
+      ]
+    }
+  ]
+}

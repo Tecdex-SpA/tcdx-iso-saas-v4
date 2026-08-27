@@ -1,0 +1,132 @@
+{
+  "createdAt": "2026-08-24T19:48:50.701Z",
+  "server": "next start :3001",
+  "shots": [
+    {
+      "name": "dashboard-1440",
+      "url": "/dashboard",
+      "width": 1440,
+      "height": 900,
+      "status": 200,
+      "file": "/Users/andresbarouh/repos/tcdx-iso-saas-v4/artifacts/ui02-stage1-1-visual/dashboard-1440.png",
+      "title": "TCDX Compliance | ISO SaaS",
+      "hasEnglishRequestedCopy": false,
+      "hasExpectedSpanishCopy": true,
+      "metrics": {
+        "bodyHeight": 900,
+        "mainScrollHeight": 821,
+        "viewportHeight": 900,
+        "emptyState": {
+          "x": 292,
+          "y": 187.265625,
+          "width": 1116,
+          "height": 170,
+          "top": 187.265625,
+          "right": 1408,
+          "bottom": 357.265625,
+          "left": 292
+        },
+        "grcSummary": {
+          "x": 292,
+          "y": 381.265625,
+          "width": 1116,
+          "height": 232,
+          "top": 381.265625,
+          "right": 1408,
+          "bottom": 613.265625,
+          "left": 292
+        }
+      }
+    },
+    {
+      "name": "dashboard-1280",
+      "url": "/dashboard",
+      "width": 1280,
+      "height": 832,
+      "status": 200,
+      "file": "/Users/andresbarouh/repos/tcdx-iso-saas-v4/artifacts/ui02-stage1-1-visual/dashboard-1280.png",
+      "title": "TCDX Compliance | ISO SaaS",
+      "hasEnglishRequestedCopy": false,
+      "hasExpectedSpanishCopy": true,
+      "metrics": {
+        "bodyHeight": 832,
+        "mainScrollHeight": 753,
+        "viewportHeight": 832,
+        "emptyState": {
+          "x": 292,
+          "y": 253.265625,
+          "width": 956,
+          "height": 170,
+          "top": 253.265625,
+          "right": 1248,
+          "bottom": 423.265625,
+          "left": 292
+        },
+        "grcSummary": {
+          "x": 292,
+          "y": 447.265625,
+          "width": 956,
+          "height": 232,
+          "top": 447.265625,
+          "right": 1248,
+          "bottom": 679.265625,
+          "left": 292
+        }
+      }
+    },
+    {
+      "name": "dashboard-mobile-390",
+      "url": "/dashboard",
+      "width": 390,
+      "height": 844,
+      "status": 200,
+      "file": "/Users/andresbarouh/repos/tcdx-iso-saas-v4/artifacts/ui02-stage1-1-visual/dashboard-mobile-390.png",
+      "title": "TCDX Compliance | ISO SaaS",
+      "hasEnglishRequestedCopy": false,
+      "hasExpectedSpanishCopy": true,
+      "metrics": {
+        "bodyHeight": 844,
+        "mainScrollHeight": 1217,
+        "viewportHeight": 844,
+        "emptyState": {
+          "x": 12,
+          "y": 373.375,
+          "width": 366,
+          "height": 261.1875,
+          "top": 373.375,
+          "right": 378,
+          "bottom": 634.5625,
+          "left": 12
+        },
+        "grcSummary": {
+          "x": 12,
+          "y": 658.5625,
+          "width": 366,
+          "height": 561.1875,
+          "top": 658.5625,
+          "right": 378,
+          "bottom": 1219.75,
+          "left": 12
+        }
+      }
+    },
+    {
+      "name": "riesgos-1440",
+      "url": "/riesgos",
+      "width": 1440,
+      "height": 900,
+      "status": 200,
+      "file": "/Users/andresbarouh/repos/tcdx-iso-saas-v4/artifacts/ui02-stage1-1-visual/riesgos-1440.png",
+      "title": "TCDX Compliance | ISO SaaS",
+      "hasEnglishRequestedCopy": false,
+      "hasExpectedSpanishCopy": true,
+      "metrics": {
+        "bodyHeight": 900,
+        "mainScrollHeight": 821,
+        "viewportHeight": 900,
+        "emptyState": null,
+        "grcSummary": null
+      }
+    }
+  ]
+}

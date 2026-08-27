@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
+import EnterpriseDomainWorkspaceShell from '@/components/enterprise-domain/EnterpriseDomainWorkspaceShell';
 import { apiRequestJson } from '@/utils/apiClient';
 
 type GraphPayload = {
@@ -51,12 +52,13 @@ export default function LineageExplorer() {
 
   return (
     <main className="min-h-full bg-[var(--tcdx-color-surface)] px-4 py-6 text-[var(--tcdx-color-text-ink)] sm:px-6">
-      <section className="rounded-[var(--tcdx-radius-tecdex-lg)] border border-[var(--tcdx-color-border)] bg-white p-6 shadow-[var(--tcdx-shadow-tecdex-sm)]">
-        <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[var(--tcdx-color-primary)]">Trazabilidad analítica</p>
-        <h1 className="mt-2 text-2xl font-semibold">Lineage e Impact Graph</h1>
-        <p className="mt-2 max-w-3xl text-sm text-[var(--tcdx-color-text-secondary)]">
-          Navega relaciones tenant-scoped entre datos, métricas, evidencias, tests, pérdidas, dashboards y reportes.
-        </p>
+      <EnterpriseDomainWorkspaceShell
+        domain="data"
+        eyebrow="Trazabilidad analítica"
+        title="Lineage e Impact Graph"
+        description="Navega relaciones tenant-scoped entre datos, métricas, evidencias, tests, pérdidas, dashboards y reportes."
+      >
+      <section className="rounded-[var(--tcdx-radius-tecdex-md)] border border-[var(--tcdx-color-border)] bg-white p-5 shadow-[var(--tcdx-shadow-tecdex-sm)]">
 
         {!endpoint && (
           <div className="mt-6 rounded-md border border-dashed p-6 text-sm text-[var(--tcdx-color-text-secondary)]">
@@ -106,6 +108,7 @@ export default function LineageExplorer() {
           </div>
         )}
       </section>
+      </EnterpriseDomainWorkspaceShell>
     </main>
   );
 }

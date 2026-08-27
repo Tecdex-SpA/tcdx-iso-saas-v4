@@ -1,0 +1,129 @@
+{
+  "verdict": "PASS",
+  "locale": "es-CL",
+  "generated_at": "2026-08-27T15:04:50.385Z",
+  "route_count": {
+    "before": 97,
+    "after": 97,
+    "expected": "97 -> 97"
+  },
+  "context": "UI-09 responsive and accessibility final focal evidence",
+  "source_fixture_policy": "Fixtures are confined to this harness and are not runtime/productive data evidence.",
+  "assertions_globales": [
+    "desktop/tablet/mobile App Shell has one topbar",
+    "global horizontal overflow=false",
+    "tabs expose active state and horizontal affordance where present",
+    "table scroll regions are local and keyboard reachable",
+    "header Escape focus return validated",
+    "disabled controls remain legible",
+    "status meaning verified through visible labels, not color alone"
+  ],
+  "captures": [
+    {
+      "file": "responsive-desktop-1440.png",
+      "route": "/ia-compliance",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "assertions": [
+        "exactly one App Shell topbar",
+        "global horizontal overflow=false",
+        "main content visible",
+        "active tab identifiable",
+        "Tab Shift+Tab Escape traversal validated",
+        "disabled state legibility checked",
+        "visible text: IA Compliance",
+        "visible text: Inteligencia",
+        "visible text: revisión humana"
+      ]
+    },
+    {
+      "file": "responsive-tablet-768.png",
+      "route": "/datos",
+      "viewport": {
+        "width": 768,
+        "height": 1000
+      },
+      "assertions": [
+        "exactly one App Shell topbar",
+        "global horizontal overflow=false",
+        "main content visible",
+        "active tab identifiable",
+        "local scroll region keyboard reachable",
+        "disabled state legibility checked",
+        "visible text: Datos",
+        "visible text: Buscar",
+        "visible text: Confianza"
+      ]
+    },
+    {
+      "file": "responsive-mobile-shell-390.png",
+      "route": "/ia-compliance",
+      "viewport": {
+        "width": 390,
+        "height": 940
+      },
+      "assertions": [
+        "exactly one App Shell topbar",
+        "global horizontal overflow=false",
+        "main content visible",
+        "active tab identifiable",
+        "disabled state legibility checked",
+        "visible text: IA Compliance",
+        "visible text: Resumen ejecutivo IA"
+      ]
+    },
+    {
+      "file": "responsive-mobile-table-390.png",
+      "route": "/matriz-riesgo",
+      "viewport": {
+        "width": 390,
+        "height": 940
+      },
+      "assertions": [
+        "exactly one App Shell topbar",
+        "global horizontal overflow=false",
+        "main content visible",
+        "active tab identifiable",
+        "local scroll region keyboard reachable",
+        "disabled state legibility checked",
+        "visible text: Matriz de Riesgo",
+        "visible text: Riesgos priorizados",
+        "visible text: Aceptar"
+      ]
+    },
+    {
+      "file": "responsive-mobile-dashboard-390.png",
+      "route": "/dashboard",
+      "viewport": {
+        "width": 390,
+        "height": 940
+      },
+      "assertions": [
+        "exactly one App Shell topbar",
+        "global horizontal overflow=false",
+        "main content visible",
+        "disabled state legibility checked",
+        "visible text: Centro ejecutivo"
+      ]
+    },
+    {
+      "file": "responsive-tabs-dialog-390.png",
+      "route": "/riesgos",
+      "viewport": {
+        "width": 390,
+        "height": 940
+      },
+      "assertions": [
+        "exactly one App Shell topbar",
+        "global horizontal overflow=false",
+        "main content visible",
+        "active tab identifiable",
+        "disabled state legibility checked",
+        "visible text: Registro de riesgos",
+        "visible text: R-001"
+      ]
+    }
+  ]
+}

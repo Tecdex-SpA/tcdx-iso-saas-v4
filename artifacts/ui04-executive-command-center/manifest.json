@@ -1,0 +1,114 @@
+{
+  "verdict": "PASS",
+  "locale": "es-CL",
+  "generated_at": "2026-08-26T21:48:41.984Z",
+  "route": "/dashboard",
+  "route_count": {
+    "before": 97,
+    "after": 97,
+    "expected": "97 -> 97"
+  },
+  "context": "UI-04 Executive Command Center over the existing dashboard route",
+  "source": "mock/real: Playwright fixtures over real App Router page; fixtures are confined to this script",
+  "assertions": {
+    "executive_route_preserved": true,
+    "app_shell_topbar_once": true,
+    "universal_states_visible": true,
+    "data_trust_visible": true,
+    "attention_priorities_visible": true,
+    "desktop_1440": true,
+    "desktop_1280": true,
+    "mobile_390": true,
+    "global_horizontal_overflow": false,
+    "route_count": "97 -> 97"
+  },
+  "captures": [
+    {
+      "file": "executive-1440.png",
+      "route": "/dashboard",
+      "locale": "es-CL",
+      "viewport": {
+        "width": 1440,
+        "height": 1080
+      },
+      "state_case": "default",
+      "source": "playwright-route-fixture",
+      "assertions": [
+        "Centro ejecutivo",
+        "Requiere atención",
+        "Prioridades ejecutivas",
+        "Data Trust ejecutivo"
+      ],
+      "scroll_target": null
+    },
+    {
+      "file": "executive-1280.png",
+      "route": "/dashboard",
+      "locale": "es-CL",
+      "viewport": {
+        "width": 1280,
+        "height": 980
+      },
+      "state_case": "default",
+      "source": "playwright-route-fixture",
+      "assertions": [
+        "Requiere atención",
+        "Tendencia",
+        "Calidad y confianza"
+      ],
+      "scroll_target": null
+    },
+    {
+      "file": "executive-mobile-390.png",
+      "route": "/dashboard",
+      "locale": "es-CL",
+      "viewport": {
+        "width": 390,
+        "height": 940
+      },
+      "state_case": "default",
+      "source": "playwright-route-fixture",
+      "assertions": [
+        "Requiere atención",
+        "Acciones vencidas",
+        "Data Trust"
+      ],
+      "scroll_target": null
+    },
+    {
+      "file": "executive-data-state-1440.png",
+      "route": "/dashboard?ui04_case=data-state",
+      "locale": "es-CL",
+      "viewport": {
+        "width": 1440,
+        "height": 1080
+      },
+      "state_case": "data-state",
+      "source": "playwright-route-fixture",
+      "assertions": [
+        "Datos insuficientes",
+        "No disponible",
+        "Sin datos"
+      ],
+      "scroll_target": "No disponible"
+    },
+    {
+      "file": "executive-data-trust-1440.png",
+      "route": "/dashboard",
+      "locale": "es-CL",
+      "viewport": {
+        "width": 1440,
+        "height": 1080
+      },
+      "state_case": "default",
+      "source": "playwright-route-fixture",
+      "assertions": [
+        "Data Trust ejecutivo",
+        "Confiable con advertencias",
+        "Vigencia",
+        "Provenance"
+      ],
+      "scroll_target": "Data Trust ejecutivo"
+    }
+  ]
+}

@@ -1,10 +1,12 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import Image from 'next/image';
+import { usePathname } from 'next/navigation';
 import { getUserFromToken } from '@/utils/auth';
 import TcdxIcon from '@/components/icons/TcdxIcon';
 import { useTranslation } from '@/hooks/useTranslation';
+import { getEnterpriseNavigationContext } from '@/config/enterpriseNavigation';
 
 type SearchResult = {
   id: string;
@@ -176,10 +178,12 @@ function buildTenantLogoCandidates(tenant: TenantInfo | null) {
 type HeaderProps = {
   onMenuClick?: () => void;
   mobileMenuOpen?: boolean;
+  menuButtonRef?: RefObject<HTMLButtonElement | null>;
 };
 
-export default function Header({ onMenuClick, mobileMenuOpen = false }: HeaderProps) {
+export default function Header({ onMenuClick, mobileMenuOpen = false, menuButtonRef }: HeaderProps) {
   const { locale, t } = useTranslation();
+  const pathname = usePathname();
   const [user, setUser] = useState<HeaderUser | null>(null);
   const [tenant, setTenant] = useState<TenantInfo | null>(null);
   const [logoCandidates, setLogoCandidates] = useState<string[]>([SERVICE_LOGO_SRC]);
@@ -203,6 +207,8 @@ export default function Header({ onMenuClick, mobileMenuOpen = false }: HeaderPr
   const menuRef = useRef<HTMLDivElement | null>(null);
   const notificationsRef = useRef<HTMLDivElement | null>(null);
   const searchRef = useRef<HTMLDivElement | null>(null);
+  const notificationsButtonRef = useRef<HTMLButtonElement | null>(null);
+  const userMenuButtonRef = useRef<HTMLButtonElement | null>(null);
   const searchAbortRef = useRef<AbortController | null>(null);
 
   const tokenRef = useRef<string | null>(null);
@@ -296,6 +302,29 @@ export default function Header({ onMenuClick, mobileMenuOpen = false }: HeaderPr
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        if (notificationsOpen) {
+          event.preventDefault();
+          setNotificationsOpen(false);
+          notificationsButtonRef.current?.focus();
+          return;
+        }
+
+        if (open) {
+          event.preventDefault();
+          setOpen(false);
+          userMenuButtonRef.current?.focus();
+          return;
+        }
+
+        if (searchOpen) {
+          event.preventDefault();
+          setSearchOpen(false);
+          setActiveIndex(-1);
+          return;
+        }
+      }
+
       const isCmdK = (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k';
       if (isCmdK) {
         event.preventDefault();
@@ -309,7 +338,7 @@ export default function Header({ onMenuClick, mobileMenuOpen = false }: HeaderPr
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  }, [notificationsOpen, open, searchOpen]);
 
   useEffect(() => {
     const tenantId = tenantIdRef.current;
@@ -561,14 +590,79 @@ export default function Header({ onMenuClick, mobileMenuOpen = false }: HeaderPr
   };
 
   const displayResults = search.trim().length >= 2 ? searchResults : [];
+  const navigationContext = useMemo(
+    () => getEnterpriseNavigationContext(pathname),
+    [pathname]
+  );
+  const breadcrumbSegments = useMemo(() => {
+    const homeLabel = t('navigation.domains.home');
+    const segments = [{ key: 'home', label: homeLabel, href: '/dashboard' }];
+
+    if (navigationContext.domain) {
+      const domainLabel = t(navigationContext.domain.labelKey);
+
+      if (
+        navigationContext.domain.id !== 'home' &&
+        domainLabel !== segments[segments.length - 1].label
+      ) {
+        segments.push({
+          key: `domain-${navigationContext.domain.id}`,
+          label: domainLabel,
+          href: navigationContext.domain.href,
+        });
+      }
+    }
+
+    if (navigationContext.item) {
+      const itemLabel = navigationContext.item.labelKey
+        ? t(navigationContext.item.labelKey)
+        : navigationContext.item.label;
+
+      if (itemLabel && itemLabel !== segments[segments.length - 1].label) {
+        segments.push({
+          key: `item-${navigationContext.item.href}`,
+          label: itemLabel,
+          href: navigationContext.item.href,
+        });
+      }
+    }
+
+    return segments.map((segment, index) => ({
+      ...segment,
+      current: index === segments.length - 1,
+    }));
+  }, [navigationContext, t]);
+
+  const visibleBreadcrumbSegments = useMemo(() => {
+    if (breadcrumbSegments.length <= 2) return breadcrumbSegments;
+
+    const middleLabels = breadcrumbSegments
+      .slice(1, -1)
+      .map((segment) => segment.label)
+      .join(' / ');
+
+    return [
+      breadcrumbSegments[0],
+      {
+        key: 'breadcrumb-ellipsis',
+        label: '…',
+        href: '',
+        current: false,
+        ellipsis: true,
+        title: middleLabels,
+      },
+      breadcrumbSegments[breadcrumbSegments.length - 1],
+    ];
+  }, [breadcrumbSegments]);
 
   return (
     <header className="enterprise-topbar tcdx-shell-header relative px-3 py-2.5 text-[var(--tcdx-color-text-ink)] sm:px-4 md:px-5">
-      <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 md:grid-cols-[minmax(170px,0.9fr)_minmax(180px,1.1fr)_auto] xl:gap-3">
+      <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 md:grid-cols-[minmax(0,1.45fr)_minmax(170px,0.85fr)_auto] xl:grid-cols-[minmax(0,1.6fr)_minmax(220px,0.9fr)_auto] xl:gap-3">
         <div className="flex min-w-0 items-center gap-2 xl:gap-3">
           <button
             type="button"
             onClick={onMenuClick}
+            ref={menuButtonRef}
             aria-label={t('header.openMenu')}
             aria-controls="mobile-sidebar-drawer"
             aria-expanded={mobileMenuOpen}
@@ -580,7 +674,44 @@ export default function Header({ onMenuClick, mobileMenuOpen = false }: HeaderPr
             </svg>
           </button>
 
-          <div className="flex min-w-0 items-center gap-2 rounded-[var(--tcdx-radius-tecdex-sm)] border border-[var(--tcdx-color-border)] bg-white px-2.5 py-1.5 shadow-[var(--tcdx-shadow-tecdex-sm)] xl:gap-3 xl:px-3">
+          <nav className="hidden min-w-[190px] max-w-[440px] flex-1 items-center gap-1.5 overflow-hidden text-xs lg:flex" aria-label={t('navigation.breadcrumb')}>
+            {visibleBreadcrumbSegments.map((segment, index) => {
+              const showSeparator = index < visibleBreadcrumbSegments.length - 1;
+              const isLast = index === visibleBreadcrumbSegments.length - 1;
+              const title = 'title' in segment && segment.title ? segment.title : segment.label;
+
+              return (
+                <span key={segment.key} className={['flex min-w-0 items-center gap-1.5', isLast ? 'flex-1' : 'shrink-0'].join(' ')}>
+                  {'ellipsis' in segment && segment.ellipsis ? (
+                    <span className="shrink-0 rounded px-1 font-semibold text-[var(--tcdx-color-text-secondary)]" title={title} aria-label={title}>
+                      …
+                    </span>
+                  ) : segment.current ? (
+                    <span
+                      aria-current="page"
+                      title={segment.label}
+                      className="min-w-0 truncate font-semibold text-[var(--tcdx-color-text-ink)]"
+                    >
+                      {segment.label}
+                    </span>
+                  ) : (
+                    <a
+                      href={segment.href}
+                      title={segment.label}
+                      className="shrink-0 whitespace-nowrap font-medium text-[var(--tcdx-color-text-secondary)] transition hover:text-[var(--tcdx-color-primary)] focus-visible:shadow-[var(--tcdx-shadow-tecdex-focus)]"
+                    >
+                      {segment.label}
+                    </a>
+                  )}
+                  {showSeparator ? (
+                    <span className="shrink-0 text-[var(--tcdx-color-text-secondary)]">/</span>
+                  ) : null}
+                </span>
+              );
+            })}
+          </nav>
+
+          <div className="flex min-w-[142px] max-w-[240px] shrink-0 items-center gap-2 rounded-[var(--tcdx-radius-tecdex-sm)] border border-[var(--tcdx-color-border)] bg-white px-2.5 py-1.5 shadow-[var(--tcdx-shadow-tecdex-sm)] lg:min-w-[168px] xl:max-w-[300px] xl:gap-3 xl:px-3" title={`${tenantDisplayName} · ${tenantSubtext}`}>
             <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-[var(--tcdx-radius-tecdex-sm)] border border-[var(--tcdx-color-border)] bg-[var(--tcdx-color-surface)] p-0.5 shadow-sm xl:h-11 xl:w-11">
               <Image
                 src={tenantLogoSource}
@@ -608,11 +739,11 @@ export default function Header({ onMenuClick, mobileMenuOpen = false }: HeaderPr
               />
             </span>
 
-            <div className="hidden min-w-0 sm:block" title={`${tenantDisplayName} · ${tenantSubtext}`}>
-              <div className="max-w-[120px] truncate text-[13px] font-semibold leading-tight tracking-normal text-[var(--tcdx-color-text-ink)] lg:max-w-[150px] xl:max-w-[220px] 2xl:max-w-[280px]">
+            <div className="hidden min-w-0 sm:block">
+              <div className="max-w-[92px] truncate text-[13px] font-semibold leading-tight tracking-normal text-[var(--tcdx-color-text-ink)] lg:max-w-[120px] xl:max-w-[190px] 2xl:max-w-[240px]">
                 {tenantDisplayName}
               </div>
-              <div className="mt-0.5 hidden max-w-[220px] truncate text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--tcdx-color-text-secondary)] xl:block 2xl:max-w-[280px]">
+              <div className="mt-0.5 hidden max-w-[190px] truncate text-[10px] font-semibold uppercase tracking-[0.08em] text-[var(--tcdx-color-text-secondary)] xl:block 2xl:max-w-[240px]">
                 {tenantSubtext}
               </div>
             </div>
@@ -638,6 +769,7 @@ export default function Header({ onMenuClick, mobileMenuOpen = false }: HeaderPr
                 onKeyDown={handleSearchKeyDown}
                 placeholder={t('header.searchPlaceholder') || 'Buscar controles, evidencias, riesgos...'}
                 role="combobox"
+                aria-haspopup="listbox"
                 aria-expanded={searchOpen}
                 aria-controls="global-header-search-results"
                 className="w-full min-w-0 rounded-[var(--tcdx-radius-tecdex-sm)] border border-[var(--tcdx-color-border)] bg-white py-2.5 pl-10 pr-4 text-sm text-[var(--tcdx-color-text-ink)] placeholder:text-[var(--tcdx-color-text-secondary)] transition focus:border-[var(--tcdx-color-primary)] focus:bg-white focus:shadow-[var(--tcdx-shadow-tecdex-focus)] xl:pr-16"
@@ -649,7 +781,7 @@ export default function Header({ onMenuClick, mobileMenuOpen = false }: HeaderPr
             </div>
 
             {searchOpen && (
-              <div id="global-header-search-results" className="absolute right-0 z-50 mt-3 w-[min(560px,calc(100vw-2rem))] overflow-hidden rounded-[var(--tcdx-radius-tecdex-sm)] border border-[var(--tcdx-color-border)] bg-white text-[var(--tcdx-color-text-ink)] shadow-[var(--tcdx-shadow-tecdex-lg)]">
+              <div id="global-header-search-results" role="listbox" className="absolute right-0 z-50 mt-3 w-[min(560px,calc(100vw-2rem))] overflow-hidden rounded-[var(--tcdx-radius-tecdex-sm)] border border-[var(--tcdx-color-border)] bg-white text-[var(--tcdx-color-text-ink)] shadow-[var(--tcdx-shadow-tecdex-lg)]">
                 <div className="border-b border-slate-100 px-4 py-3">
                   <div className="text-sm font-semibold text-slate-900">{t('header.searchTitle')}</div>
                   <div className="text-xs text-slate-500">{t('header.searchHelp')}</div>
@@ -691,7 +823,10 @@ export default function Header({ onMenuClick, mobileMenuOpen = false }: HeaderPr
                     {displayResults.map((result, index) => (
                       <button
                         key={`${result.type}-${result.id}`}
+                        id={`global-header-search-result-${index}`}
                         type="button"
+                        role="option"
+                        aria-selected={activeIndex === index}
                         onClick={() => handleResultNavigate(result)}
                         className={`flex w-full items-start gap-3 rounded-xl px-3 py-3 text-left transition ${
                           activeIndex === index ? 'bg-[rgba(240,114,29,0.08)]' : 'hover:bg-[var(--tcdx-color-surface)]'
@@ -754,6 +889,7 @@ export default function Header({ onMenuClick, mobileMenuOpen = false }: HeaderPr
               aria-label={t('header.notifications')}
               aria-haspopup="menu"
               aria-expanded={notificationsOpen}
+              ref={notificationsButtonRef}
               className="relative flex h-10 w-10 items-center justify-center rounded-[var(--tcdx-radius-tecdex-sm)] border border-[var(--tcdx-color-border)] bg-white text-[var(--tcdx-color-text-primary)] shadow-sm transition hover:bg-[var(--tcdx-color-surface)] hover:text-[var(--tcdx-color-text-ink)] focus-visible:shadow-[var(--tcdx-shadow-tecdex-focus)]"
               title={t('header.notifications')}
               onClick={() => setNotificationsOpen((prev) => !prev)}
@@ -768,7 +904,7 @@ export default function Header({ onMenuClick, mobileMenuOpen = false }: HeaderPr
             </button>
 
             {notificationsOpen && (
-              <div className="absolute right-0 z-50 mt-3 w-[min(390px,calc(100vw-1.5rem))] overflow-hidden rounded-[var(--tcdx-radius-tecdex-sm)] border border-[var(--tcdx-color-border)] bg-white text-[var(--tcdx-color-text-ink)] shadow-[var(--tcdx-shadow-tecdex-lg)]">
+              <div className="absolute right-0 z-50 mt-3 w-[min(390px,calc(100vw-1.5rem))] overflow-hidden rounded-[var(--tcdx-radius-tecdex-sm)] border border-[var(--tcdx-color-border)] bg-white text-[var(--tcdx-color-text-ink)] shadow-[var(--tcdx-shadow-tecdex-lg)]" role="menu" aria-label={t('header.notifications')}>
                 <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
                   <div>
                     <div className="font-semibold text-slate-900">{t('header.notifications')}</div>
@@ -794,6 +930,7 @@ export default function Header({ onMenuClick, mobileMenuOpen = false }: HeaderPr
                       <button
                         key={item.id}
                         type="button"
+                        role="menuitem"
                         onClick={() => markNotificationRead(item)}
                         className={`flex w-full gap-3 rounded-xl px-3 py-3 text-left transition hover:bg-slate-50 ${
                           item.is_read ? 'opacity-70' : ''
@@ -819,6 +956,8 @@ export default function Header({ onMenuClick, mobileMenuOpen = false }: HeaderPr
             <div className="relative">
               <button
                 type="button"
+                ref={userMenuButtonRef}
+                aria-label={`${t('header.profile')}: ${displayName}`}
                 aria-haspopup="menu"
                 aria-expanded={open}
                 className="flex min-w-0 items-center gap-2 rounded-[var(--tcdx-radius-tecdex-sm)] border border-[var(--tcdx-color-border)] bg-white px-1.5 py-1 text-left shadow-sm transition hover:bg-[var(--tcdx-color-surface)] focus-visible:shadow-[var(--tcdx-shadow-tecdex-focus)] xl:px-2"
@@ -937,13 +1076,14 @@ export default function Header({ onMenuClick, mobileMenuOpen = false }: HeaderPr
               onKeyDown={handleSearchKeyDown}
               placeholder={t('header.searchPlaceholder') || 'Buscar controles, evidencias, riesgos...'}
               role="combobox"
+              aria-haspopup="listbox"
               aria-expanded={searchOpen}
               aria-controls="global-header-search-mobile-results"
               className="w-full min-w-0 rounded-[var(--tcdx-radius-tecdex-sm)] border border-[var(--tcdx-color-border)] bg-white py-2.5 pl-10 pr-3 text-sm text-[var(--tcdx-color-text-ink)] placeholder:text-[var(--tcdx-color-text-secondary)] transition focus:border-[var(--tcdx-color-primary)] focus:shadow-[var(--tcdx-shadow-tecdex-focus)]"
             />
           </div>
 
-          <div id="global-header-search-mobile-results" className="mt-3 max-h-[60vh] overflow-auto">
+          <div id="global-header-search-mobile-results" role="listbox" className="mt-3 max-h-[60vh] overflow-auto">
             {search.trim() === '' ? (
               <div className="text-sm text-slate-500">{t('header.searchHelp')}</div>
             ) : searchLoading ? (
@@ -957,7 +1097,10 @@ export default function Header({ onMenuClick, mobileMenuOpen = false }: HeaderPr
                 {displayResults.map((result, index) => (
                   <button
                     key={`${result.type}-${result.id}-mobile`}
+                    id={`global-header-search-mobile-result-${index}`}
                     type="button"
+                    role="option"
+                    aria-selected={activeIndex === index}
                     onClick={() => handleResultNavigate(result)}
                     className={`flex w-full items-start gap-3 rounded-xl px-3 py-3 text-left transition ${
                       activeIndex === index ? 'bg-[rgba(240,114,29,0.08)]' : 'hover:bg-[var(--tcdx-color-surface)]'

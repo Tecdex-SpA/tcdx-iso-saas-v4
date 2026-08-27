@@ -4,12 +4,13 @@ import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type React
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import AppLayout from '@/components/AppLayout';
+import EnterpriseDomainWorkspaceShell from '@/components/enterprise-domain/EnterpriseDomainWorkspaceShell';
 import GrcPhase1Panel from '@/components/grc/GrcPhase1Panel';
 import { getUserFromToken } from '@/utils/auth';
 import GoogleDriveSourcesPanel from '@/components/evidences/GoogleDriveSourcesPanel';
 import IntegratedEvidenceApprovalPanel from '@/components/evidences/IntegratedEvidenceApprovalPanel';
 import UnifiedEvidenceLibrary from '@/components/evidences/UnifiedEvidenceLibrary';
-import { EnterpriseScrollPanel } from '@/components/ui/enterprise';
+import { EnterpriseFilterBar, EnterpriseScrollPanel, UniversalStateBlock } from '@/components/ui/enterprise';
 import { clearAiAuditorDraft, formatAiAuditorDraftEvidenceDescription, readAiAuditorDraftFromSession, type AiAuditorDraftPayload } from '@/utils/aiAuditorDraft';
 import { useTranslation } from '@/hooks/useTranslation';
 import { useTenantEntitlements } from '@/hooks/useTenantEntitlements';
@@ -818,7 +819,11 @@ function EvidenciasPageContent() {
     return Number.isFinite(n) ? n : 0;
   };
 
-  const toPercent = (value: unknown) => `${Math.round(toNumber(value))}%`;
+  const toPercent = (value: unknown) => {
+    if (value === null || value === undefined || value === '') return 'Sin datos';
+    const n = Number(value);
+    return Number.isFinite(n) ? `${Math.round(n)}%` : 'No disponible';
+  };
 
   const parseArray = (value: unknown): string[] => {
     if (Array.isArray(value)) return value.map((item) => String(item));
@@ -1274,27 +1279,22 @@ function EvidenciasPageContent() {
   if (showGrcOperations) {
     return (
       <AppLayout>
-        <div className="tcdx-evidence-refinement min-h-screen bg-[var(--tcdx-color-surface)] p-6">
-          <div className="mx-auto max-w-7xl space-y-5">
-            <div className="flex flex-wrap items-start justify-between gap-4">
-              <div>
-                <h1 className="text-3xl font-bold text-[var(--tcdx-color-text-ink)]">
-                  Operación GRC de evidencias
-                </h1>
-                <p className="mt-1 text-sm text-[var(--tcdx-color-text-muted)]">
-                  Gestiona solicitudes, entregas, revisiones y versiones de evidencia.
-                </p>
-              </div>
-              <Link
-                href="/evidencias"
-                className="inline-flex min-h-10 items-center rounded-md border border-[var(--tcdx-color-border)] bg-white px-4 text-sm font-semibold text-[var(--tcdx-color-text-ink)] shadow-sm transition-colors hover:bg-[var(--tcdx-color-surface-subtle)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--tcdx-color-focus)]"
-              >
-                Volver a biblioteca
-              </Link>
-            </div>
-            <GrcPhase1Panel mode="evidence" />
-          </div>
-        </div>
+        <EnterpriseDomainWorkspaceShell
+          domain="data"
+          eyebrow="Gobierno de evidencias"
+          title="Operación GRC de evidencias"
+          description="Gestiona solicitudes, entregas, revisiones y versiones de evidencia."
+          actions={
+            <Link
+              href="/evidencias"
+              className="inline-flex min-h-10 items-center rounded-md border border-[var(--tcdx-color-border)] bg-white px-4 text-sm font-semibold text-[var(--tcdx-color-text-ink)] shadow-sm transition-colors hover:bg-[var(--tcdx-color-surface-subtle)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--tcdx-color-focus)]"
+            >
+              Volver a biblioteca
+            </Link>
+          }
+        >
+          <GrcPhase1Panel mode="evidence" />
+        </EnterpriseDomainWorkspaceShell>
       </AppLayout>
     );
   }
@@ -1302,17 +1302,22 @@ function EvidenciasPageContent() {
   if (!showLegacyUpload) {
     return (
       <AppLayout>
-        <div className="tcdx-evidence-refinement space-y-4">
-          <div className="flex justify-end px-6 pt-6">
+        <EnterpriseDomainWorkspaceShell
+          domain="data"
+          eyebrow="Gobierno de datos"
+          title="Evidencias"
+          description="Biblioteca operacional de evidencias, trazabilidad documental y asociaciones GRC."
+          actions={
             <Link
               href="/evidencias?grc_operations=1"
               className="inline-flex min-h-10 items-center rounded-md bg-[var(--tcdx-color-action-primary)] px-4 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-[var(--tcdx-color-action-primary-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--tcdx-color-focus)]"
             >
               Operación GRC de evidencias
             </Link>
-          </div>
+          }
+        >
           <UnifiedEvidenceLibrary token={token} canManage={canManageEvidenceAssociations} />
-        </div>
+        </EnterpriseDomainWorkspaceShell>
       </AppLayout>
     );
   }
@@ -1320,7 +1325,7 @@ function EvidenciasPageContent() {
   return (
     <AppLayout>
       <div className="tcdx-evidence-refinement min-h-screen bg-[var(--tcdx-color-surface)] p-6 space-y-5">
-        <div className="flex flex-wrap justify-between items-center gap-3">
+        <div className="flex flex-wrap justify-between items-start gap-3">
           <div>
             <h1 className="text-3xl font-bold text-slate-900">
               {t('evidence.title')}
@@ -1330,7 +1335,44 @@ function EvidenciasPageContent() {
             </p>
           </div>
 
-          <div className="flex flex-wrap gap-2">
+        </div>
+
+        <EnterpriseFilterBar
+          count={`${filteredData.length} de ${data.length} evidencias`}
+          actions={
+            <>
+              {(statusFilter || evidenceSearch) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setStatusFilter('');
+                    setEvidenceSearch('');
+                  }}
+                  className="min-h-10 rounded-[var(--tcdx-radius-tecdex-sm)] border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--tcdx-color-primary)]"
+                >
+                  Limpiar
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={refresh}
+                className="min-h-10 rounded-[var(--tcdx-radius-tecdex-sm)] border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--tcdx-color-primary)]"
+              >
+                {t('common.refresh')}
+              </button>
+              <button
+                type="button"
+                onClick={refreshHealth}
+                disabled={healthRefreshing}
+                className="min-h-10 rounded-[var(--tcdx-radius-tecdex-sm)] bg-[#1b2733] px-3 text-sm font-semibold text-white hover:bg-[#24384a] disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--tcdx-color-primary)]"
+              >
+                {healthRefreshing ? t('evidence.recalculating') : t('evidence.recalculateHealth')}
+              </button>
+            </>
+          }
+        >
+          <label>
+            <span className="text-xs font-bold text-slate-500">{t('dashboard.standard')}</span>
             <select
               value={iso}
               onChange={(e) => {
@@ -1340,7 +1382,7 @@ function EvidenciasPageContent() {
                   setFocusMessage('');
                 }
               }}
-              className="border border-slate-200 bg-white px-3 py-2 rounded-xl shadow-sm"
+              className="mt-1 min-h-10 w-full rounded-[var(--tcdx-radius-tecdex-sm)] border border-slate-200 bg-white px-3 text-sm shadow-sm"
             >
               {standards.map((s) => (
                 <option key={s.code} value={s.code}>
@@ -1348,44 +1390,33 @@ function EvidenciasPageContent() {
                 </option>
               ))}
             </select>
+          </label>
 
+          <label>
+            <span className="text-xs font-bold text-slate-500">{t('common.status')}</span>
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              className="border border-slate-200 bg-white px-3 py-2 rounded-xl shadow-sm"
+              className="mt-1 min-h-10 w-full rounded-[var(--tcdx-radius-tecdex-sm)] border border-slate-200 bg-white px-3 text-sm shadow-sm"
             >
               <option value="">{t('evidence.allStatuses')}</option>
               <option value="pendiente">{t('statuses.evidence.pendiente')}</option>
               <option value="aprobada">{t('statuses.evidence.aprobada')}</option>
               <option value="rechazada">{t('statuses.evidence.rechazada')}</option>
             </select>
+          </label>
 
+          <label className="sm:col-span-2">
+            <span className="text-xs font-bold text-slate-500">{t('common.search')}</span>
             <input
               type="search"
               value={evidenceSearch}
               onChange={(e) => setEvidenceSearch(e.target.value)}
-              placeholder="Buscar evidencia, archivo, control..."
-              className="min-w-[240px] rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm"
+              placeholder="Buscar evidencia, archivo, control o cláusula"
+              className="mt-1 min-h-10 w-full rounded-[var(--tcdx-radius-tecdex-sm)] border border-slate-200 bg-white px-3 text-sm shadow-sm"
             />
-
-            <button
-              type="button"
-              onClick={refresh}
-              className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
-            >
-              {t('common.refresh')}
-            </button>
-
-            <button
-              type="button"
-              onClick={refreshHealth}
-              disabled={healthRefreshing}
-              className="rounded-xl bg-[#1b2733] px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-[#24384a] disabled:opacity-60"
-            >
-              {healthRefreshing ? t('evidence.recalculating') : t('evidence.recalculateHealth')}
-            </button>
-          </div>
-        </div>
+          </label>
+        </EnterpriseFilterBar>
 
         {evidenceNotice && (
           <div
@@ -1773,11 +1804,11 @@ function EvidenciasPageContent() {
         )}
 
         {filteredData.length === 0 ? (
-          <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 text-gray-500">
-            {statusFilter || evidenceSearch
-              ? t('evidence.noEvidenceForFilter')
-              : t('evidence.noEvidenceForScope')}
-          </div>
+          <UniversalStateBlock
+            state="empty"
+            title={statusFilter || evidenceSearch ? t('evidence.noEvidenceForFilter') : t('evidence.noEvidenceForScope')}
+            description="La biblioteca se actualizará cuando exista evidencia operacional para los filtros activos."
+          />
         ) : (
           <EnterpriseScrollPanel maxHeight="560px" className="space-y-4 pr-2">
           {filteredData.map((e: EvidenceRow) => {
@@ -2231,7 +2262,7 @@ function EvidenciasPageContent() {
 
 function MetricCard({ title, value }: { title: string; value: number }) {
   return (
-    <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+    <div className="rounded-[var(--tcdx-radius-tecdex-md)] border border-slate-200 bg-white p-4 shadow-sm">
       <div className="text-sm text-gray-500">{title}</div>
       <div className="mt-2 text-3xl font-bold text-slate-900">{value}</div>
     </div>

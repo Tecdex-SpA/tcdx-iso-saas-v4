@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import AppLayout from '@/components/AppLayout';
 import { getUserFromToken } from '@/utils/auth';
 import { useTranslation } from '@/hooks/useTranslation';
+import RiskControlWorkspaceShell from '@/components/risk-control/RiskControlWorkspaceShell';
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL || '';
@@ -687,7 +688,10 @@ function ActivosPageContent() {
   if (loadingStandards) {
     return (
       <AppLayout>
-        <div className="p-6">{t('assets.loadingStandards')}</div>
+        <div className="tcdx-assets-risk-refinement mx-auto max-w-[1800px] space-y-6 p-6">
+          <RiskControlWorkspaceShell activeView="assets" compactHeader />
+          <div>{t('assets.loadingStandards')}</div>
+        </div>
       </AppLayout>
     );
   }
@@ -695,7 +699,8 @@ function ActivosPageContent() {
   if (!loadingStandards && operationalStandards.length === 0) {
     return (
       <AppLayout>
-        <div className="p-6 space-y-4">
+        <div className="tcdx-assets-risk-refinement mx-auto max-w-[1800px] space-y-4 p-6">
+          <RiskControlWorkspaceShell activeView="assets" compactHeader />
           <h1 className="text-2xl font-bold">{t('assets.title')}</h1>
 
           <div className="rounded-[28px] border border-yellow-200 bg-yellow-50 p-6 shadow-sm">
@@ -715,7 +720,10 @@ function ActivosPageContent() {
   if (loadingAssets) {
     return (
       <AppLayout>
-        <div className="p-6">{t('assets.loading')}</div>
+        <div className="tcdx-assets-risk-refinement mx-auto max-w-[1800px] space-y-6 p-6">
+          <RiskControlWorkspaceShell activeView="assets" compactHeader />
+          <div>{t('assets.loading')}</div>
+        </div>
       </AppLayout>
     );
   }
@@ -723,6 +731,7 @@ function ActivosPageContent() {
   return (
     <AppLayout>
       <div className="tcdx-assets-risk-refinement mx-auto max-w-[1800px] space-y-6">
+        <RiskControlWorkspaceShell activeView="assets" compactHeader />
         <section className="overflow-hidden rounded-[34px] border border-white/70 bg-[linear-gradient(135deg,#ffffff_0%,#f8fbff_55%,#edf4ff_100%)] p-6 shadow-[0_20px_60px_rgba(15,23,42,0.08)]">
           <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
             <div className="max-w-4xl">

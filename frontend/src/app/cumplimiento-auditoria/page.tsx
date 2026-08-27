@@ -12,6 +12,7 @@ export default function CumplimientoAuditoriaPage() {
 
   return (
     <MvpViewShell
+      domainWorkspace="compliance"
       eyebrow="Vista operacional"
       title="Cumplimiento y Auditoría"
       description="Panel de trabajo para diagnóstico, controles, SoA, ciclo de vida ISO, auditorías, hallazgos y no conformidades. Las acciones disponibles dependen del rol y del alcance del tenant."

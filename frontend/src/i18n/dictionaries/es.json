@@ -131,6 +131,99 @@
     "description": "Gobierno ISO operativo por rol, módulos contratados y alcance activo.",
     "aiAuditor": "IA Auditor"
   },
+  "navigation": {
+    "breadcrumb": "Ruta de navegación",
+    "mobileDrawer": "Menú de navegación móvil",
+    "sections": {
+      "platformAdmin": "Administración SaaS",
+      "dealerChannel": "Canal Dealer",
+      "enterpriseDomains": "Navegación",
+      "domainViews": "Accesos"
+    },
+    "domains": {
+      "home": "Inicio",
+      "compliance": "Cumplimiento",
+      "riskControl": "Riesgo y Control",
+      "auditImprovement": "Auditoría y Mejora",
+      "operationsResilience": "Operación y Resiliencia",
+      "dataEvidence": "Datos y Evidencia",
+      "intelligence": "Inteligencia",
+      "reports": "Reportes",
+      "administration": "Administración"
+    },
+    "destinations": {
+      "executiveCenter": "Centro ejecutivo",
+      "grcPortfolio": "Portafolio GRC",
+      "isoOverview": "Resumen ISO",
+      "diagnosis": "Diagnóstico",
+      "isoHealth": "Salud ISO",
+      "soa": "SoA",
+      "lifecycle": "Ciclo de vida",
+      "riskRegister": "Registro de riesgos",
+      "riskMatrix": "Matriz de riesgos",
+      "controls": "Controles",
+      "assets": "Activos",
+      "quantitativeRisk": "Riesgo cuantitativo",
+      "actionPlans": "Planes de acción",
+      "audits": "Auditorías",
+      "findings": "Hallazgos",
+      "nonconformities": "No conformidades",
+      "recommendations": "Recomendaciones",
+      "grcOperations": "Operación GRC",
+      "continuity": "Continuidad",
+      "incidents": "Incidentes",
+      "suppliers": "Proveedores",
+      "privacy": "Privacidad",
+      "evidence": "Evidencias",
+      "data": "Datos",
+      "dataQuality": "Calidad",
+      "dataCatalog": "Catálogo",
+      "lineage": "Lineage",
+      "semanticLayer": "Semántica",
+      "imports": "Importaciones",
+      "metrics": "Métricas",
+      "indicators": "Indicadores",
+      "grcAnalysis": "Análisis GRC",
+      "surveys": "Encuestas",
+      "aiCompliance": "IA Compliance",
+      "exports": "Exportes",
+      "bi": "BI",
+      "reportStudio": "Report Studio",
+      "reportGenerations": "Generaciones",
+      "settings": "Configuración",
+      "users": "Usuarios",
+      "companyProfile": "Perfil empresa",
+      "connectors": "Conectores"
+    }
+  },
+  "enterpriseDomainWorkspace": {
+    "tabsLabel": "Vistas del dominio",
+    "compliance": {
+      "eyebrow": "Cumplimiento",
+      "title": "Cumplimiento e ISO",
+      "description": "Diagnóstico, salud, aplicabilidad y ciclo de vida ISO con datos reales del tenant y revisión humana."
+    },
+    "audit": {
+      "eyebrow": "Auditoría y mejora",
+      "title": "Auditoría y Mejora",
+      "description": "Auditorías, hallazgos, no conformidades, planes y recomendaciones conectadas sin fusionar entidades."
+    },
+    "data": {
+      "eyebrow": "Datos y evidencia",
+      "title": "Datos y Evidencia",
+      "description": "Evidencias, calidad, catálogo, lineage, semántica e importaciones con trazabilidad y estados de dato explícitos."
+    },
+    "intelligence": {
+      "eyebrow": "Inteligencia",
+      "title": "Inteligencia GRC",
+      "description": "Métricas oficiales, indicadores, análisis y asistencia IA con límites de autoridad y fuentes gobernadas."
+    },
+    "reports": {
+      "eyebrow": "Reportes",
+      "title": "BI y Reportes",
+      "description": "Exportes, BI, Studio y generaciones basadas en resultados oficiales, plantillas y descargas autorizadas."
+    }
+  },
   "header": {
     "openMenu": "Abrir menú",
     "tenantActive": "Tenant activo",
@@ -173,8 +266,9 @@
   "dashboard": {
     "title": "Bienvenido a TCDX",
     "subtitle": "Vista general de cumplimiento y gestión ISO.",
-    "executiveView": "Vista Operacional",
+    "executiveView": "Vista operacional",
     "kpiView": "Vista KPI",
+    "systemHealthView": "Salud del sistema",
     "loadingData": "Cargando datos...",
     "initialControlsTitle": "Controles inicializados pendientes de evaluación",
     "initialControlsSubtitle": "Esta empresa aún no tiene controles cargados o vigentes en el dashboard.",
@@ -237,6 +331,65 @@
     "iaAuditorCriticalRisks": "{{count}} riesgos se mantienen en nivel crítico.",
     "iaAuditorUpcomingActions": "Hay {{count}} acciones o evidencias próximas.",
     "iaAuditorReviewSuggestions": "Revisar sugerencias"
+  },
+  "grcDecisionCenter": {
+    "defaultTitle": "Centro de decisiones GRC",
+    "summaryTitle": "Resumen ejecutivo GRC",
+    "cta": "Ver análisis GRC",
+    "evidenceBased": "Decisión basada en evidencia",
+    "summaryDescription": "Lectura ejecutiva de decisiones, prioridades e indicadores oficiales. El análisis detallado vive en GRC.",
+    "fullDescription": "Consolida snapshots oficiales, interpretación, tendencia, impacto y acciones propuestas. Un estado sin medición nunca se presenta como cero.",
+    "loading": "Cargando decisiones...",
+    "loadError": "No fue posible cargar el centro de decisiones.",
+    "summaryCards": {
+      "critical": "Críticos",
+      "attention": "Atención",
+      "controlled": "Controlados",
+      "unmeasured": "Sin medición",
+      "measured": "Medidos"
+    },
+    "values": {
+      "noData": "Sin datos",
+      "noValidMeasurement": "Sin medición válida",
+      "validResult": "Resultado disponible",
+      "unmeasured": "Sin medición",
+      "noComparablePeriod": "Sin período comparable"
+    },
+    "defaults": {
+      "unnamedIndicator": "Indicador sin nombre",
+      "noOfficialSnapshot": "No existe un snapshot oficial calculado y publicado.",
+      "officialSnapshot": "El resultado proviene del snapshot oficial publicado.",
+      "reviewImpact": "Revise el indicador junto con sus riesgos, controles, evidencias y planes asociados.",
+      "completeSourceData": "Complete o corrija los datos fuente antes de tomar decisiones.",
+      "reviewEvidence": "Revise la evidencia y registre una propuesta gobernada cuando corresponda.",
+      "unassigned": "Por asignar",
+      "notPublished": "no publicado"
+    },
+    "priorities": {
+      "title": "Prioridades principales",
+      "managementTitle": "Prioridades de gestión",
+      "noneAvailable": "No hay indicadores oficiales disponibles para calcular prioridades.",
+      "noneCritical": "No hay prioridades críticas o en atención con los datos actuales.",
+      "previewHelp": "Se muestran hasta 3 por criticidad; el listado completo está en GRC.",
+      "focusHelp": "Se muestran hasta 6 prioridades por criticidad; el catálogo completo permanece visible en la grilla inferior.",
+      "additional": "+{{count}} adicionales en GRC.",
+      "additionalPriorities": "+{{count}} prioridades adicionales disponibles en la grilla completa."
+    },
+    "actions": {
+      "viewDecision": "Ver decisión",
+      "openIndicator": "Abrir indicador",
+      "close": "Cerrar",
+      "openProposal": "Abrir indicador y propuesta"
+    },
+    "fields": {
+      "trend": "Tendencia",
+      "cause": "Causa",
+      "impact": "Impacto",
+      "recommendation": "Recomendación",
+      "traceability": "Trazabilidad",
+      "snapshot": "Snapshot"
+    },
+    "dialogTitle": "Decisión GRC"
   },
   "exports": {
     "title": "Exportes ejecutivos premium",
@@ -800,6 +953,129 @@
     },
     "notesPlaceholder": "Comentario del auditor...",
     "empty": "No hay controles para esta auditoría."
+  },
+  "riskControlWorkspace": {
+    "eyebrow": "Riesgo y Control",
+    "tabsLabel": "Vistas de Riesgo y Control",
+    "tabs": {
+      "register": "Registro",
+      "matrix": "Matriz",
+      "controls": "Controles",
+      "assets": "Activos",
+      "quantitative": "Riesgo cuantitativo"
+    },
+    "views": {
+      "register": {
+        "title": "Registro de riesgos",
+        "description": "Vista operativa para consultar riesgos reales de matriz ISO, activos y evaluación cuantitativa sin cambiar contratos ni permisos."
+      },
+      "matrix": {
+        "title": "Matriz de riesgos",
+        "description": "Heatmap ISO, priorización por probabilidad e impacto y simulación operacional existente."
+      },
+      "controls": {
+        "title": "Controles",
+        "description": "Workbench de controles, evidencias y estado operacional usando capacidades existentes."
+      },
+      "assets": {
+        "title": "Activos",
+        "description": "Inventario de activos, criticidad y riesgos asociados al alcance operativo."
+      },
+      "quantitative": {
+        "title": "Riesgo cuantitativo",
+        "description": "Exposición anualizada y evaluación económica de tratamientos desde Phase 3."
+      }
+    },
+    "actions": {
+      "refresh": "Actualizar"
+    },
+    "sources": {
+      "isoMatrix": "Matriz ISO",
+      "assetRisk": "Riesgo de activo",
+      "quantitative": "Cuantitativo"
+    },
+    "sourceStates": {
+      "loaded": "Cargado",
+      "empty": "Sin datos",
+      "unavailable": "No disponible",
+      "error": "Error"
+    },
+    "kpis": {
+      "total": "Riesgos totales",
+      "high": "Críticos o altos",
+      "untreated": "Sin tratamiento",
+      "quantitative": "Evaluaciones cuantitativas",
+      "loadedScope": "Fuentes reales cargadas para el tenant activo",
+      "fromLoadedRecords": "Derivado de registros cargados",
+      "matrixOnly": "Solo matriz ISO cargada",
+      "phase3": "Contrato Phase 3"
+    },
+    "filters": {
+      "title": "Filtros",
+      "subtitle": "Dimensiones disponibles en las fuentes cargadas.",
+      "search": "Búsqueda",
+      "source": "Fuente",
+      "level": "Nivel",
+      "status": "Estado",
+      "owner": "Responsable",
+      "standard": "Norma",
+      "all": "Todos",
+      "recommended": "Recomendada",
+      "clear": "Limpiar filtros",
+      "localPagination": "Paginación local sobre registros cargados"
+    },
+    "table": {
+      "title": "Registro enterprise",
+      "subtitle": "No deduplica por título; cada fila conserva su identificador estable y fuente.",
+      "id": "ID",
+      "risk": "Riesgo",
+      "level": "Nivel",
+      "status": "Estado",
+      "owner": "Responsable",
+      "source": "Fuente",
+      "actions": "Acciones",
+      "select": "Seleccionar",
+      "selectRisk": "Seleccionar riesgo {{id}}",
+      "view": "Ver detalle",
+      "pagination": "Mostrando {{shown}} de {{total}} registros",
+      "previous": "Anterior",
+      "next": "Siguiente"
+    },
+    "detail": {
+      "eyebrow": "Detalle contextual",
+      "close": "Cerrar",
+      "closeOverlay": "Cerrar detalle",
+      "summary": "Resumen del riesgo",
+      "identifier": "Identificador",
+      "source": "Fuente",
+      "classification": "Clasificación",
+      "status": "Estado",
+      "owner": "Responsable",
+      "asset": "Activo",
+      "inherent": "Riesgo inherente",
+      "residual": "Riesgo residual",
+      "trust": "Estado de datos",
+      "description": "Resumen",
+      "aiTitle": "IA contextual",
+      "aiUnavailable": "No hay un contrato de IA contextual aplicable a este tipo de registro. No se generan recomendaciones simuladas.",
+      "aiQuantitative": "El análisis cuantitativo asociado está disponible en la vista Phase 3; este panel no modifica ni aprueba registros.",
+      "openQuantitative": "Abrir detalle cuantitativo"
+    },
+    "empty": {
+      "title": "Sin riesgos para mostrar",
+      "description": "Las fuentes consultadas no devolvieron registros para los filtros actuales."
+    },
+    "errors": {
+      "load": "No fue posible cargar el registro de riesgos.",
+      "invalidTenant": "La sesión no contiene un tenant válido.",
+      "scope": "No fue posible cargar el alcance operativo.",
+      "matrixOptions": "No fue posible cargar las opciones de matriz.",
+      "matrix": "No fue posible cargar la matriz de riesgos.",
+      "assets": "No fue posible cargar los activos.",
+      "assetRisks": "No fue posible cargar riesgos de activos.",
+      "quantitative": "No fue posible cargar riesgo cuantitativo.",
+      "noOperationalScope": "No existe alcance operativo activo para matriz."
+    }
   },
   "riskMatrix": {
     "title": "Matriz de Riesgo",
@@ -1422,11 +1698,11 @@
     "healthEngineSubtitle": "Datos reales desde snapshots del motor Health: salud general, cobertura de evidencias y deterioro de controles.",
     "noHealthKpis": "Aún no hay KPIs Health disponibles. Ejecuta “Recalcular KPIs” para generar snapshots actuales.",
     "pendingNoData": "{{count}} sin dato",
-    "kpiViewTitle": "KPI View",
+    "kpiViewTitle": "Vista KPI",
     "viewHealth": "Ver Health",
     "administerKpis": "Configurar KPI administrativos",
     "greenPlural": "{{count}} verdes",
-    "noDataPlural": "{{count}} no data",
+    "noDataPlural": "{{count}} sin datos",
     "manualPlural": "{{count}} manuales",
     "viewHealthDetail": "Ver detalle Health",
     "periodRange": "Periodo: {{start}} - {{end}}",

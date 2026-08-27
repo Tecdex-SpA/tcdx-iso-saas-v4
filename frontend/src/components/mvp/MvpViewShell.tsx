@@ -2,6 +2,7 @@
 
 import type { ReactNode } from 'react';
 import AppLayout from '@/components/AppLayout';
+import EnterpriseDomainWorkspaceShell, { type EnterpriseDomainWorkspaceKey } from '@/components/enterprise-domain/EnterpriseDomainWorkspaceShell';
 import TcdxIcon, { type TcdxIconName } from '@/components/icons/TcdxIcon';
 import {
   EnterpriseBadge,
@@ -32,6 +33,7 @@ type MvpViewShellProps = {
   links: MvpLink[];
   notes?: string[];
   children?: ReactNode;
+  domainWorkspace?: EnterpriseDomainWorkspaceKey;
 };
 
 const toneClasses = {
@@ -68,28 +70,32 @@ export default function MvpViewShell({
   links,
   notes = [],
   children,
+  domainWorkspace,
 }: MvpViewShellProps) {
   const role = getCurrentRole();
   const roleGroup = getMvpRoleGroup(role);
   const visibleLinks = links.filter((link) => canAccessMvpFeature(role, link.feature));
 
-  return (
-    <AppLayout>
-      <div className="space-y-6">
+  const rolePanel = (
+    <div className="enterprise-muted-panel px-4 py-3 text-sm text-[var(--tcdx-color-text-secondary)]">
+      <div className="font-semibold text-[var(--tcdx-color-text-ink)]">Rol activo</div>
+      <div className="mt-1">{roleGroup === 'unknown' ? role || 'sin rol' : roleGroup}</div>
+    </div>
+  );
+
+  const content = (
+    <div className="space-y-6">
+      {!domainWorkspace && (
         <EnterpriseCard>
           <EnterprisePageHeader
             eyebrow={eyebrow}
             title={title}
             subtitle={description}
             className="mb-0"
-            actions={
-            <div className="enterprise-muted-panel px-4 py-3 text-sm text-[var(--tcdx-color-text-secondary)]">
-              <div className="font-semibold text-[var(--tcdx-color-text-ink)]">Rol activo</div>
-              <div className="mt-1">{roleGroup === 'unknown' ? role || 'sin rol' : roleGroup}</div>
-            </div>
-            }
+            actions={rolePanel}
           />
         </EnterpriseCard>
+      )}
 
         <section aria-label="Selector de vistas internas" className="enterprise-card p-0">
           <div className="border-b border-[var(--tcdx-color-border)] px-5 py-4">
@@ -143,6 +149,23 @@ export default function MvpViewShell({
 
         {children}
       </div>
+  );
+
+  return (
+    <AppLayout>
+      {domainWorkspace ? (
+        <EnterpriseDomainWorkspaceShell
+          domain={domainWorkspace}
+          eyebrow={eyebrow}
+          title={title}
+          description={description}
+          actions={rolePanel}
+        >
+          {content}
+        </EnterpriseDomainWorkspaceShell>
+      ) : (
+        content
+      )}
     </AppLayout>
   );
 }

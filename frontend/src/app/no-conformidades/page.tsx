@@ -3,6 +3,7 @@
 import { Suspense, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useSearchParams } from 'next/navigation';
 import AppLayout from '@/components/AppLayout';
+import EnterpriseDomainWorkspaceShell from '@/components/enterprise-domain/EnterpriseDomainWorkspaceShell';
 import { EnterpriseScrollPanel } from '@/components/ui/enterprise';
 import { getUserFromToken } from '@/utils/auth';
 import { clearAiAuditorDraft, formatAiAuditorDraftDescription, normalizeAiAuditorDraftPriority, readAiAuditorDraftFromSession, type AiAuditorDraftPayload } from '@/utils/aiAuditorDraft';
@@ -1132,6 +1133,12 @@ function NoConformidadesPageContent() {
 
   return (
     <AppLayout>
+      <EnterpriseDomainWorkspaceShell
+        domain="audit"
+        eyebrow="No conformidades"
+        title="No conformidades"
+        description="Registro operacional de no conformidades, acciones relacionadas y borradores IA sujetos a revisión humana."
+      >
       <div className="mx-auto max-w-[1700px] space-y-6">
 
         {aiAuditorDraft && (
@@ -1197,7 +1204,7 @@ function NoConformidadesPageContent() {
           </div>
         )}
 
-        <section className="overflow-hidden rounded-[34px] border border-white/70 bg-[linear-gradient(135deg,#ffffff_0%,#f8fbff_55%,#edf4ff_100%)] p-6 shadow-[0_20px_60px_rgba(15,23,42,0.08)]">
+        <section className="overflow-hidden rounded-md border border-[var(--tcdx-color-border)] bg-white p-5 shadow-sm">
           <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
             <div className="max-w-4xl">
               <div className="flex flex-wrap items-center gap-3">
@@ -1209,11 +1216,11 @@ function NoConformidadesPageContent() {
                 </span>
               </div>
 
-              <h1 className="mt-4 text-4xl font-bold tracking-tight text-slate-900 md:text-5xl">
-                No Conformidades
-              </h1>
+              <h2 className="mt-4 text-xl font-bold tracking-tight text-slate-900">
+                Alcance operativo + trazabilidad + IA
+              </h2>
 
-              <p className="mt-3 text-base leading-7 text-slate-600 md:text-lg">
+              <p className="mt-3 text-sm leading-6 text-slate-600">
                 Controla el ciclo completo de la no conformidad: apertura, avance,
                 aprobación, evidencia automática y enlace directo al plan correctivo.
               </p>
@@ -1542,6 +1549,7 @@ function NoConformidadesPageContent() {
           </EnterpriseScrollPanel>
         )}
       </div>
+      </EnterpriseDomainWorkspaceShell>
     </AppLayout>
   );
 }
