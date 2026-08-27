@@ -6,8 +6,10 @@ type EnterpriseTableShellProps = {
   title?: ReactNode;
   subtitle?: ReactNode;
   actions?: ReactNode;
+  footer?: ReactNode;
   className?: string;
   maxHeight?: string;
+  density?: 'compact' | 'comfortable';
 };
 
 export default function EnterpriseTableShell({
@@ -15,13 +17,15 @@ export default function EnterpriseTableShell({
   title,
   subtitle,
   actions,
+  footer,
   className,
   maxHeight,
+  density = 'comfortable',
 }: EnterpriseTableShellProps) {
   const hasHeader = title || subtitle || actions;
 
   return (
-    <section className={cx('enterprise-table', className)}>
+    <section className={cx('enterprise-table', density === 'compact' && 'enterprise-table-compact', className)}>
       {hasHeader && (
         <div className="flex flex-col gap-3 border-b border-[var(--tcdx-color-border)] px-5 py-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
@@ -32,6 +36,7 @@ export default function EnterpriseTableShell({
         </div>
       )}
       <div className="overflow-auto tcdx-scrollbar" style={maxHeight ? { maxHeight } : undefined}>{children}</div>
+      {footer && <div className="border-t border-[var(--tcdx-color-border)] px-4 py-3">{footer}</div>}
     </section>
   );
 }

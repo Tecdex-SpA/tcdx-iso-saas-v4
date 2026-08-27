@@ -1,0 +1,174 @@
+{
+  "verdict": "PASS",
+  "locale": "es-CL",
+  "generated_at": "2026-08-27T14:27:18.071Z",
+  "route_count": {
+    "before": 97,
+    "after": 97,
+    "expected": "97 -> 97"
+  },
+  "context": "UI-07 enterprise tables, filters and density focal evidence",
+  "source_fixture_policy": "Fixtures are confined to this harness and are not runtime/productive data evidence.",
+  "captures": [
+    {
+      "file": "datos-table-1440.png",
+      "route": "/datos",
+      "viewport": {
+        "width": 1440,
+        "height": 980
+      },
+      "locale": "es-CL",
+      "pattern": "EnterpriseTableShell + EnterpriseFilterBar",
+      "filters": "search over loaded collection",
+      "state": "measured + Data Trust",
+      "responsive": "desktop table with local horizontal overflow only if needed",
+      "source": "Playwright route fixtures confined to this script; product code consumes existing endpoints only",
+      "assertions": [
+        "Datos",
+        "Buscar",
+        "2 de 2 dominios de datos",
+        "Confianza",
+        "Lineage",
+        "Confiable con advertencias"
+      ],
+      "route_count": "97 -> 97"
+    },
+    {
+      "file": "evidencias-table-1440.png",
+      "route": "/evidencias?legacy_upload=1",
+      "viewport": {
+        "width": 1440,
+        "height": 980
+      },
+      "locale": "es-CL",
+      "pattern": "EnterpriseFilterBar + operational evidence cards",
+      "filters": "standard, status, search, reset",
+      "state": "measured list",
+      "responsive": "desktop dense toolbar and scroll panel",
+      "source": "Playwright route fixtures confined to this script; product code consumes existing endpoints only",
+      "assertions": [
+        "Evidencias",
+        "Buscar",
+        "evidencias en la vista actual",
+        "Pendiente"
+      ],
+      "route_count": "97 -> 97"
+    },
+    {
+      "file": "riesgos-table-1440.png",
+      "route": "/riesgos",
+      "viewport": {
+        "width": 1440,
+        "height": 980
+      },
+      "locale": "es-CL",
+      "pattern": "sortable operational table",
+      "filters": "search, source, level, status, owner",
+      "state": "measured + source state labels",
+      "responsive": "desktop table with local scroll",
+      "source": "Playwright route fixtures confined to this script; product code consumes existing endpoints only",
+      "assertions": [
+        "Registro de riesgos",
+        "Búsqueda",
+        "Fuente",
+        "Con medición",
+        "En progreso"
+      ],
+      "route_count": "97 -> 97"
+    },
+    {
+      "file": "exportes-table-1440.png",
+      "route": "/exportes",
+      "viewport": {
+        "width": 1440,
+        "height": 980
+      },
+      "locale": "es-CL",
+      "pattern": "EnterpriseTableShell history table",
+      "filters": "search, report type, client, date range, reset",
+      "state": "measured history",
+      "responsive": "desktop table with local horizontal scroll",
+      "source": "Playwright route fixtures confined to this script; product code consumes existing endpoints only",
+      "assertions": [
+        "Historial",
+        "Desde",
+        "Hasta",
+        "Reporte ejecutivo de cumplimiento",
+        "En proceso"
+      ],
+      "route_count": "97 -> 97"
+    },
+    {
+      "file": "table-mobile-390.png",
+      "route": "/riesgos",
+      "viewport": {
+        "width": 390,
+        "height": 940
+      },
+      "locale": "es-CL",
+      "pattern": "same risk dataset with mobile cards",
+      "filters": "collapsed responsive filter grid",
+      "state": "measured",
+      "responsive": "mobile preserves entity, state and primary action without global overflow",
+      "source": "Playwright route fixtures confined to this script; product code consumes existing endpoints only",
+      "assertions": [
+        "Registro de riesgos",
+        "R-001",
+        "Alto"
+      ],
+      "route_count": "97 -> 97"
+    },
+    {
+      "file": "table-state-1440.png",
+      "route": "/datos",
+      "viewport": {
+        "width": 1440,
+        "height": 980
+      },
+      "locale": "es-CL",
+      "pattern": "UniversalStateBlock empty search state",
+      "filters": "search no-match",
+      "state": "empty",
+      "responsive": "desktop empty state without table collapse",
+      "source": "Playwright route fixtures confined to this script; product code consumes existing endpoints only",
+      "assertions": [
+        "Sin resultados",
+        "No hay registros que coincidan"
+      ],
+      "route_count": "97 -> 97"
+    }
+  ],
+  "responsive_validations": [
+    {
+      "route": "/datos",
+      "viewport": {
+        "width": 1280,
+        "height": 900
+      },
+      "locale": "es-CL",
+      "assertions": [
+        "Datos",
+        "Buscar",
+        "2 de 2 dominios de datos",
+        "Confianza"
+      ],
+      "responsive": "1280 desktop table preserves scanability and no global horizontal overflow",
+      "route_count": "97 -> 97"
+    },
+    {
+      "route": "/exportes",
+      "viewport": {
+        "width": 1280,
+        "height": 900
+      },
+      "locale": "es-CL",
+      "assertions": [
+        "Historial",
+        "Reporte ejecutivo de cumplimiento",
+        "Ver PDF"
+      ],
+      "responsive": "1280 history table keeps filters, entity and primary action visible without global overflow",
+      "route_count": "97 -> 97"
+    }
+  ]
+}

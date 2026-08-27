@@ -5,7 +5,13 @@ import Link from 'next/link';
 import EnterpriseDomainWorkspaceShell, { type EnterpriseDomainWorkspaceKey } from '@/components/enterprise-domain/EnterpriseDomainWorkspaceShell';
 import { ApiClientError, apiRequestJson } from '@/utils/apiClient';
 import OfficialAnalyticsPanel from '@/components/math-governance/OfficialAnalyticsPanel';
-import { DataTrustIndicator, UniversalStateBlock } from '@/components/ui/enterprise';
+import {
+  DataTrustIndicator,
+  EnterpriseFilterBar,
+  EnterpriseRowActions,
+  EnterpriseTableShell,
+  UniversalStateBlock,
+} from '@/components/ui/enterprise';
 
 type Phase5Item = Record<string, unknown>;
 
@@ -27,6 +33,36 @@ function text(value: unknown) {
   if (value === null || value === undefined || value === '') return '—';
   if (typeof value === 'object') return 'Ver detalle';
   return String(value);
+}
+
+function displayValue(key: string, value: unknown) {
+  const raw = text(value);
+  const normalized = raw.toLowerCase();
+  const labels: Record<string, string> = {
+    active: 'Activo',
+    inactive: 'Inactivo',
+    enabled: 'Activo',
+    disabled: 'Inactivo',
+    published: 'Publicado',
+    draft: 'Borrador',
+    pending: 'Pendiente',
+    in_progress: 'En progreso',
+    completed: 'Completado',
+    failed: 'Error técnico',
+    monthly: 'Mensual',
+    trusted: 'Confiable',
+    trusted_with_warnings: 'Confiable con advertencias',
+    low_confidence: 'Baja confianza',
+    insufficient_data: 'Datos insuficientes',
+    source_unavailable: 'Sin fuente',
+    dependency_pending: 'Dependencia pendiente',
+  };
+
+  if (key.toLowerCase().includes('frequency') || normalized === 'monthly') {
+    return labels[normalized] || raw;
+  }
+
+  return labels[normalized] || raw.replaceAll('_', ' ');
 }
 
 function isWarning(item: Phase5Item) {
@@ -82,9 +118,20 @@ export default function Phase5Workspace({
   const [loading, setLoading] = useState(loadCollection);
   const [error, setError] = useState<{ code: string; message: string } | null>(null);
   const [lastLoadedAt, setLastLoadedAt] = useState('');
+  const [tableSearch, setTableSearch] = useState('');
 
   const requestEndpoint = useMemo(() => endpoint, [endpoint]);
   const entityType = useMemo(() => entityTypeFromEndpoint(endpoint), [endpoint]);
+  const filteredRows = useMemo(() => {
+    const query = tableSearch.trim().toLowerCase();
+    if (!query) return rows;
+
+    return rows.filter((row) =>
+      columns
+        .map((column) => row[column.key])
+        .some((value) => text(value).toLowerCase().includes(query))
+    );
+  }, [columns, rows, tableSearch]);
 
   useEffect(() => {
     if (!loadCollection) {
@@ -216,61 +263,115 @@ export default function Phase5Workspace({
         )}
 
         {loadCollection && !loading && !error && rows.length > 0 && (
-          <div className="overflow-x-auto rounded-[var(--tcdx-radius-tecdex-sm)] border border-[var(--tcdx-color-border)] bg-white">
-            <table className="min-w-full divide-y divide-[var(--tcdx-color-border)] text-sm">
-              <thead className="bg-[var(--tcdx-color-surface)]">
-                <tr>
-                  {columns.map((column) => (
-                    <th key={column.key} scope="col" className="px-4 py-3 text-left font-semibold">
-                      {column.label}
-                    </th>
-                  ))}
-                  <th scope="col" className="px-4 py-3 text-left font-semibold">Confianza</th>
-                  <th scope="col" className="px-4 py-3 text-left font-semibold">Fórmula</th>
-                  <th scope="col" className="px-4 py-3 text-left font-semibold">Análisis</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[var(--tcdx-color-border)] bg-white">
-                {rows.map((row, index) => (
-                  <tr key={String(row.id || row.metric_code || row.dashboard_key || index)} className={isWarning(row) ? 'bg-amber-50' : ''}>
-                    {columns.map((column) => (
-                      <td key={column.key} className="px-4 py-3 align-top">
-                        {text(row[column.key])}
-                      </td>
+          <div className="space-y-3">
+            <EnterpriseFilterBar
+              count={`${filteredRows.length} de ${rows.length} ${primaryLabel}`}
+              actions={
+                tableSearch ? (
+                  <button
+                    type="button"
+                    onClick={() => setTableSearch('')}
+                    className="min-h-10 rounded-[var(--tcdx-radius-tecdex-sm)] border border-[var(--tcdx-color-border)] bg-white px-3 text-xs font-bold text-[var(--tcdx-color-text-ink)] hover:bg-[var(--tcdx-color-surface-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--tcdx-color-primary)]"
+                  >
+                    Limpiar
+                  </button>
+                ) : null
+              }
+            >
+              <label className="sm:col-span-2">
+                <span className="text-xs font-bold text-[var(--tcdx-color-text-secondary)]">Buscar</span>
+                <input
+                  type="search"
+                  value={tableSearch}
+                  onChange={(event) => setTableSearch(event.target.value)}
+                  placeholder={`Buscar en ${primaryLabel}`}
+                  className="mt-1 min-h-10 w-full rounded-[var(--tcdx-radius-tecdex-sm)] border border-[var(--tcdx-color-border)] bg-white px-3 text-sm text-[var(--tcdx-color-text-ink)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--tcdx-color-primary)]"
+                />
+              </label>
+            </EnterpriseFilterBar>
+
+            {filteredRows.length === 0 ? (
+              <UniversalStateBlock
+                state="empty"
+                title="Sin resultados"
+                description="No hay registros que coincidan con la búsqueda actual."
+              />
+            ) : (
+              <EnterpriseTableShell density="compact" maxHeight="620px">
+                <table className="min-w-[980px] w-full table-fixed text-left text-sm">
+                  <thead>
+                    <tr>
+                      {columns.map((column, index) => (
+                        <th
+                          key={column.key}
+                          scope="col"
+                          className={index === 0 ? 'w-[24%] px-3 py-3 text-left' : 'px-3 py-3 text-left'}
+                        >
+                          {column.label}
+                        </th>
+                      ))}
+                      <th scope="col" className="w-[150px] px-3 py-3 text-left">Confianza</th>
+                      <th scope="col" className="w-[190px] px-3 py-3 text-left">Fórmula</th>
+                      <th scope="col" className="w-[150px] px-3 py-3 text-right">Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white">
+                    {filteredRows.map((row, index) => (
+                      <tr
+                        key={String(row.id || row.metric_code || row.dashboard_key || index)}
+                        className={isWarning(row) ? 'bg-amber-50/60' : ''}
+                      >
+                        {columns.map((column, columnIndex) => (
+                          <td key={column.key} className="px-3 py-3 align-top text-[var(--tcdx-color-text-ink)]">
+                            <span
+                              className={columnIndex === 0 ? 'line-clamp-2 font-semibold' : 'line-clamp-2 text-[var(--tcdx-color-text-secondary)]'}
+                              title={displayValue(column.key, row[column.key])}
+                            >
+                              {displayValue(column.key, row[column.key])}
+                            </span>
+                          </td>
+                        ))}
+                        <td className="px-3 py-3 align-top">
+                          <DataTrustIndicator
+                            status={String(row.trust_status || row.quality_status || '')}
+                            coverage={typeof row.coverage === 'number' || typeof row.coverage === 'string' ? row.coverage : null}
+                            freshness={typeof row.freshness_status === 'string' ? row.freshness_status : null}
+                            source={typeof row.source_status === 'string' ? row.source_status : null}
+                            warnings={stringList(row.warnings)}
+                            label={isWarning(row) ? 'Data Trust con advertencias' : 'Data Trust'}
+                          />
+                        </td>
+                        <td className="px-3 py-3 align-top text-xs">
+                          <div className="line-clamp-1 font-semibold text-[var(--tcdx-color-text-ink)]">
+                            {displayValue('formula', row.formula_code || row.official_formula_code || row.result_code)}
+                          </div>
+                          <div className="text-[var(--tcdx-color-text-secondary)]">
+                            v{displayValue('version', row.formula_version || row.official_formula_version || row.version_number)}
+                          </div>
+                          <div className="line-clamp-1 text-[var(--tcdx-color-text-secondary)]">
+                            {displayValue('trust', row.coverage ?? row.trust_status ?? row.source_status)}
+                          </div>
+                        </td>
+                        <td className="px-3 py-3 align-top">
+                          {row.id ? (
+                            <EnterpriseRowActions>
+                              <Link className="rounded-[var(--tcdx-radius-tecdex-sm)] border border-[var(--tcdx-color-border)] bg-white px-2 py-1 text-xs font-semibold text-[var(--tcdx-color-primary)] hover:bg-[var(--tcdx-color-surface-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--tcdx-color-primary)]" href={`/datos/lineage?entityType=${encodeURIComponent(String(row.entity_type || entityType))}&entityId=${encodeURIComponent(String(row.id))}&mode=lineage`}>
+                                Lineage
+                              </Link>
+                              <Link className="rounded-[var(--tcdx-radius-tecdex-sm)] border border-[var(--tcdx-color-border)] bg-white px-2 py-1 text-xs font-semibold text-[var(--tcdx-color-primary)] hover:bg-[var(--tcdx-color-surface-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--tcdx-color-primary)]" href={`/datos/lineage?entityType=${encodeURIComponent(String(row.entity_type || entityType))}&entityId=${encodeURIComponent(String(row.id))}&mode=impact`}>
+                                Impacto
+                              </Link>
+                            </EnterpriseRowActions>
+                          ) : (
+                            '—'
+                          )}
+                        </td>
+                      </tr>
                     ))}
-                    <td className="px-4 py-3 align-top">
-                      <DataTrustIndicator
-                        status={String(row.trust_status || row.quality_status || '')}
-                        coverage={typeof row.coverage === 'number' || typeof row.coverage === 'string' ? row.coverage : null}
-                        freshness={typeof row.freshness_status === 'string' ? row.freshness_status : null}
-                        source={typeof row.source_status === 'string' ? row.source_status : null}
-                        warnings={stringList(row.warnings)}
-                        label={isWarning(row) ? 'Data Trust con advertencias' : 'Data Trust'}
-                      />
-                    </td>
-                    <td className="px-4 py-3 align-top text-xs">
-                      <div className="font-semibold">{text(row.formula_code || row.official_formula_code || row.result_code)}</div>
-                      <div className="text-[var(--tcdx-color-text-secondary)]">v{text(row.formula_version || row.official_formula_version || row.version_number)}</div>
-                      <div className="text-[var(--tcdx-color-text-secondary)]">{text(row.coverage ?? row.trust_status ?? row.source_status)}</div>
-                    </td>
-                    <td className="px-4 py-3 align-top">
-                      {row.id ? (
-                        <div className="flex flex-wrap gap-2">
-                          <Link className="text-xs font-semibold text-[var(--tcdx-color-primary)] underline-offset-2 hover:underline" href={`/datos/lineage?entityType=${encodeURIComponent(String(row.entity_type || entityType))}&entityId=${encodeURIComponent(String(row.id))}&mode=lineage`}>
-                            Lineage
-                          </Link>
-                          <Link className="text-xs font-semibold text-[var(--tcdx-color-primary)] underline-offset-2 hover:underline" href={`/datos/lineage?entityType=${encodeURIComponent(String(row.entity_type || entityType))}&entityId=${encodeURIComponent(String(row.id))}&mode=impact`}>
-                            Impacto
-                          </Link>
-                        </div>
-                      ) : (
-                        '—'
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                  </tbody>
+                </table>
+              </EnterpriseTableShell>
+            )}
           </div>
         )}
       </div>

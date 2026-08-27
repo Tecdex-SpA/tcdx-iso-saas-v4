@@ -1,9 +1,9 @@
 # CURRENT_STATE — TCDX ISO SaaS V4
 
-Actualizado: 2026-08-26
+Actualizado: 2026-08-27
 Repositorio: `Tecdex-SpA/tcdx-iso-saas-v4`
 Remote/base `main` verificado para F6.14-A: `e6b431df521300119efaf9194d3ff4d8e56d7004`
-Fuente: repositorio `main` + handoffs runtime cerrados + evidencia runtime validada por el responsable del proyecto + cierre runtime F6.11-A + cierre runtime F6.11-B + cierre runtime F6.12-A + cierre runtime F6.13-A + cierre local UI-04.
+Fuente: repositorio `main` + handoffs runtime cerrados + evidencia runtime validada por el responsable del proyecto + cierre runtime F6.11-A + cierre runtime F6.11-B + cierre runtime F6.12-A + cierre runtime F6.13-A + cierre local UI-04 + cierre local UI-07.
 
 ## Estado del programa
 
@@ -29,6 +29,7 @@ Fuente: repositorio `main` + handoffs runtime cerrados + evidencia runtime valid
 - UI-04: REMEDIATED_AND_APPROVED_LOCAL en branch `codex/ui02-stage1-foundation` sobre HEAD `7d16d534d8f442041569783e247b6d8bd8f72456` sin commit por instruccion. Product Design review final completada: se detecto un `MAJOR` mobile/evidencia porque `Requiere atención` y las secciones Data Trust/Data Gap no quedaban visibles en las capturas objetivo; se remedio adelantando prioridades en mobile sin cambiar el orden desktop y ajustando el harness para capturar secciones `scroll_target`. Centro Ejecutivo aprobado sobre la ruta existente `/dashboard`: KPI strip, prioridades "Requiere atención", riesgo/cumplimiento, auditoría/acciones, tendencia oficial comparable y Data Trust ejecutivo reutilizando `UniversalStateBlock`, `UniversalStateBadge` y `DataTrustIndicator`. No crea `/centro-ejecutivo`, `/executive-center`, endpoint ejecutivo, scoring nuevo, source of truth nuevo, cambios backend/API/BD/IA ni cambios RBAC. Contrato focal PASS: `UI04_EXECUTIVE_COMMAND_CENTER_CONTRACT_PASS route=/dashboard routes=97->97 rbac=unchanged`. Evidencia visual PASS actualizada: `artifacts/ui04-executive-command-center/` con cinco PNG y `manifest.json`. Validacion local PASS: lint, typecheck, sidebar/RBAC, responsive, UI-04 contract, build y git diff --check. DATA_GAP documentado: si snapshots no publican histórico suficiente o Data Trust, la UI muestra `Datos insuficientes`, `No disponible`, `Sin datos` o `No calculable` sin convertir ausencia a cero.
 - UI-05: MATERIALMENTE_SATISFECHO_ANTICIPADO por UI-02. Los workspaces GRC consolidados de Riesgo y Control, Cumplimiento, Auditoría, Datos, Inteligencia y Reportes quedaron implementados/aprobados en UI-02 mediante `RiskControlWorkspaceShell` y `EnterpriseDomainWorkspaceShell`. No se ejecutó reimplementación UI-05.
 - UI-06: COMPLETE_WITH_POLISH_BACKLOG local en branch `codex/ui02-stage1-foundation` sobre HEAD `966525dbc09af01da1834389f068bfd775514e2d` sin commit por instruccion. Visualización de datos normalizada de forma focal: `ResponsiveChartFrame` acepta contexto accesible; `/dashboard` conserva UI-04 y normaliza tooltips, ejes, estados universales y resúmenes textuales en charts existentes; `/metricas/[id]` agrega tendencia oficial publicada sólo con snapshots calculados suficientes y sin convertir ausencia/no calculable en cero. No se agregan endpoints, mutaciones, fuentes de verdad, fórmulas, agregaciones backend, cambios RBAC ni rutas. Contrato focal PASS: `UI06_DATA_VISUALIZATION_CONTRACT_PASS routes=97->97 rbac=unchanged`. Evidencia visual PASS: `artifacts/ui06-data-visualization/` con `charts-dashboard-1440.png`, `charts-metrics-1440.png`, `charts-mobile-390.png` y `manifest.json`. Validación local PASS: lint, typecheck, sidebar/RBAC, responsive, UI-06 contract, UI-04 contract, UI-02 Universal States/Data Trust contract, build y git diff --check. DATA_GAP: un snapshot ausente/no calculable se omite de la línea y se mantiene como ausencia; histórico insuficiente muestra `Datos insuficientes`. POLISH BACKLOG: warnings locales de Recharts por dimensiones durante captura persisten como deuda no bloqueante ya observada en UI-04, sin overflow global ni chart blank en evidencia.
+- UI-07: COMPLETE_WITH_POLISH_BACKLOG local en branch `codex/ui02-stage1-foundation` sobre HEAD `d54d66c890d6c87f9ecb2bf554b53a4a9d5ae34a` sin commit por instruccion. Tablas/filtros/densidad enterprise normalizados de forma focal en `/datos`, `/metricas`, `/riesgos`, `/evidencias?legacy_upload=1`, `/controles` y `/exportes`; rutas revisadas sin reimplementación: `/hallazgos`, `/no-conformidades`, `/planes-accion`, `/auditorias`, `/indicadores`. Se agregan primitivas UI `EnterpriseFilterBar` y `EnterpriseRowActions`, y `EnterpriseTableShell` soporta densidad compacta/footer. No se agregan endpoints, mutaciones, fuentes de verdad, backend/API/BD, fórmulas, cambios RBAC ni rutas. Contrato focal PASS: `UI07_ENTERPRISE_TABLES_CONTRACT_PASS routes=97->97 rbac=unchanged`. Evidencia visual PASS: `artifacts/ui07-enterprise-tables/` con seis PNG, `manifest.json` y validación 1440/1280/390. Validación local PASS: lint, typecheck, sidebar/RBAC, responsive, UI-07 contract, build y git diff --check. POLISH BACKLOG: workbenches especializados tipo cards siguen fuera de conversión a tabla general sin soporte de workflow/backend.
 - Fase 6 ampliada 6.8-6.14: LOCAL_CLOSED_PENDING_RUNTIME_VALIDATION.
 - 6.8-01-HF1: CLOSED (reconciliación Observation: `grc_observations` + `grc_observation_relations` son el modelo canónico del Semantic Layer; `grcObservation.service.js` queda como fachada GRC; tabla paralela de 6.8-01 migrada/removida si existía).
 - 6.8-01-HF2: CLOSED / PASS_RUNTIME (deploy validado por el usuario en production/main `5c40dcc0cad8ff98a207ee92b6465648b1a8a3f2`; `schema_migrations` registra `20260818_f6_8_01_hf2_manual_observation_contract_bootstrap` aplicado, `grc.manual_observations@v1` existe published, `current_version_id` correcto, sin duplicados globales/versiones ni contratos tenant-specific).
@@ -121,10 +122,10 @@ El usuario realiza CI/merge/deploy y decide si un fallo requiere un work package
 
 ## Próxima acción
 
-1. UI-06 queda listo para revision humana sobre `artifacts/ui06-data-visualization/`.
+1. UI-07 queda listo para revision humana sobre `artifacts/ui07-enterprise-tables/`.
 2. Usuario mantiene push/PR/CI/merge/deploy/manual runtime validation si corresponde.
 3. No continuar al siguiente bloque desde este cierre.
-4. Mantener cerrados PUI-01..PUI-09, F6.8-01/F6.8-02/F6.8-03, 6.9-01..6.9-03, 6.10-01..6.10-05, F6.11-A/B, F6.12-A, F6.13-A, F6.14-A, UI-02, UI-04, UI-05 material y UI-06 salvo evidencia objetiva nueva.
+4. Mantener cerrados PUI-01..PUI-09, F6.8-01/F6.8-02/F6.8-03, 6.9-01..6.9-03, 6.10-01..6.10-05, F6.11-A/B, F6.12-A, F6.13-A, F6.14-A, UI-02, UI-04, UI-05 material, UI-06 y UI-07 salvo evidencia objetiva nueva.
 
 ## Handoff relevante
 
@@ -178,5 +179,6 @@ El usuario realiza CI/merge/deploy y decide si un fallo requiere un work package
 - `docs/codex/handoffs/6.14-A.md`
 - `docs/codex/handoffs/UI-04.md`
 - `docs/codex/handoffs/UI-06.md`
+- `docs/codex/handoffs/UI-07.md`
 - `docs/codex/PHASE6_EXPANDED_CLOSURE.md`
 - `docs/architecture/grc_relationship_inventory.md`

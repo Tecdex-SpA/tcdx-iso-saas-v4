@@ -8,6 +8,7 @@ import {
   EnterpriseButton,
   EnterpriseCard,
   EnterpriseEmptyState,
+  EnterpriseFilterBar,
   EnterpriseKpiCard,
 } from '@/components/ui/enterprise';
 import RiskControlWorkspaceShell from '@/components/risk-control/RiskControlWorkspaceShell';
@@ -186,6 +187,8 @@ function localStatus(value?: string | null, locale = 'es') {
     aprobado: 'Aprobado',
     active: 'Activo',
     activo: 'Activo',
+    in_progress: 'En progreso',
+    'in progress': 'En progreso',
     open: 'Abierto',
     abierto: 'Abierto',
     closed: 'Cerrado',
@@ -199,6 +202,8 @@ function localStatus(value?: string | null, locale = 'es') {
     reviewed: 'Reviewed',
     approved: 'Approved',
     active: 'Active',
+    in_progress: 'In progress',
+    'in progress': 'In progress',
     open: 'Open',
     closed: 'Closed',
     mitigated: 'Mitigated',
@@ -771,12 +776,17 @@ export default function RiskRegisterWorkspace() {
         title={t('riskControlWorkspace.filters.title')}
         subtitle={t('riskControlWorkspace.filters.subtitle')}
       >
-        <div className="grid gap-3 p-4 md:grid-cols-2 xl:grid-cols-6">
+        <EnterpriseFilterBar
+          className="border-0 shadow-none"
+          count={t('riskControlWorkspace.table.pagination', { shown: pageRows.length, total: sortedRows.length })}
+        >
           <label className="xl:col-span-2">
             <span className="text-xs font-bold text-[var(--tcdx-color-text-secondary)]">{t('riskControlWorkspace.filters.search')}</span>
             <input
+              type="search"
               value={query}
               onChange={(event) => updateQuery({ q: event.target.value, page: '1' })}
+              placeholder="Buscar riesgo, activo, responsable o fuente"
               className="mt-1 min-h-11 w-full rounded-[var(--tcdx-radius-tecdex-sm)] border border-[var(--tcdx-color-border)] px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--tcdx-color-primary)]"
             />
           </label>
@@ -813,7 +823,7 @@ export default function RiskRegisterWorkspace() {
               ]}
             />
           )}
-        </div>
+        </EnterpriseFilterBar>
         <div className="flex flex-wrap items-center gap-2 border-t border-[var(--tcdx-color-border)] px-4 py-3 text-xs text-[var(--tcdx-color-text-secondary)]">
           <EnterpriseBadge tone="neutral">{t('riskControlWorkspace.filters.localPagination')}</EnterpriseBadge>
           {(query || source !== 'all' || level !== 'all' || status !== 'all' || owner !== 'all' || standard) && (
@@ -852,7 +862,7 @@ export default function RiskRegisterWorkspace() {
                     <SortableHeader className="w-[105px]" label={t('riskControlWorkspace.table.level')} sortKey="level" currentSort={sort} direction={direction} onSort={updateSort} />
                     <SortableHeader className="w-[120px]" label={t('riskControlWorkspace.table.status')} sortKey="status" currentSort={sort} direction={direction} onSort={updateSort} />
                     <SortableHeader className="w-[130px]" label={t('riskControlWorkspace.table.owner')} sortKey="owner" currentSort={sort} direction={direction} onSort={updateSort} />
-                    <SortableHeader className="w-[120px]" label={t('riskControlWorkspace.table.source')} sortKey="sourceType" currentSort={sort} direction={direction} onSort={updateSort} />
+                    <SortableHeader className="w-[170px]" label={t('riskControlWorkspace.table.source')} sortKey="sourceType" currentSort={sort} direction={direction} onSort={updateSort} />
                     <th className="w-[110px] px-3 py-3">{t('riskControlWorkspace.table.actions')}</th>
                   </tr>
                 </thead>
@@ -883,7 +893,10 @@ export default function RiskRegisterWorkspace() {
                       <td className="border-t border-[var(--tcdx-color-border)] px-3 py-3"><EnterpriseBadge tone={levelTone(row.level)}>{row.levelLabel}</EnterpriseBadge></td>
                       <td className="truncate border-t border-[var(--tcdx-color-border)] px-3 py-3" title={localStatus(row.status, locale)}>{localStatus(row.status, locale)}</td>
                       <td className="truncate border-t border-[var(--tcdx-color-border)] px-3 py-3" title={row.owner || dataStateLabel('unavailable', locale)}>{row.owner || dataStateLabel('unavailable', locale)}</td>
-                      <td className="truncate border-t border-[var(--tcdx-color-border)] px-3 py-3" title={t(row.sourceLabelKey)}>{t(row.sourceLabelKey)}</td>
+                      <td className="border-t border-[var(--tcdx-color-border)] px-3 py-3" title={`${t(row.sourceLabelKey)} · ${dataStateLabel(row.sourceState, locale)}`}>
+                        <div className="line-clamp-2 font-semibold text-[var(--tcdx-color-text-ink)]">{t(row.sourceLabelKey)}</div>
+                        <div className="mt-1 text-xs text-[var(--tcdx-color-text-secondary)]">{dataStateLabel(row.sourceState, locale)}</div>
+                      </td>
                       <td className="border-t border-[var(--tcdx-color-border)] px-3 py-3">
                         <button
                           type="button"
@@ -1009,7 +1022,7 @@ function SortableHeader({
         className="inline-flex min-h-9 items-center gap-1 rounded-[var(--tcdx-radius-tecdex-sm)] px-1 font-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--tcdx-color-primary)]"
       >
         {label}
-        <span aria-hidden="true">{active ? (direction === 'asc' ? '^' : 'v') : '-'}</span>
+        <span aria-hidden="true">{active ? (direction === 'asc' ? '↑' : '↓') : '↕'}</span>
       </button>
     </th>
   );

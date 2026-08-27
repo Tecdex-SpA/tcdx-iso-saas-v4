@@ -9,6 +9,7 @@ import { getUserFromToken } from '@/utils/auth';
 import { useTranslation } from '@/hooks/useTranslation';
 import { translateDisplayText, translateClauseLabel, translateControlLabel, translateStatusLabel } from '@/i18n/displayText';
 import RiskControlWorkspaceShell from '@/components/risk-control/RiskControlWorkspaceShell';
+import { EnterpriseFilterBar } from '@/components/ui/enterprise';
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL || '';
@@ -1420,12 +1421,30 @@ function ControlesPageContent() {
             </div>
           </div>
 
-          <div className="mt-6 grid grid-cols-1 gap-4 xl:grid-cols-[repeat(4,minmax(0,1fr))_minmax(0,1.2fr)]">
-            <FilterCard label={t('controls.standard')}>
+          <EnterpriseFilterBar
+            className="mt-6"
+            count={`${filteredEnabledControls.length} activos · ${filteredAvailableControls.length} disponibles`}
+            actions={
+              (healthFilter !== 'todos' || searchText) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setHealthFilter('todos');
+                    setSearchText('');
+                  }}
+                  className="min-h-10 rounded-[var(--tcdx-radius-tecdex-sm)] border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--tcdx-color-primary)]"
+                >
+                  Limpiar
+                </button>
+              )
+            }
+          >
+            <label>
+              <span className="text-xs font-bold text-slate-500">{t('controls.standard')}</span>
               <select
                 value={selectedISO}
                 onChange={(e) => setSelectedISO(e.target.value)}
-                className="w-full rounded-2xl border border-slate-200 px-3 py-3 text-sm outline-none"
+                className="mt-1 min-h-10 w-full rounded-[var(--tcdx-radius-tecdex-sm)] border border-slate-200 px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-[var(--tcdx-color-primary)]"
               >
                 {availableStandards.length === 0 ? (
                   <option value="">{t('controls.noOperationalStandards')}</option>
@@ -1437,13 +1456,14 @@ function ControlesPageContent() {
                   ))
                 )}
               </select>
-            </FilterCard>
+            </label>
 
-            <FilterCard label={t('controls.operation')}>
+            <label>
+              <span className="text-xs font-bold text-slate-500">{t('controls.operation')}</span>
               <select
                 value={selectedOperationId}
                 onChange={(e) => setSelectedOperationId(e.target.value)}
-                className="w-full rounded-2xl border border-slate-200 px-3 py-3 text-sm outline-none"
+                className="mt-1 min-h-10 w-full rounded-[var(--tcdx-radius-tecdex-sm)] border border-slate-200 px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-[var(--tcdx-color-primary)]"
                 disabled={availableOperations.length === 0}
               >
                 {availableOperations.length === 0 ? (
@@ -1456,22 +1476,24 @@ function ControlesPageContent() {
                   ))
                 )}
               </select>
-            </FilterCard>
+            </label>
 
-            <FilterCard label={t('controls.catalogMode')}>
+            <label>
+              <span className="text-xs font-bold text-slate-500">{t('controls.catalogMode')}</span>
               <select
                 value={mode}
                 onChange={(e) => void updateCatalogMode(e.target.value)}
-                className="w-full rounded-2xl border border-slate-200 px-3 py-3 text-sm outline-none"
+                className="mt-1 min-h-10 w-full rounded-[var(--tcdx-radius-tecdex-sm)] border border-slate-200 px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-[var(--tcdx-color-primary)]"
                 disabled={!selectedISO}
               >
                 <option value="generic">{t('controls.catalog.generic')}</option>
                 <option value="personalized">{t('controls.catalog.personalized')}</option>
                 <option value="mixed">{t('controls.catalog.mixed')}</option>
               </select>
-            </FilterCard>
+            </label>
 
-            <FilterCard label={t('controls.health')}>
+            <label>
+              <span className="text-xs font-bold text-slate-500">{t('controls.health')}</span>
               <select
                 value={healthFilter}
                 onChange={(e) =>
@@ -1479,24 +1501,26 @@ function ControlesPageContent() {
                     e.target.value as 'todos' | 'saludable' | 'atencion' | 'deteriorado'
                   )
                 }
-                className="w-full rounded-2xl border border-slate-200 px-3 py-3 text-sm outline-none"
+                className="mt-1 min-h-10 w-full rounded-[var(--tcdx-radius-tecdex-sm)] border border-slate-200 px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-[var(--tcdx-color-primary)]"
               >
                 <option value="todos">{t('controls.allStatuses')}</option>
                 <option value="saludable">{t('statuses.controls.saludable')}</option>
                 <option value="atencion">{t('statuses.controls.atencion')}</option>
                 <option value="deteriorado">{t('statuses.controls.deteriorado')}</option>
               </select>
-            </FilterCard>
+            </label>
 
-            <FilterCard label={t('common.search')}>
+            <label>
+              <span className="text-xs font-bold text-slate-500">{t('common.search')}</span>
               <input
+                type="search"
                 value={searchText}
                 onChange={(e) => setSearchText(e.target.value)}
                 placeholder={t('controls.searchPlaceholder')}
-                className="w-full rounded-2xl border border-slate-200 px-3 py-3 text-sm outline-none"
+                className="mt-1 min-h-10 w-full rounded-[var(--tcdx-radius-tecdex-sm)] border border-slate-200 px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-[var(--tcdx-color-primary)]"
               />
-            </FilterCard>
-          </div>
+            </label>
+          </EnterpriseFilterBar>
 
           {summary && (
             <div className="mt-6 grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-6">
@@ -2269,23 +2293,6 @@ function ControlesPageContent() {
         <GrcPhase1Panel mode="framework" />
       </div>
     </AppLayout>
-  );
-}
-
-function FilterCard({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm">
-      <label className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
-        {label}
-      </label>
-      {children}
-    </div>
   );
 }
 

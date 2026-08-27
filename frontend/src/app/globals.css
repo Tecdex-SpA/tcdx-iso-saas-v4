@@ -446,6 +446,11 @@ a[class*="flex"] {
   vertical-align: middle;
 }
 
+.enterprise-table-compact :is(th, td) {
+  height: 40px;
+  padding-block: 0.55rem;
+}
+
 .enterprise-table thead th {
   position: sticky;
   top: 0;
@@ -455,6 +460,10 @@ a[class*="flex"] {
   font-size: 0.75rem;
   font-weight: 700;
   line-height: 1.25;
+}
+
+.enterprise-table tbody td {
+  border-top: 1px solid var(--tcdx-color-border-subtle);
 }
 
 .enterprise-table tbody tr {
