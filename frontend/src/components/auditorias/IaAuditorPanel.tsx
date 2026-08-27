@@ -1328,7 +1328,7 @@ export default function IaAuditorPanel() {
               <div className="bg-slate-950 p-5 text-white">
                 <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                   <div>
-                    <p className="text-xs font-black uppercase tracking-[0.16em] text-indigo-200">TCDX by Tecdex</p>
+                    <p className="text-xs font-black uppercase tracking-[0.16em] text-indigo-200">Tecdex GRC Compliance</p>
                     <h3 className="mt-1 text-xl font-black">
                       {copy.viewHistoryDetail}
                     </h3>

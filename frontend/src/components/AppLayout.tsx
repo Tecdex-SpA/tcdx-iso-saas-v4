@@ -31,9 +31,9 @@ import {
   DEALER_ROUTES,
   FUNCTIONAL_MVP_SUBFLOW_ROUTES,
   INTERNAL_CLIENT_HIDDEN_ROUTES,
-  PLATFORM_ROLES,
   PLATFORM_ROUTES,
   canAccessMvpFeature,
+  getMvpRoleGroup,
   getMvpRouteCapability,
   getMvpRouteRule,
   isPathInRoutes,
@@ -234,7 +234,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
             '/riesgo-cuantitativo',
           ],
           fallback: '/dashboard',
-          label: 'Operación GRC',
+          label: 'Riesgo Operativo',
           permission_key: null,
           permission_denied_message: null,
         },
@@ -250,7 +250,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           module_key: 'metrics_bi',
           routes: ['/metricas', '/bi'],
           fallback: '/dashboard',
-          label: 'Métricas y BI',
+          label: 'Datos y Analítica',
           permission_key: null,
           permission_denied_message: null,
         },
@@ -274,7 +274,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           module_key: 'report_studio',
           routes: ['/reportes/studio', '/reportes/generaciones'],
           fallback: '/dashboard',
-          label: 'Report Studio',
+          label: 'Diseñador de reportes',
           permission_key: null,
           permission_denied_message: null,
         },
@@ -359,20 +359,13 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         ).toLowerCase();
         if (!cancelled) setAccessRole(role);
 
-        const isPlatform = PLATFORM_ROLES.includes(role);
-
-        const isDealer = role === 'dealer';
+        const roleGroup = getMvpRoleGroup(role);
+        const isPlatform = roleGroup === 'platform';
+        const isDealer = roleGroup === 'dealer';
         const isFunctionalMvpSubflow = FUNCTIONAL_MVP_SUBFLOW_ROUTES.includes(pathname);
 
         const homePath = getHomePathByRole(role);
-        const isExecutiveClient =
-          role === 'viewer' ||
-          role === 'cliente' ||
-          role === 'client' ||
-          role === 'solo_lectura' ||
-          role === 'read_only' ||
-          role === 'readonly' ||
-          role === 'ejecutivo';
+        const isExecutiveClient = roleGroup === 'executive';
 
         if (isDealer && !isRoute(routeRules.dealerOnly)) {
           window.location.href = '/dealer';

@@ -1,0 +1,7 @@
+tenant_id,plan_key,plan_display_name,status,started_at,ended_at,version_number
+3e88abb4-b346-4ba5-9b6e-aa58c3d84606,pyme,Pyme,active,2026-05-01 00:00:00+00,2027-05-01 00:00:00+00,1
+444cb18c-831a-4964-b7d9-c1d302f73fc6,legacy,Legacy compatible,active,2026-04-22 00:00:00+00,2026-07-21 00:00:00+00,1
+4f8c5522-190c-4ace-bf59-1e7cc96003e7,enterprise,Enterprise,active,2026-07-30 16:41:42.399471+00,,1
+697eefa4-3b56-4c8a-a7d4-6d512c40233e,pyme,Pyme,active,2026-04-01 00:00:00+00,2027-03-31 00:00:00+00,1
+70000000-0000-0000-0000-000000000701,enterprise,Enterprise,active,2026-07-29 16:44:23.387149+00,,1
+76c44a0e-6041-8bda-99c7-b740fccea001,enterprise,Enterprise,active,2026-08-03 19:59:18.231419+00,,1

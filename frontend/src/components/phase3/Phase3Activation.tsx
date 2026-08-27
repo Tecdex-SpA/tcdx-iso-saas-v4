@@ -56,7 +56,7 @@ export default function Phase3Activation() {
         <nav aria-label="Migas de pan" className="text-sm text-[var(--tcdx-color-text-secondary)]">
           <Link href="/dashboard">Inicio</Link>
           <span className="mx-2">/</span>
-          <Link href="/operaciones-grc">Operación GRC</Link>
+          <Link href="/operaciones-grc">Riesgo Operativo</Link>
           <span className="mx-2">/</span>
           <span aria-current="page">Activación</span>
         </nav>

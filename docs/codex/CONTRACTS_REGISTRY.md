@@ -46,7 +46,8 @@
 | Regulatory Pack Activation | CURRENT/F6.11-B-RUNTIME | CODEX B | `regulatory-pack-activation-contract-v1`; activación/configuración tenant-scoped que no muta la definición global del pack; runtime closure PASS. |
 | Regulatory Applicability | CURRENT/F6.11-B-RUNTIME | CODEX B | `regulatory-pack-applicability-contract-v1`; evaluación/recomendación tenant-scoped con confirmación humana para aplicabilidad sensible; IA no es autoridad legal; runtime closure PASS. |
 | Regulatory Mapping | PLANNED | CODEX B | Mapeos profundos a controles/evidencias/riesgos existentes requieren equivalencia real y revisión humana; F6.11-B sólo conserva `mapping_targets` gobernados en items de pack. |
-| Capability/RBAC | CURRENT/PROTECTED | A+C | Reutilizar sistema existente; backend autoriza. |
+| Capability/RBAC | CURRENT/RBAC-01 | A+C | Backend autoriza; roles canónicos usan resolver de compatibilidad sin alias de privilegios; autorización efectiva separa permiso, entitlement, módulo activo y scope. |
+| RBAC-01 canonical roles | CURRENT/RBAC-01 | A+C | Roles nuevos oficiales: `platform_admin`, `tenant_admin`, `auditor`, `area_owner`, `executive`, `dealer`; legacy preserva `effective_role` y no reescribe usuarios. |
 
 Regla: si un work package cambia un contrato, actualizar este archivo en el mismo commit.
 

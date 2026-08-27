@@ -1167,7 +1167,7 @@ export default function ExportesPage() {
         {reportJobMessage && (
           <div className="fixed bottom-6 right-6 z-50 max-w-md rounded-2xl border border-indigo-200 bg-white px-5 py-4 text-sm font-semibold text-slate-800 shadow-2xl">
             <div className="text-[11px] font-black uppercase tracking-[0.14em] text-indigo-600">
-              Reportes TCDX
+              Reportes Tecdex GRC Compliance
             </div>
             <div className="mt-1">{reportJobMessage}</div>
           </div>

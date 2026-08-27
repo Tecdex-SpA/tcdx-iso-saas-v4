@@ -7,6 +7,22 @@ export type MvpRoleGroup =
   | 'executive'
   | 'unknown';
 
+export type MvpRoleClassification =
+  | 'CANONICAL_ROLE'
+  | 'EXACT_ALIAS'
+  | 'COMPATIBILITY_MAPPING'
+  | 'DEPRECATED_LEGACY_ROLE'
+  | 'UNKNOWN_REQUIRES_DECISION';
+
+export type MvpRoleCompatibility = {
+  rawRole: string | null;
+  normalizedRole: string;
+  canonicalRole: MvpRoleGroup;
+  effectiveRole: string | null;
+  classification: MvpRoleClassification;
+  privilegePreservation: 'DIRECT' | 'PRESERVE_LEGACY_EFFECTIVE_ROLE' | 'NO_ALIAS_APPLIED';
+};
+
 export type MvpFeatureKey =
   | 'dashboard.read'
   | 'compliance.read'
@@ -71,6 +87,7 @@ export type MvpNavItem = {
 };
 
 export const CAPABILITY_BY_PATH: Record<string, string> = {
+  '/dashboard': 'core.dashboard',
   '/grc': 'data.governance',
   '/datos': 'data.governance',
   '/metricas': 'metrics.catalog',
@@ -93,8 +110,9 @@ export const PLATFORM_ROLES = [
 
 export const ADMIN_ROLES = ['admin', 'tenant_admin', 'admin_cumplimiento', 'compliance_admin'];
 export const AUDITOR_ROLES = ['auditor'];
-export const AREA_OWNER_ROLES = ['operativo', 'responsable_area', 'area_owner'];
+export const AREA_OWNER_ROLES = ['operativo', 'responsable_area', 'area_owner', 'control_owner'];
 export const EXECUTIVE_ROLES = [
+  'executive',
   'viewer',
   'cliente',
   'client',
@@ -104,25 +122,82 @@ export const EXECUTIVE_ROLES = [
   'ejecutivo',
 ];
 
+const ROLE_COMPATIBILITY: Record<string, Omit<MvpRoleCompatibility, 'rawRole' | 'normalizedRole'>> = {
+  platform_admin: { canonicalRole: 'platform', effectiveRole: 'platform_admin', classification: 'CANONICAL_ROLE', privilegePreservation: 'DIRECT' },
+  tenant_admin: { canonicalRole: 'admin', effectiveRole: 'tenant_admin', classification: 'CANONICAL_ROLE', privilegePreservation: 'DIRECT' },
+  auditor: { canonicalRole: 'auditor', effectiveRole: 'auditor', classification: 'CANONICAL_ROLE', privilegePreservation: 'DIRECT' },
+  area_owner: { canonicalRole: 'area_owner', effectiveRole: 'area_owner', classification: 'CANONICAL_ROLE', privilegePreservation: 'DIRECT' },
+  executive: { canonicalRole: 'executive', effectiveRole: 'executive', classification: 'CANONICAL_ROLE', privilegePreservation: 'DIRECT' },
+  dealer: { canonicalRole: 'dealer', effectiveRole: 'dealer', classification: 'CANONICAL_ROLE', privilegePreservation: 'DIRECT' },
+  super_admin: { canonicalRole: 'platform', effectiveRole: 'super_admin', classification: 'EXACT_ALIAS', privilegePreservation: 'PRESERVE_LEGACY_EFFECTIVE_ROLE' },
+  global_admin: { canonicalRole: 'platform', effectiveRole: 'global_admin', classification: 'EXACT_ALIAS', privilegePreservation: 'PRESERVE_LEGACY_EFFECTIVE_ROLE' },
+  admin_global: { canonicalRole: 'platform', effectiveRole: 'admin_global', classification: 'EXACT_ALIAS', privilegePreservation: 'PRESERVE_LEGACY_EFFECTIVE_ROLE' },
+  superadmin: { canonicalRole: 'platform', effectiveRole: 'superadmin', classification: 'DEPRECATED_LEGACY_ROLE', privilegePreservation: 'PRESERVE_LEGACY_EFFECTIVE_ROLE' },
+  owner: { canonicalRole: 'platform', effectiveRole: 'owner', classification: 'DEPRECATED_LEGACY_ROLE', privilegePreservation: 'PRESERVE_LEGACY_EFFECTIVE_ROLE' },
+  admin: { canonicalRole: 'admin', effectiveRole: 'admin', classification: 'DEPRECATED_LEGACY_ROLE', privilegePreservation: 'PRESERVE_LEGACY_EFFECTIVE_ROLE' },
+  admin_cumplimiento: { canonicalRole: 'admin', effectiveRole: 'admin_cumplimiento', classification: 'COMPATIBILITY_MAPPING', privilegePreservation: 'PRESERVE_LEGACY_EFFECTIVE_ROLE' },
+  compliance_admin: { canonicalRole: 'admin', effectiveRole: 'compliance_admin', classification: 'COMPATIBILITY_MAPPING', privilegePreservation: 'PRESERVE_LEGACY_EFFECTIVE_ROLE' },
+  compliance_manager: { canonicalRole: 'admin', effectiveRole: 'compliance_manager', classification: 'DEPRECATED_LEGACY_ROLE', privilegePreservation: 'PRESERVE_LEGACY_EFFECTIVE_ROLE' },
+  operativo: { canonicalRole: 'area_owner', effectiveRole: 'operativo', classification: 'DEPRECATED_LEGACY_ROLE', privilegePreservation: 'PRESERVE_LEGACY_EFFECTIVE_ROLE' },
+  responsable_area: { canonicalRole: 'area_owner', effectiveRole: 'responsable_area', classification: 'COMPATIBILITY_MAPPING', privilegePreservation: 'PRESERVE_LEGACY_EFFECTIVE_ROLE' },
+  control_owner: { canonicalRole: 'area_owner', effectiveRole: 'control_owner', classification: 'DEPRECATED_LEGACY_ROLE', privilegePreservation: 'PRESERVE_LEGACY_EFFECTIVE_ROLE' },
+  viewer: { canonicalRole: 'executive', effectiveRole: 'viewer', classification: 'DEPRECATED_LEGACY_ROLE', privilegePreservation: 'PRESERVE_LEGACY_EFFECTIVE_ROLE' },
+  cliente: { canonicalRole: 'executive', effectiveRole: 'cliente', classification: 'COMPATIBILITY_MAPPING', privilegePreservation: 'PRESERVE_LEGACY_EFFECTIVE_ROLE' },
+  client: { canonicalRole: 'executive', effectiveRole: 'client', classification: 'COMPATIBILITY_MAPPING', privilegePreservation: 'PRESERVE_LEGACY_EFFECTIVE_ROLE' },
+  read_only: { canonicalRole: 'executive', effectiveRole: 'read_only', classification: 'COMPATIBILITY_MAPPING', privilegePreservation: 'PRESERVE_LEGACY_EFFECTIVE_ROLE' },
+  readonly: { canonicalRole: 'executive', effectiveRole: 'readonly', classification: 'COMPATIBILITY_MAPPING', privilegePreservation: 'PRESERVE_LEGACY_EFFECTIVE_ROLE' },
+  solo_lectura: { canonicalRole: 'executive', effectiveRole: 'solo_lectura', classification: 'COMPATIBILITY_MAPPING', privilegePreservation: 'PRESERVE_LEGACY_EFFECTIVE_ROLE' },
+  ejecutivo: { canonicalRole: 'executive', effectiveRole: 'ejecutivo', classification: 'COMPATIBILITY_MAPPING', privilegePreservation: 'PRESERVE_LEGACY_EFFECTIVE_ROLE' },
+};
+
 export function normalizeMvpRole(role?: string | null) {
   return String(role || '').toLowerCase().trim();
 }
 
-export function getMvpRoleGroup(role?: string | null): MvpRoleGroup {
-  const normalized = normalizeMvpRole(role);
+export function resolveMvpRoleCompatibility(role?: string | null): MvpRoleCompatibility {
+  const normalizedRole = normalizeMvpRole(role);
+  const match = ROLE_COMPATIBILITY[normalizedRole];
 
-  if (PLATFORM_ROLES.includes(normalized)) return 'platform';
-  if (normalized === 'dealer') return 'dealer';
-  if (ADMIN_ROLES.includes(normalized)) return 'admin';
-  if (AUDITOR_ROLES.includes(normalized)) return 'auditor';
-  if (AREA_OWNER_ROLES.includes(normalized)) return 'area_owner';
-  if (EXECUTIVE_ROLES.includes(normalized)) return 'executive';
+  if (!match) {
+    return {
+      rawRole: role || null,
+      normalizedRole,
+      canonicalRole: 'unknown',
+      effectiveRole: normalizedRole || null,
+      classification: 'UNKNOWN_REQUIRES_DECISION',
+      privilegePreservation: 'NO_ALIAS_APPLIED',
+    };
+  }
+
+  return {
+    rawRole: role || null,
+    normalizedRole,
+    ...match,
+  };
+}
+
+export function getMvpRoleGroup(role?: string | null): MvpRoleGroup {
+  return resolveMvpRoleCompatibility(role).canonicalRole;
+}
+
+function getMvpEffectiveAccessGroup(role?: string | null): MvpRoleGroup {
+  const roleModel = resolveMvpRoleCompatibility(role);
+  const effectiveRole = roleModel.effectiveRole || roleModel.normalizedRole;
+
+  if (PLATFORM_ROLES.includes(effectiveRole)) return 'platform';
+  if (effectiveRole === 'dealer') return 'dealer';
+  if (ADMIN_ROLES.includes(effectiveRole)) return 'admin';
+  if (AUDITOR_ROLES.includes(effectiveRole)) return 'auditor';
+  if (AREA_OWNER_ROLES.includes(effectiveRole)) return 'area_owner';
+  if (EXECUTIVE_ROLES.includes(effectiveRole)) return 'executive';
+  if (roleModel.classification === 'CANONICAL_ROLE') return roleModel.canonicalRole;
+  if (roleModel.classification === 'EXACT_ALIAS') return roleModel.canonicalRole;
 
   return 'unknown';
 }
 
 const FEATURE_ACCESS: Record<MvpFeatureKey, MvpRoleGroup[]> = {
-  'dashboard.read': ['admin', 'area_owner', 'executive'],
+  'dashboard.read': ['admin', 'auditor', 'area_owner', 'executive'],
   'compliance.read': ['admin', 'auditor', 'area_owner', 'executive'],
   'health.view': ['admin', 'auditor', 'area_owner', 'executive'],
   'health.refresh': ['admin'],
@@ -184,7 +259,7 @@ export function canAccessMvpFeature(
 ) {
   if (!feature) return false;
 
-  const group = getMvpRoleGroup(role);
+  const group = getMvpEffectiveAccessGroup(role);
 
   if (group === 'platform') {
     return feature === 'admin_saas.internal';
@@ -221,7 +296,7 @@ export const CLIENT_MVP_NAV_ITEMS: MvpNavItem[] = [
   },
   {
     href: '/operaciones-grc',
-    label: 'Operación GRC',
+    label: 'Riesgo Operativo',
     feature: 'phase3.read',
     moduleKey: 'grc_phase3_operations',
   },
@@ -263,13 +338,13 @@ export const CLIENT_MVP_NAV_ITEMS: MvpNavItem[] = [
   },
   {
     href: '/bi',
-    label: 'Business Intelligence',
+    label: 'Datos y Analítica',
     feature: 'phase5.read',
     moduleKey: 'metrics_bi',
   },
   {
     href: '/reportes/studio',
-    label: 'Report Studio',
+    label: 'Diseñador de reportes',
     feature: 'phase5.read',
     moduleKey: 'report_studio',
   },

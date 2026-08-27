@@ -11,6 +11,7 @@ const state = {
   badSqlReferences: [],
   tenant: { id: tenantId, name: 'Tenant Comercial QA', service_status: 'active' },
   subscription: { id: subscriptionId, tenant_id: tenantId, plan_key: 'empresa', status: 'active', metadata: {} },
+  moduleEnabled: true,
   events: [],
   insertedSubscriptions: 0,
 };
@@ -48,7 +49,7 @@ async function query(sql, params = []) {
   if (/SELECT \* FROM audit_workpaper_template_versions ORDER BY template_key, version_number/i.test(text)) return rows([]);
   if (/SELECT id, name, service_status FROM tenants WHERE id = \$1::uuid LIMIT 1/i.test(text)) return rows([state.tenant]);
   if (/SELECT \* FROM v_commercial_tenant_subscription WHERE tenant_id = \$1::uuid LIMIT 1/i.test(text)) return rows([state.subscription]);
-  if (/SELECT \* FROM v_commercial_tenant_modules WHERE tenant_id = \$1::uuid/i.test(text)) return rows([{ tenant_id: tenantId, module_key: 'tprm', display_name: 'TPRM', sort_order: 10 }]);
+  if (/SELECT \* FROM v_commercial_tenant_modules WHERE tenant_id = \$1::uuid/i.test(text)) return rows([{ tenant_id: tenantId, module_key: 'tprm', display_name: 'TPRM', sort_order: 10, is_enabled: state.moduleEnabled }]);
   if (/SELECT \* FROM v_commercial_tenant_capabilities WHERE tenant_id = \$1::uuid/i.test(text)) return rows([
     { tenant_id: tenantId, capability_key: 'tprm.suppliers', enabled: true, source: 'plan', module_key: 'tprm', required_permission: null, read_only: false, dependencies: [] },
   ]);
@@ -124,7 +125,7 @@ const {
   previewPlanChange,
   changePlan,
 } = require('./commercialAdmin.service');
-const { normalizeKey, resolveTenantEntitlements } = require('./entitlementResolver.service');
+const { normalizeKey, resolveCapability, resolveTenantEntitlements } = require('./entitlementResolver.service');
 const express = require('express');
 const commercialRouter = require('../../routes/admin-saas-commercial.routes');
 
@@ -195,6 +196,24 @@ async function run() {
   assert.ok(entitlements.capabilities['tprm.suppliers'].enabled);
   assert.ok(entitlements.limits.active_users);
   assert.strictEqual(entitlements.health.status, 'healthy');
+
+  const allowedCapability = await resolveCapability({
+    tenantId,
+    user: { id: userId, tenant_id: tenantId },
+    capabilityKey: 'tprm.suppliers',
+  });
+  assert.strictEqual(allowedCapability.enabled, true);
+  assert.strictEqual(allowedCapability.module_active, true);
+
+  state.moduleEnabled = false;
+  const inactiveModuleCapability = await resolveCapability({
+    tenantId,
+    user: { id: userId, tenant_id: tenantId },
+    capabilityKey: 'tprm.suppliers',
+  });
+  assert.strictEqual(inactiveModuleCapability.enabled, false);
+  assert.strictEqual(inactiveModuleCapability.reason_code, 'MODULE_NOT_ACTIVE');
+  state.moduleEnabled = true;
 
   const preview = await previewPlanChange({ tenantId, body: { target_plan_key: 'enterprise' } });
   assert.strictEqual(preview.target_plan_key, 'enterprise');

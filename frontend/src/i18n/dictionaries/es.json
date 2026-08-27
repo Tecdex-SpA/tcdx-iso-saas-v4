@@ -169,7 +169,7 @@
       "findings": "Hallazgos",
       "nonconformities": "No conformidades",
       "recommendations": "Recomendaciones",
-      "grcOperations": "Operación GRC",
+      "grcOperations": "Riesgo Operativo",
       "continuity": "Continuidad",
       "incidents": "Incidentes",
       "suppliers": "Proveedores",
@@ -187,8 +187,8 @@
       "surveys": "Encuestas",
       "aiCompliance": "IA Compliance",
       "exports": "Exportes",
-      "bi": "BI",
-      "reportStudio": "Report Studio",
+      "bi": "Datos y Analítica",
+      "reportStudio": "Diseñador de reportes",
       "reportGenerations": "Generaciones",
       "settings": "Configuración",
       "users": "Usuarios",
@@ -220,7 +220,7 @@
     },
     "reports": {
       "eyebrow": "Reportes",
-      "title": "BI y Reportes",
+      "title": "Datos, Analítica y Reportes",
       "description": "Exportes, BI, Studio y generaciones basadas en resultados oficiales, plantillas y descargas autorizadas."
     }
   },
@@ -248,7 +248,7 @@
     "profile": "Editar perfil",
     "logout": "Cerrar sesión",
     "userFallback": "Usuario",
-    "profileHint": "Entorno premium TCDX listo para operación diaria.",
+    "profileHint": "Entorno premium Tecdex GRC Compliance listo para operación diaria.",
     "clientLogoAlt": "Logo cliente"
   },
   "app": {
@@ -257,14 +257,14 @@
     "restrictedAccess": "Acceso restringido",
     "logoutAndSwitch": "Cerrar sesión e ingresar con otra cuenta",
     "moduleDisabled": "El módulo \"{{module}}\" no está habilitado para esta empresa.",
-    "serviceSuspended": "El servicio de {{tenantName}} está suspendido por no pago. Contacta al administrador comercial de TCDX para regularizar la cuenta.",
+    "serviceSuspended": "El servicio de {{tenantName}} está suspendido por no pago. Contacta al administrador comercial de Tecdex GRC Compliance para regularizar la cuenta.",
     "serviceDeleted": "El servicio de {{tenantName}} ya no se encuentra activo. La empresa fue dada de baja administrativamente.",
     "permissionsError": "Error validando permisos de acceso.",
     "modulesError": "Error consultando módulos contratados",
     "invalidModulesResponse": "Respuesta inválida del backend en /api/me/modules. HTTP {{status}}."
   },
   "dashboard": {
-    "title": "Bienvenido a TCDX",
+    "title": "Bienvenido a Tecdex GRC Compliance",
     "subtitle": "Vista general de cumplimiento y gestión ISO.",
     "executiveView": "Vista operacional",
     "kpiView": "Vista KPI",
@@ -393,7 +393,7 @@
   },
   "exports": {
     "title": "Exportes ejecutivos premium",
-    "brand": "TCDX by Tecdex",
+    "brand": "Tecdex GRC Compliance",
     "reportTypesLabel": "Tipos de reporte",
     "reportTypes": {
       "executive_summary": {
@@ -426,7 +426,7 @@
     "clientHelp": "El tenant seleccionado define la fuente de datos del informe.",
     "currentContext": "Contexto actual",
     "clientNotSelected": "Cliente no seleccionado",
-    "premiumDocument": "Documento premium con foco ejecutivo y marca TCDX by Tecdex.",
+    "premiumDocument": "Documento premium con foco ejecutivo y marca Tecdex GRC Compliance.",
     "readOnlyMode": "Modo solo lectura: tu rol puede revisar y descargar reportes generados, pero no generar nuevos informes.",
     "generateTab": "Generar informes",
     "history": "Historial",
@@ -656,9 +656,9 @@
     },
     "ai": {
       "bestEffort": "Mejor esfuerzo",
-      "engine": "Motor IA TCDX",
+      "engine": "Motor IA Tecdex GRC Compliance",
       "notReported": "No informada",
-      "orchestration": "Orquestación IA TCDX",
+      "orchestration": "Orquestación IA Tecdex GRC Compliance",
       "traceability": "Esta evaluación conserva trazabilidad del motor IA central usado para validar la evidencia.",
       "source": "Origen",
       "confidence": "Confianza",

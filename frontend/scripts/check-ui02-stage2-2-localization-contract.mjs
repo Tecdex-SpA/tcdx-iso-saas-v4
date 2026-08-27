@@ -50,12 +50,12 @@ function assertManifestTextClean({ locale, bodyText, breadcrumbText }) {
     const spanishSignals = [
       /Inicio/i,
       /Centro ejecutivo/i,
-      /Bienvenido a TCDX/i,
+      /Bienvenido a Tecdex GRC Compliance/i,
       /Vista operacional/i,
       /Resumen ejecutivo GRC/i,
     ];
     const englishSignals = [
-      /Welcome to TCDX/i,
+      /Welcome to Tecdex GRC Compliance/i,
       /Operational View/i,
       /Executive Center/i,
       /Risk Register/i,
@@ -76,7 +76,7 @@ function assertManifestTextClean({ locale, bodyText, breadcrumbText }) {
     const englishSignals = [
       /Home/i,
       /Executive Center/i,
-      /Welcome to TCDX/i,
+      /Welcome to Tecdex GRC Compliance/i,
       /Operational View/i,
       /Executive GRC Summary/i,
     ];
@@ -123,7 +123,7 @@ const captureScriptPath = path.join(root, 'scripts/capture-ui02-stage2-2-localiz
   ['navigation.destinations.controls', 'Controles'],
   ['navigation.destinations.assets', 'Activos'],
   ['navigation.destinations.quantitativeRisk', 'Riesgo cuantitativo'],
-  ['dashboard.title', 'Bienvenido a TCDX'],
+  ['dashboard.title', 'Bienvenido a Tecdex GRC Compliance'],
   ['dashboard.executiveView', 'Vista operacional'],
   ['dashboard.kpiView', 'Vista KPI'],
   ['dashboard.systemHealthView', 'Salud del sistema'],
@@ -138,7 +138,7 @@ const captureScriptPath = path.join(root, 'scripts/capture-ui02-stage2-2-localiz
   ['navigation.destinations.riskRegister', 'Risk Register'],
   ['navigation.destinations.riskMatrix', 'Risk Matrix'],
   ['navigation.destinations.quantitativeRisk', 'Quantitative Risk'],
-  ['dashboard.title', 'Welcome to TCDX'],
+  ['dashboard.title', 'Welcome to Tecdex GRC Compliance'],
   ['dashboard.executiveView', 'Operational View'],
   ['dashboard.kpiView', 'KPI View'],
   ['dashboard.systemHealthView', 'System Health'],
@@ -190,7 +190,7 @@ let rejectedMixedLocale = false;
 try {
   assertManifestTextClean({
     locale: 'es',
-    bodyText: 'Bienvenido a TCDX\nOperational View\nResumen ejecutivo GRC',
+    bodyText: 'Bienvenido a Tecdex GRC Compliance\nOperational View\nResumen ejecutivo GRC',
     breadcrumbText: 'Inicio / Centro ejecutivo',
   });
 } catch {
@@ -204,13 +204,13 @@ assert(
 
 assertManifestTextClean({
   locale: 'es',
-  bodyText: 'Inicio / Centro ejecutivo\nBienvenido a TCDX\nVista operacional\nResumen ejecutivo GRC',
+  bodyText: 'Inicio / Centro ejecutivo\nBienvenido a Tecdex GRC Compliance\nVista operacional\nResumen ejecutivo GRC',
   breadcrumbText: 'Inicio / Centro ejecutivo',
 });
 
 assertManifestTextClean({
   locale: 'en',
-  bodyText: 'Home / Executive Center\nWelcome to TCDX\nOperational View\nExecutive GRC Summary',
+  bodyText: 'Home / Executive Center\nWelcome to Tecdex GRC Compliance\nOperational View\nExecutive GRC Summary',
   breadcrumbText: 'Home / Executive Center',
 });
 

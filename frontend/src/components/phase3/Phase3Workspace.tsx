@@ -695,7 +695,7 @@ export default function Phase3Workspace({
           <nav aria-label="Migas de pan" className="text-sm text-[var(--tcdx-color-text-secondary)]">
             <Link href="/dashboard" className="hover:text-[var(--tcdx-color-primary)]">Inicio</Link>
             <span aria-hidden="true" className="mx-2">/</span>
-            <Link href="/operaciones-grc" className="hover:text-[var(--tcdx-color-primary)]">Operación GRC</Link>
+            <Link href="/operaciones-grc" className="hover:text-[var(--tcdx-color-primary)]">Riesgo Operativo</Link>
             {view !== 'operations' && (
               <>
                 <span aria-hidden="true" className="mx-2">/</span>

@@ -1,0 +1,189 @@
+tenant_id,capability_key,enabled,read_only,source,module_key,required_permission,effective_from,effective_until
+3e88abb4-b346-4ba5-9b6e-aa58c3d84606,bi.dashboard_builder,t,f,plan,metrics_bi,dashboards.read,2026-05-01 00:00:00+00,2027-05-01 00:00:00+00
+3e88abb4-b346-4ba5-9b6e-aa58c3d84606,bi.executive_dashboards,t,f,plan,metrics_bi,dashboards.read,2026-05-01 00:00:00+00,2027-05-01 00:00:00+00
+3e88abb4-b346-4ba5-9b6e-aa58c3d84606,core.dashboard,t,f,plan,core,commercial.entitlement.read,2026-05-01 00:00:00+00,2027-05-01 00:00:00+00
+3e88abb4-b346-4ba5-9b6e-aa58c3d84606,core.reports,t,f,plan,core,commercial.entitlement.read,2026-05-01 00:00:00+00,2027-05-01 00:00:00+00
+3e88abb4-b346-4ba5-9b6e-aa58c3d84606,grc.phase1,t,f,plan,grc_core,commercial.entitlement.read,2026-05-01 00:00:00+00,2027-05-01 00:00:00+00
+3e88abb4-b346-4ba5-9b6e-aa58c3d84606,grc.phase3,t,f,plan,operations_grc,commercial.entitlement.read,2026-05-01 00:00:00+00,2027-05-01 00:00:00+00
+3e88abb4-b346-4ba5-9b6e-aa58c3d84606,imports.excel,t,f,plan,operations_grc,operations.import,2026-05-01 00:00:00+00,2027-05-01 00:00:00+00
+3e88abb4-b346-4ba5-9b6e-aa58c3d84606,methodology.risk,t,f,plan,risk_manager,commercial.entitlement.read,2026-05-01 00:00:00+00,2027-05-01 00:00:00+00
+3e88abb4-b346-4ba5-9b6e-aa58c3d84606,metrics.actions.propose,t,f,plan,metrics_bi,metrics.measure,2026-05-01 00:00:00+00,2027-05-01 00:00:00+00
+3e88abb4-b346-4ba5-9b6e-aa58c3d84606,metrics.actions.review,t,f,plan,metrics_bi,metrics.validate,2026-05-01 00:00:00+00,2027-05-01 00:00:00+00
+3e88abb4-b346-4ba5-9b6e-aa58c3d84606,metrics.catalog,t,f,plan,metrics_bi,metrics.read,2026-05-01 00:00:00+00,2027-05-01 00:00:00+00
+3e88abb4-b346-4ba5-9b6e-aa58c3d84606,metrics.comparisons.read,t,f,plan,metrics_bi,metrics.read,2026-05-01 00:00:00+00,2027-05-01 00:00:00+00
+3e88abb4-b346-4ba5-9b6e-aa58c3d84606,metrics.data_trust,t,f,plan,metrics_bi,data.quality.read,2026-05-01 00:00:00+00,2027-05-01 00:00:00+00
+3e88abb4-b346-4ba5-9b6e-aa58c3d84606,metrics.engine,t,f,plan,metrics_bi,metrics.measure,2026-05-01 00:00:00+00,2027-05-01 00:00:00+00
+3e88abb4-b346-4ba5-9b6e-aa58c3d84606,metrics.indicators.read,t,f,plan,metrics_bi,metrics.read,2026-05-01 00:00:00+00,2027-05-01 00:00:00+00
+3e88abb4-b346-4ba5-9b6e-aa58c3d84606,metrics.indicators.technical,t,f,plan,metrics_bi,data.lineage.read,2026-05-01 00:00:00+00,2027-05-01 00:00:00+00
+3e88abb4-b346-4ba5-9b6e-aa58c3d84606,metrics.jobs.run,t,f,plan,metrics_bi,metrics.recalculate,2026-05-01 00:00:00+00,2027-05-01 00:00:00+00
+3e88abb4-b346-4ba5-9b6e-aa58c3d84606,metrics.methodology.manage,t,f,plan,metrics_bi,metrics.manage,2026-05-01 00:00:00+00,2027-05-01 00:00:00+00
+3e88abb4-b346-4ba5-9b6e-aa58c3d84606,metrics.methodology.publish,t,f,plan,metrics_bi,metrics.publish,2026-05-01 00:00:00+00,2027-05-01 00:00:00+00
+3e88abb4-b346-4ba5-9b6e-aa58c3d84606,metrics.methodology.review,t,f,plan,metrics_bi,metrics.validate,2026-05-01 00:00:00+00,2027-05-01 00:00:00+00
+3e88abb4-b346-4ba5-9b6e-aa58c3d84606,metrics.snapshots.publish,t,f,plan,metrics_bi,metrics.measure,2026-05-01 00:00:00+00,2027-05-01 00:00:00+00
+3e88abb4-b346-4ba5-9b6e-aa58c3d84606,reporting.docx,t,f,plan,report_studio,reports.generate,2026-05-01 00:00:00+00,2027-05-01 00:00:00+00
+3e88abb4-b346-4ba5-9b6e-aa58c3d84606,reporting.pdf,t,f,plan,report_studio,reports.generate,2026-05-01 00:00:00+00,2027-05-01 00:00:00+00
+3e88abb4-b346-4ba5-9b6e-aa58c3d84606,reporting.scheduled,t,f,plan,report_studio,reports.schedule,2026-05-01 00:00:00+00,2027-05-01 00:00:00+00
+3e88abb4-b346-4ba5-9b6e-aa58c3d84606,reporting.studio,t,f,plan,report_studio,reports.read,2026-05-01 00:00:00+00,2027-05-01 00:00:00+00
+3e88abb4-b346-4ba5-9b6e-aa58c3d84606,reporting.xlsx,t,f,plan,report_studio,reports.generate,2026-05-01 00:00:00+00,2027-05-01 00:00:00+00
+3e88abb4-b346-4ba5-9b6e-aa58c3d84606,risk.quantitative,t,f,plan,risk_manager,commercial.entitlement.read,2026-05-01 00:00:00+00,2027-05-01 00:00:00+00
+444cb18c-831a-4964-b7d9-c1d302f73fc6,ai.compliance,t,f,plan,ai_compliance,commercial.entitlement.read,2026-04-22 00:00:00+00,2026-07-21 00:00:00+00
+444cb18c-831a-4964-b7d9-c1d302f73fc6,core.dashboard,t,f,plan,core,commercial.entitlement.read,2026-04-22 00:00:00+00,2026-07-21 00:00:00+00
+444cb18c-831a-4964-b7d9-c1d302f73fc6,core.reports,t,f,plan,core,commercial.entitlement.read,2026-04-22 00:00:00+00,2026-07-21 00:00:00+00
+444cb18c-831a-4964-b7d9-c1d302f73fc6,grc.phase1,t,f,plan,grc_core,commercial.entitlement.read,2026-04-22 00:00:00+00,2026-07-21 00:00:00+00
+444cb18c-831a-4964-b7d9-c1d302f73fc6,grc.phase2,t,f,plan,integrated_grc,commercial.entitlement.read,2026-04-22 00:00:00+00,2026-07-21 00:00:00+00
+444cb18c-831a-4964-b7d9-c1d302f73fc6,grc.phase3,t,f,plan,operations_grc,commercial.entitlement.read,2026-04-22 00:00:00+00,2026-07-21 00:00:00+00
+444cb18c-831a-4964-b7d9-c1d302f73fc6,imports.excel,t,f,plan,operations_grc,operations.import,2026-04-22 00:00:00+00,2026-07-21 00:00:00+00
+444cb18c-831a-4964-b7d9-c1d302f73fc6,methodology.risk,t,f,plan,risk_manager,commercial.entitlement.read,2026-04-22 00:00:00+00,2026-07-21 00:00:00+00
+444cb18c-831a-4964-b7d9-c1d302f73fc6,reports.premium,t,f,plan,premium_reports,grc.export.generate,2026-04-22 00:00:00+00,2026-07-21 00:00:00+00
+444cb18c-831a-4964-b7d9-c1d302f73fc6,risk.quantitative,t,f,plan,risk_manager,commercial.entitlement.read,2026-04-22 00:00:00+00,2026-07-21 00:00:00+00
+444cb18c-831a-4964-b7d9-c1d302f73fc6,tprm.suppliers,t,f,plan,integrated_grc,commercial.entitlement.read,2026-04-22 00:00:00+00,2026-07-21 00:00:00+00
+444cb18c-831a-4964-b7d9-c1d302f73fc6,workpapers.audit,t,f,plan,audit_workpapers,commercial.entitlement.read,2026-04-22 00:00:00+00,2026-07-21 00:00:00+00
+4f8c5522-190c-4ace-bf59-1e7cc96003e7,ai.compliance,t,f,plan,ai_compliance,commercial.entitlement.read,2026-07-30 16:41:42.399471+00,
+4f8c5522-190c-4ace-bf59-1e7cc96003e7,assurance.testing,t,f,plan,assurance_loss,assurance_tests.read,2026-07-30 16:41:42.399471+00,
+4f8c5522-190c-4ace-bf59-1e7cc96003e7,bi.dashboard_builder,t,f,plan,metrics_bi,dashboards.read,2026-07-30 16:41:42.399471+00,
+4f8c5522-190c-4ace-bf59-1e7cc96003e7,bi.executive_dashboards,t,f,plan,metrics_bi,dashboards.read,2026-07-30 16:41:42.399471+00,
+4f8c5522-190c-4ace-bf59-1e7cc96003e7,core.dashboard,t,f,plan,core,commercial.entitlement.read,2026-07-30 16:41:42.399471+00,
+4f8c5522-190c-4ace-bf59-1e7cc96003e7,core.reports,t,f,plan,core,commercial.entitlement.read,2026-07-30 16:41:42.399471+00,
+4f8c5522-190c-4ace-bf59-1e7cc96003e7,data.governance,t,f,plan,data_governance,data.catalog.read,2026-07-30 16:41:42.399471+00,
+4f8c5522-190c-4ace-bf59-1e7cc96003e7,data.impact_graph,t,f,plan,data_governance,data.lineage.read,2026-07-30 16:41:42.399471+00,
+4f8c5522-190c-4ace-bf59-1e7cc96003e7,data.lineage,t,f,plan,data_governance,data.lineage.read,2026-07-30 16:41:42.399471+00,
+4f8c5522-190c-4ace-bf59-1e7cc96003e7,data.semantic_layer,t,f,plan,data_governance,semantic.contracts.read,2026-07-30 16:41:42.399471+00,
+4f8c5522-190c-4ace-bf59-1e7cc96003e7,grc.phase1,t,f,plan,grc_core,commercial.entitlement.read,2026-07-30 16:41:42.399471+00,
+4f8c5522-190c-4ace-bf59-1e7cc96003e7,grc.phase2,t,f,plan,integrated_grc,commercial.entitlement.read,2026-07-30 16:41:42.399471+00,
+4f8c5522-190c-4ace-bf59-1e7cc96003e7,grc.phase3,t,f,plan,operations_grc,commercial.entitlement.read,2026-07-30 16:41:42.399471+00,
+4f8c5522-190c-4ace-bf59-1e7cc96003e7,imports.excel,t,f,plan,operations_grc,operations.import,2026-07-30 16:41:42.399471+00,
+4f8c5522-190c-4ace-bf59-1e7cc96003e7,loss.events,t,f,plan,assurance_loss,loss_events.read,2026-07-30 16:41:42.399471+00,
+4f8c5522-190c-4ace-bf59-1e7cc96003e7,methodology.risk,t,f,plan,risk_manager,commercial.entitlement.read,2026-07-30 16:41:42.399471+00,
+4f8c5522-190c-4ace-bf59-1e7cc96003e7,metrics.actions.propose,t,f,plan,metrics_bi,metrics.measure,2026-07-30 16:41:42.399471+00,
+4f8c5522-190c-4ace-bf59-1e7cc96003e7,metrics.actions.review,t,f,plan,metrics_bi,metrics.validate,2026-07-30 16:41:42.399471+00,
+4f8c5522-190c-4ace-bf59-1e7cc96003e7,metrics.catalog,t,f,plan,metrics_bi,metrics.read,2026-07-30 16:41:42.399471+00,
+4f8c5522-190c-4ace-bf59-1e7cc96003e7,metrics.comparisons.read,t,f,plan,metrics_bi,metrics.read,2026-07-30 16:41:42.399471+00,
+4f8c5522-190c-4ace-bf59-1e7cc96003e7,metrics.data_trust,t,f,plan,data_governance,data.quality.read,2026-07-30 16:41:42.399471+00,
+4f8c5522-190c-4ace-bf59-1e7cc96003e7,metrics.data_trust,t,f,plan,metrics_bi,data.quality.read,2026-07-30 16:41:42.399471+00,
+4f8c5522-190c-4ace-bf59-1e7cc96003e7,metrics.engine,t,f,plan,metrics_bi,metrics.measure,2026-07-30 16:41:42.399471+00,
+4f8c5522-190c-4ace-bf59-1e7cc96003e7,metrics.indicators.read,t,f,plan,metrics_bi,metrics.read,2026-07-30 16:41:42.399471+00,
+4f8c5522-190c-4ace-bf59-1e7cc96003e7,metrics.indicators.technical,t,f,plan,metrics_bi,data.lineage.read,2026-07-30 16:41:42.399471+00,
+4f8c5522-190c-4ace-bf59-1e7cc96003e7,metrics.jobs.run,t,f,plan,metrics_bi,metrics.recalculate,2026-07-30 16:41:42.399471+00,
+4f8c5522-190c-4ace-bf59-1e7cc96003e7,metrics.methodology.manage,t,f,plan,metrics_bi,metrics.manage,2026-07-30 16:41:42.399471+00,
+4f8c5522-190c-4ace-bf59-1e7cc96003e7,metrics.methodology.publish,t,f,plan,metrics_bi,metrics.publish,2026-07-30 16:41:42.399471+00,
+4f8c5522-190c-4ace-bf59-1e7cc96003e7,metrics.methodology.review,t,f,plan,metrics_bi,metrics.validate,2026-07-30 16:41:42.399471+00,
+4f8c5522-190c-4ace-bf59-1e7cc96003e7,metrics.snapshots.publish,t,f,plan,metrics_bi,metrics.measure,2026-07-30 16:41:42.399471+00,
+4f8c5522-190c-4ace-bf59-1e7cc96003e7,reporting.docx,t,f,plan,report_studio,reports.generate,2026-07-30 16:41:42.399471+00,
+4f8c5522-190c-4ace-bf59-1e7cc96003e7,reporting.pdf,t,f,plan,report_studio,reports.generate,2026-07-30 16:41:42.399471+00,
+4f8c5522-190c-4ace-bf59-1e7cc96003e7,reporting.scheduled,t,f,plan,report_studio,reports.schedule,2026-07-30 16:41:42.399471+00,
+4f8c5522-190c-4ace-bf59-1e7cc96003e7,reporting.studio,t,f,plan,report_studio,reports.read,2026-07-30 16:41:42.399471+00,
+4f8c5522-190c-4ace-bf59-1e7cc96003e7,reporting.xlsx,t,f,plan,report_studio,reports.generate,2026-07-30 16:41:42.399471+00,
+4f8c5522-190c-4ace-bf59-1e7cc96003e7,reports.premium,t,f,plan,premium_reports,grc.export.generate,2026-07-30 16:41:42.399471+00,
+4f8c5522-190c-4ace-bf59-1e7cc96003e7,risk.quantitative,t,f,plan,risk_manager,commercial.entitlement.read,2026-07-30 16:41:42.399471+00,
+4f8c5522-190c-4ace-bf59-1e7cc96003e7,surveys.engine,t,f,plan,surveys_assessments,surveys.read,2026-07-30 16:41:42.399471+00,
+4f8c5522-190c-4ace-bf59-1e7cc96003e7,tprm.suppliers,t,f,plan,integrated_grc,commercial.entitlement.read,2026-07-30 16:41:42.399471+00,
+4f8c5522-190c-4ace-bf59-1e7cc96003e7,workpapers.audit,t,f,plan,audit_workpapers,commercial.entitlement.read,2026-07-30 16:41:42.399471+00,
+697eefa4-3b56-4c8a-a7d4-6d512c40233e,bi.dashboard_builder,t,f,plan,metrics_bi,dashboards.read,2026-04-01 00:00:00+00,2027-03-31 00:00:00+00
+697eefa4-3b56-4c8a-a7d4-6d512c40233e,bi.executive_dashboards,t,f,plan,metrics_bi,dashboards.read,2026-04-01 00:00:00+00,2027-03-31 00:00:00+00
+697eefa4-3b56-4c8a-a7d4-6d512c40233e,core.dashboard,t,f,plan,core,commercial.entitlement.read,2026-04-01 00:00:00+00,2027-03-31 00:00:00+00
+697eefa4-3b56-4c8a-a7d4-6d512c40233e,core.reports,t,f,plan,core,commercial.entitlement.read,2026-04-01 00:00:00+00,2027-03-31 00:00:00+00
+697eefa4-3b56-4c8a-a7d4-6d512c40233e,grc.phase1,t,f,plan,grc_core,commercial.entitlement.read,2026-04-01 00:00:00+00,2027-03-31 00:00:00+00
+697eefa4-3b56-4c8a-a7d4-6d512c40233e,grc.phase3,t,f,plan,operations_grc,commercial.entitlement.read,2026-04-01 00:00:00+00,2027-03-31 00:00:00+00
+697eefa4-3b56-4c8a-a7d4-6d512c40233e,imports.excel,t,f,plan,operations_grc,operations.import,2026-04-01 00:00:00+00,2027-03-31 00:00:00+00
+697eefa4-3b56-4c8a-a7d4-6d512c40233e,methodology.risk,t,f,plan,risk_manager,commercial.entitlement.read,2026-04-01 00:00:00+00,2027-03-31 00:00:00+00
+697eefa4-3b56-4c8a-a7d4-6d512c40233e,metrics.actions.propose,t,f,plan,metrics_bi,metrics.measure,2026-04-01 00:00:00+00,2027-03-31 00:00:00+00
+697eefa4-3b56-4c8a-a7d4-6d512c40233e,metrics.actions.review,t,f,plan,metrics_bi,metrics.validate,2026-04-01 00:00:00+00,2027-03-31 00:00:00+00
+697eefa4-3b56-4c8a-a7d4-6d512c40233e,metrics.catalog,t,f,plan,metrics_bi,metrics.read,2026-04-01 00:00:00+00,2027-03-31 00:00:00+00
+697eefa4-3b56-4c8a-a7d4-6d512c40233e,metrics.comparisons.read,t,f,plan,metrics_bi,metrics.read,2026-04-01 00:00:00+00,2027-03-31 00:00:00+00
+697eefa4-3b56-4c8a-a7d4-6d512c40233e,metrics.data_trust,t,f,plan,metrics_bi,data.quality.read,2026-04-01 00:00:00+00,2027-03-31 00:00:00+00
+697eefa4-3b56-4c8a-a7d4-6d512c40233e,metrics.engine,t,f,plan,metrics_bi,metrics.measure,2026-04-01 00:00:00+00,2027-03-31 00:00:00+00
+697eefa4-3b56-4c8a-a7d4-6d512c40233e,metrics.indicators.read,t,f,plan,metrics_bi,metrics.read,2026-04-01 00:00:00+00,2027-03-31 00:00:00+00
+697eefa4-3b56-4c8a-a7d4-6d512c40233e,metrics.indicators.technical,t,f,plan,metrics_bi,data.lineage.read,2026-04-01 00:00:00+00,2027-03-31 00:00:00+00
+697eefa4-3b56-4c8a-a7d4-6d512c40233e,metrics.jobs.run,t,f,plan,metrics_bi,metrics.recalculate,2026-04-01 00:00:00+00,2027-03-31 00:00:00+00
+697eefa4-3b56-4c8a-a7d4-6d512c40233e,metrics.methodology.manage,t,f,plan,metrics_bi,metrics.manage,2026-04-01 00:00:00+00,2027-03-31 00:00:00+00
+697eefa4-3b56-4c8a-a7d4-6d512c40233e,metrics.methodology.publish,t,f,plan,metrics_bi,metrics.publish,2026-04-01 00:00:00+00,2027-03-31 00:00:00+00
+697eefa4-3b56-4c8a-a7d4-6d512c40233e,metrics.methodology.review,t,f,plan,metrics_bi,metrics.validate,2026-04-01 00:00:00+00,2027-03-31 00:00:00+00
+697eefa4-3b56-4c8a-a7d4-6d512c40233e,metrics.snapshots.publish,t,f,plan,metrics_bi,metrics.measure,2026-04-01 00:00:00+00,2027-03-31 00:00:00+00
+697eefa4-3b56-4c8a-a7d4-6d512c40233e,reporting.docx,t,f,plan,report_studio,reports.generate,2026-04-01 00:00:00+00,2027-03-31 00:00:00+00
+697eefa4-3b56-4c8a-a7d4-6d512c40233e,reporting.pdf,t,f,plan,report_studio,reports.generate,2026-04-01 00:00:00+00,2027-03-31 00:00:00+00
+697eefa4-3b56-4c8a-a7d4-6d512c40233e,reporting.scheduled,t,f,plan,report_studio,reports.schedule,2026-04-01 00:00:00+00,2027-03-31 00:00:00+00
+697eefa4-3b56-4c8a-a7d4-6d512c40233e,reporting.studio,t,f,plan,report_studio,reports.read,2026-04-01 00:00:00+00,2027-03-31 00:00:00+00
+697eefa4-3b56-4c8a-a7d4-6d512c40233e,reporting.xlsx,t,f,plan,report_studio,reports.generate,2026-04-01 00:00:00+00,2027-03-31 00:00:00+00
+697eefa4-3b56-4c8a-a7d4-6d512c40233e,risk.quantitative,t,f,plan,risk_manager,commercial.entitlement.read,2026-04-01 00:00:00+00,2027-03-31 00:00:00+00
+70000000-0000-0000-0000-000000000701,ai.compliance,t,f,plan,ai_compliance,commercial.entitlement.read,2026-07-29 16:44:23.387149+00,
+70000000-0000-0000-0000-000000000701,assurance.testing,t,f,plan,assurance_loss,assurance_tests.read,2026-07-29 16:44:23.387149+00,
+70000000-0000-0000-0000-000000000701,bi.dashboard_builder,t,f,plan,metrics_bi,dashboards.read,2026-07-29 16:44:23.387149+00,
+70000000-0000-0000-0000-000000000701,bi.executive_dashboards,t,f,plan,metrics_bi,dashboards.read,2026-07-29 16:44:23.387149+00,
+70000000-0000-0000-0000-000000000701,core.dashboard,t,f,plan,core,commercial.entitlement.read,2026-07-29 16:44:23.387149+00,
+70000000-0000-0000-0000-000000000701,core.reports,t,f,plan,core,commercial.entitlement.read,2026-07-29 16:44:23.387149+00,
+70000000-0000-0000-0000-000000000701,data.governance,t,f,plan,data_governance,data.catalog.read,2026-07-29 16:44:23.387149+00,
+70000000-0000-0000-0000-000000000701,data.impact_graph,t,f,plan,data_governance,data.lineage.read,2026-07-29 16:44:23.387149+00,
+70000000-0000-0000-0000-000000000701,data.lineage,t,f,plan,data_governance,data.lineage.read,2026-07-29 16:44:23.387149+00,
+70000000-0000-0000-0000-000000000701,data.semantic_layer,t,f,plan,data_governance,semantic.contracts.read,2026-07-29 16:44:23.387149+00,
+70000000-0000-0000-0000-000000000701,grc.phase1,t,f,plan,grc_core,commercial.entitlement.read,2026-07-29 16:44:23.387149+00,
+70000000-0000-0000-0000-000000000701,grc.phase2,t,f,plan,integrated_grc,commercial.entitlement.read,2026-07-29 16:44:23.387149+00,
+70000000-0000-0000-0000-000000000701,grc.phase3,t,f,plan,operations_grc,commercial.entitlement.read,2026-07-29 16:44:23.387149+00,
+70000000-0000-0000-0000-000000000701,imports.excel,t,f,plan,operations_grc,operations.import,2026-07-29 16:44:23.387149+00,
+70000000-0000-0000-0000-000000000701,loss.events,t,f,plan,assurance_loss,loss_events.read,2026-07-29 16:44:23.387149+00,
+70000000-0000-0000-0000-000000000701,methodology.risk,t,f,plan,risk_manager,commercial.entitlement.read,2026-07-29 16:44:23.387149+00,
+70000000-0000-0000-0000-000000000701,metrics.actions.propose,t,f,plan,metrics_bi,metrics.measure,2026-07-29 16:44:23.387149+00,
+70000000-0000-0000-0000-000000000701,metrics.actions.review,t,f,plan,metrics_bi,metrics.validate,2026-07-29 16:44:23.387149+00,
+70000000-0000-0000-0000-000000000701,metrics.catalog,t,f,plan,metrics_bi,metrics.read,2026-07-29 16:44:23.387149+00,
+70000000-0000-0000-0000-000000000701,metrics.comparisons.read,t,f,plan,metrics_bi,metrics.read,2026-07-29 16:44:23.387149+00,
+70000000-0000-0000-0000-000000000701,metrics.data_trust,t,f,plan,data_governance,data.quality.read,2026-07-29 16:44:23.387149+00,
+70000000-0000-0000-0000-000000000701,metrics.data_trust,t,f,plan,metrics_bi,data.quality.read,2026-07-29 16:44:23.387149+00,
+70000000-0000-0000-0000-000000000701,metrics.engine,t,f,plan,metrics_bi,metrics.measure,2026-07-29 16:44:23.387149+00,
+70000000-0000-0000-0000-000000000701,metrics.indicators.read,t,f,plan,metrics_bi,metrics.read,2026-07-29 16:44:23.387149+00,
+70000000-0000-0000-0000-000000000701,metrics.indicators.technical,t,f,plan,metrics_bi,data.lineage.read,2026-07-29 16:44:23.387149+00,
+70000000-0000-0000-0000-000000000701,metrics.jobs.run,t,f,plan,metrics_bi,metrics.recalculate,2026-07-29 16:44:23.387149+00,
+70000000-0000-0000-0000-000000000701,metrics.methodology.manage,t,f,plan,metrics_bi,metrics.manage,2026-07-29 16:44:23.387149+00,
+70000000-0000-0000-0000-000000000701,metrics.methodology.publish,t,f,plan,metrics_bi,metrics.publish,2026-07-29 16:44:23.387149+00,
+70000000-0000-0000-0000-000000000701,metrics.methodology.review,t,f,plan,metrics_bi,metrics.validate,2026-07-29 16:44:23.387149+00,
+70000000-0000-0000-0000-000000000701,metrics.snapshots.publish,t,f,plan,metrics_bi,metrics.measure,2026-07-29 16:44:23.387149+00,
+70000000-0000-0000-0000-000000000701,reporting.docx,t,f,plan,report_studio,reports.generate,2026-07-29 16:44:23.387149+00,
+70000000-0000-0000-0000-000000000701,reporting.pdf,t,f,plan,report_studio,reports.generate,2026-07-29 16:44:23.387149+00,
+70000000-0000-0000-0000-000000000701,reporting.scheduled,t,f,plan,report_studio,reports.schedule,2026-07-29 16:44:23.387149+00,
+70000000-0000-0000-0000-000000000701,reporting.studio,t,f,plan,report_studio,reports.read,2026-07-29 16:44:23.387149+00,
+70000000-0000-0000-0000-000000000701,reporting.xlsx,t,f,plan,report_studio,reports.generate,2026-07-29 16:44:23.387149+00,
+70000000-0000-0000-0000-000000000701,reports.premium,t,f,plan,premium_reports,grc.export.generate,2026-07-29 16:44:23.387149+00,
+70000000-0000-0000-0000-000000000701,risk.quantitative,t,f,plan,risk_manager,commercial.entitlement.read,2026-07-29 16:44:23.387149+00,
+70000000-0000-0000-0000-000000000701,surveys.engine,t,f,plan,surveys_assessments,surveys.read,2026-07-29 16:44:23.387149+00,
+70000000-0000-0000-0000-000000000701,tprm.suppliers,t,f,override,,commercial.entitlement.read,2026-08-03 19:42:58.403457+00,
+70000000-0000-0000-0000-000000000701,tprm.suppliers,t,f,plan,integrated_grc,commercial.entitlement.read,2026-07-29 16:44:23.387149+00,
+70000000-0000-0000-0000-000000000701,workpapers.audit,t,f,plan,audit_workpapers,commercial.entitlement.read,2026-07-29 16:44:23.387149+00,
+76c44a0e-6041-8bda-99c7-b740fccea001,ai.compliance,t,f,plan,ai_compliance,commercial.entitlement.read,2026-08-03 19:59:18.231419+00,
+76c44a0e-6041-8bda-99c7-b740fccea001,assurance.testing,t,f,plan,assurance_loss,assurance_tests.read,2026-08-03 19:59:18.231419+00,
+76c44a0e-6041-8bda-99c7-b740fccea001,bi.dashboard_builder,t,f,plan,metrics_bi,dashboards.read,2026-08-03 19:59:18.231419+00,
+76c44a0e-6041-8bda-99c7-b740fccea001,bi.executive_dashboards,t,f,plan,metrics_bi,dashboards.read,2026-08-03 19:59:18.231419+00,
+76c44a0e-6041-8bda-99c7-b740fccea001,core.dashboard,t,f,plan,core,commercial.entitlement.read,2026-08-03 19:59:18.231419+00,
+76c44a0e-6041-8bda-99c7-b740fccea001,core.reports,t,f,plan,core,commercial.entitlement.read,2026-08-03 19:59:18.231419+00,
+76c44a0e-6041-8bda-99c7-b740fccea001,data.governance,t,f,plan,data_governance,data.catalog.read,2026-08-03 19:59:18.231419+00,
+76c44a0e-6041-8bda-99c7-b740fccea001,data.impact_graph,t,f,plan,data_governance,data.lineage.read,2026-08-03 19:59:18.231419+00,
+76c44a0e-6041-8bda-99c7-b740fccea001,data.lineage,t,f,plan,data_governance,data.lineage.read,2026-08-03 19:59:18.231419+00,
+76c44a0e-6041-8bda-99c7-b740fccea001,data.semantic_layer,t,f,override,,semantic.contracts.read,2025-09-03 19:53:16.440717+00,2028-02-03 19:53:16.440717+00
+76c44a0e-6041-8bda-99c7-b740fccea001,data.semantic_layer,t,f,plan,data_governance,semantic.contracts.read,2026-08-03 19:59:18.231419+00,
+76c44a0e-6041-8bda-99c7-b740fccea001,grc.phase1,t,f,plan,grc_core,commercial.entitlement.read,2026-08-03 19:59:18.231419+00,
+76c44a0e-6041-8bda-99c7-b740fccea001,grc.phase2,t,f,plan,integrated_grc,commercial.entitlement.read,2026-08-03 19:59:18.231419+00,
+76c44a0e-6041-8bda-99c7-b740fccea001,grc.phase3,t,f,plan,operations_grc,commercial.entitlement.read,2026-08-03 19:59:18.231419+00,
+76c44a0e-6041-8bda-99c7-b740fccea001,imports.excel,t,f,plan,operations_grc,operations.import,2026-08-03 19:59:18.231419+00,
+76c44a0e-6041-8bda-99c7-b740fccea001,loss.events,t,f,plan,assurance_loss,loss_events.read,2026-08-03 19:59:18.231419+00,
+76c44a0e-6041-8bda-99c7-b740fccea001,methodology.risk,t,f,plan,risk_manager,commercial.entitlement.read,2026-08-03 19:59:18.231419+00,
+76c44a0e-6041-8bda-99c7-b740fccea001,metrics.actions.propose,t,f,plan,metrics_bi,metrics.measure,2026-08-03 19:59:18.231419+00,
+76c44a0e-6041-8bda-99c7-b740fccea001,metrics.actions.review,t,f,plan,metrics_bi,metrics.validate,2026-08-03 19:59:18.231419+00,
+76c44a0e-6041-8bda-99c7-b740fccea001,metrics.catalog,t,f,plan,metrics_bi,metrics.read,2026-08-03 19:59:18.231419+00,
+76c44a0e-6041-8bda-99c7-b740fccea001,metrics.comparisons.read,t,f,plan,metrics_bi,metrics.read,2026-08-03 19:59:18.231419+00,
+76c44a0e-6041-8bda-99c7-b740fccea001,metrics.data_trust,t,f,plan,metrics_bi,data.quality.read,2026-08-03 19:59:18.231419+00,
+76c44a0e-6041-8bda-99c7-b740fccea001,metrics.data_trust,t,f,plan,data_governance,data.quality.read,2026-08-03 19:59:18.231419+00,
+76c44a0e-6041-8bda-99c7-b740fccea001,metrics.engine,t,f,plan,metrics_bi,metrics.measure,2026-08-03 19:59:18.231419+00,
+76c44a0e-6041-8bda-99c7-b740fccea001,metrics.indicators.read,t,f,plan,metrics_bi,metrics.read,2026-08-03 19:59:18.231419+00,
+76c44a0e-6041-8bda-99c7-b740fccea001,metrics.indicators.technical,t,f,plan,metrics_bi,data.lineage.read,2026-08-03 19:59:18.231419+00,
+76c44a0e-6041-8bda-99c7-b740fccea001,metrics.jobs.run,t,f,plan,metrics_bi,metrics.recalculate,2026-08-03 19:59:18.231419+00,
+76c44a0e-6041-8bda-99c7-b740fccea001,metrics.methodology.manage,t,f,plan,metrics_bi,metrics.manage,2026-08-03 19:59:18.231419+00,
+76c44a0e-6041-8bda-99c7-b740fccea001,metrics.methodology.publish,t,f,plan,metrics_bi,metrics.publish,2026-08-03 19:59:18.231419+00,
+76c44a0e-6041-8bda-99c7-b740fccea001,metrics.methodology.review,t,f,plan,metrics_bi,metrics.validate,2026-08-03 19:59:18.231419+00,
+76c44a0e-6041-8bda-99c7-b740fccea001,metrics.snapshots.publish,t,f,plan,metrics_bi,metrics.measure,2026-08-03 19:59:18.231419+00,
+76c44a0e-6041-8bda-99c7-b740fccea001,reporting.docx,t,f,plan,report_studio,reports.generate,2026-08-03 19:59:18.231419+00,
+76c44a0e-6041-8bda-99c7-b740fccea001,reporting.pdf,t,f,plan,report_studio,reports.generate,2026-08-03 19:59:18.231419+00,
+76c44a0e-6041-8bda-99c7-b740fccea001,reporting.scheduled,t,f,plan,report_studio,reports.schedule,2026-08-03 19:59:18.231419+00,
+76c44a0e-6041-8bda-99c7-b740fccea001,reporting.studio,t,f,plan,report_studio,reports.read,2026-08-03 19:59:18.231419+00,
+76c44a0e-6041-8bda-99c7-b740fccea001,reporting.xlsx,t,f,plan,report_studio,reports.generate,2026-08-03 19:59:18.231419+00,
+76c44a0e-6041-8bda-99c7-b740fccea001,reports.premium,t,f,plan,premium_reports,grc.export.generate,2026-08-03 19:59:18.231419+00,
+76c44a0e-6041-8bda-99c7-b740fccea001,risk.quantitative,t,f,plan,risk_manager,commercial.entitlement.read,2026-08-03 19:59:18.231419+00,
+76c44a0e-6041-8bda-99c7-b740fccea001,surveys.engine,t,f,plan,surveys_assessments,surveys.read,2026-08-03 19:59:18.231419+00,
+76c44a0e-6041-8bda-99c7-b740fccea001,tprm.suppliers,t,f,plan,integrated_grc,commercial.entitlement.read,2026-08-03 19:59:18.231419+00,
+76c44a0e-6041-8bda-99c7-b740fccea001,workpapers.audit,t,f,plan,audit_workpapers,commercial.entitlement.read,2026-08-03 19:59:18.231419+00,

@@ -339,11 +339,11 @@ export default function GrcPhase1Panel({ mode }: { mode: PanelMode }) {
   }
 
   return (
-    <section className="space-y-4" aria-label="Operación GRC avanzada">
+    <section className="space-y-4" aria-label="Gestión GRC avanzada">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <h2 className="text-xl font-semibold text-[var(--tcdx-color-text-ink)]">Operación GRC avanzada</h2>
+            <h2 className="text-xl font-semibold text-[var(--tcdx-color-text-ink)]">Gestión GRC avanzada</h2>
             <EnterpriseBadge tone="info">Beta controlada</EnterpriseBadge>
           </div>
           <p className="mt-1 text-sm text-[var(--tcdx-color-text-secondary)]">

@@ -24,7 +24,7 @@ export default function Home() {
         </div>
 
         <p className="mt-5 text-xs font-bold uppercase tracking-[0.18em] text-blue-700">
-          TCDX by Tecdex
+          Tecdex GRC Compliance
         </p>
         <h1 className="mt-2 text-3xl font-bold tracking-tight text-slate-950 sm:text-4xl">
           Plataforma de cumplimiento ISO para operación, auditoría y evidencia.

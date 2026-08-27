@@ -59,8 +59,14 @@ assert(
   'Evidence P0 mutations must expose inline success/error feedback, processing state, and double-submit blocking.'
 );
 
+assert(
+  risksShell.includes('RiskRegisterWorkspace') &&
+    risksShell.includes('AppLayout') &&
+    risksShell.includes('Suspense'),
+  'risks must use the approved risk-control workspace under AppLayout.'
+);
+
 for (const [name, shell, expectedRoute] of [
-  ['risks', risksShell, '/matriz-riesgo'],
   ['actions', actionsShell, '/plan-accion'],
   ['compliance', complianceShell, '/auditorias'],
 ]) {

@@ -284,7 +284,7 @@ function EvidenceAiTraceCard({ evidence }: { evidence: EvidenceRow }) {
 
   const sourceLabels: Record<string, string> = {
     tenant_internal: 'Tenant',
-    tcdx_knowledge: 'Base TCDX',
+    tcdx_knowledge: 'Base Tecdex GRC Compliance',
     anonymized_benchmark: 'Benchmark',
     external_web: 'Internet',
     best_effort: t('evidence.ai.bestEffort'),
@@ -354,7 +354,7 @@ function EvidenceAiTraceCard({ evidence }: { evidence: EvidenceRow }) {
         </div>
 
         <div className="rounded-xl bg-white px-3 py-2 text-xs font-semibold text-slate-700 ring-1 ring-blue-100">
-          TCDX: {trace.knowledgeHits}
+          Tecdex GRC Compliance: {trace.knowledgeHits}
         </div>
 
         <div className="rounded-xl bg-white px-3 py-2 text-xs font-semibold text-slate-700 ring-1 ring-blue-100">
@@ -1282,7 +1282,7 @@ function EvidenciasPageContent() {
         <EnterpriseDomainWorkspaceShell
           domain="data"
           eyebrow="Gobierno de evidencias"
-          title="Operación GRC de evidencias"
+          title="Gestión GRC de evidencias"
           description="Gestiona solicitudes, entregas, revisiones y versiones de evidencia."
           actions={
             <Link
@@ -1312,7 +1312,7 @@ function EvidenciasPageContent() {
               href="/evidencias?grc_operations=1"
               className="inline-flex min-h-10 items-center rounded-md bg-[var(--tcdx-color-action-primary)] px-4 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-[var(--tcdx-color-action-primary-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--tcdx-color-focus)]"
             >
-              Operación GRC de evidencias
+              Gestión GRC de evidencias
             </Link>
           }
         >

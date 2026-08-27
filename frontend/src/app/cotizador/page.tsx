@@ -53,7 +53,7 @@ const ui = {
     loading: 'Cargando cotizador...',
     unauthorized: 'No autorizado. Esta vista es solo para superusuario y dealer.',
     badge: 'Cotizador SaaS',
-    title: 'Cotizador comercial TCDX',
+    title: 'Cotizador comercial Tecdex GRC Compliance',
     subtitle:
       'Genera estimaciones mensuales para pymes y clientes B2B usando planes, normas activas, módulos premium y cuotas IA. Los usuarios no se cobran.',
     quoteData: 'Datos de la cotización',
@@ -117,7 +117,7 @@ const ui = {
     loading: 'Loading quote builder...',
     unauthorized: 'Unauthorized. This view is only for superuser and dealer roles.',
     badge: 'SaaS Quote Builder',
-    title: 'TCDX Commercial Quote Builder',
+    title: 'Tecdex GRC Compliance Quote Builder',
     subtitle:
       'Generate monthly estimates for SMBs and B2B clients using plans, active standards, premium modules, and AI quotas. Users are not billed.',
     quoteData: 'Quote details',

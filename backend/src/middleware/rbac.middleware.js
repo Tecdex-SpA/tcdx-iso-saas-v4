@@ -1,5 +1,12 @@
+const {
+  isDealerRole,
+  isPlatformRole,
+  normalizeRoleKey,
+  roleMatchesAny,
+} = require('../services/auth/roleCompatibility.service');
+
 function normalizeRole(role) {
-  return String(role || '').toLowerCase().trim();
+  return normalizeRoleKey(role);
 }
 
 function getUserRole(req) {
@@ -47,7 +54,7 @@ const REPORT_GENERATE_ROLES = [
   'compliance_admin',
   'auditor',
 ];
-const TENANT_DASHBOARD_ROLES = ['admin', 'tenant_admin', ...AREA_OWNER_ROLES, ...EXECUTIVE_ROLES];
+const TENANT_DASHBOARD_ROLES = ['admin', 'tenant_admin', 'auditor', ...AREA_OWNER_ROLES, ...EXECUTIVE_ROLES];
 const IMPORT_READ_ROLES = [...TENANT_ADMIN_ROLES, 'auditor'];
 const IMPORT_OPERATE_ROLES = [...TENANT_ADMIN_ROLES];
 const COMMERCIAL_ADMIN_READ_ROLES = PLATFORM_ROLES;
@@ -55,7 +62,7 @@ const COMMERCIAL_ADMIN_MANAGE_ROLES = PLATFORM_ROLES;
 const COMMERCIAL_TENANT_READ_ROLES = [...TENANT_ADMIN_ROLES, 'dealer'];
 
 function roleIsPlatform(role) {
-  return PLATFORM_ROLES.includes(role);
+  return isPlatformRole(role);
 }
 
 function deny(req, res, message = 'No autorizado para ejecutar esta acción') {
@@ -93,17 +100,17 @@ function getReportPermission(req, path) {
 }
 
 function roleCanUseReports(role, permission) {
-  if (role === 'dealer') {
+  if (isDealerRole(role)) {
     // reports.routes.js valida asignacion tenant-dealer antes de operar.
     return ['read', 'download', 'generate', 'admin'].includes(permission);
   }
 
   if (permission === 'read' || permission === 'download') {
-    return REPORT_READ_ROLES.includes(role);
+    return roleMatchesAny(role, REPORT_READ_ROLES);
   }
 
   if (permission === 'generate') {
-    return REPORT_GENERATE_ROLES.includes(role);
+    return roleMatchesAny(role, REPORT_GENERATE_ROLES);
   }
 
   return false;
@@ -730,7 +737,7 @@ function enforceApiAccess(req, res, next) {
     return deny(req, res, `Permiso reports:${reportPermission} requerido`);
   }
 
-  if (role === 'dealer') {
+  if (isDealerRole(role)) {
     const dealerAllowed =
       starts(path, '/api/me') ||
       starts(path, '/api/quotes') ||
@@ -750,7 +757,7 @@ function enforceApiAccess(req, res, next) {
 
   const allowedRoles = rule.roles || (read ? rule.read : rule.write);
 
-  if (allowedRoles.includes(role)) {
+  if (roleMatchesAny(role, allowedRoles)) {
     return next();
   }
 
@@ -763,4 +770,9 @@ function enforceApiAccess(req, res, next) {
 
 module.exports = {
   enforceApiAccess,
+  _private: {
+    findRule,
+    roleCanUseReports,
+    roleIsPlatform,
+  },
 };

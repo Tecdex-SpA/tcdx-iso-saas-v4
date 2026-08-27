@@ -1,0 +1,10 @@
+role_key,display_name,description,role_level,is_system,is_active
+viewer,Solo Lectura,"Usuario ejecutivo o de consulta, sin permisos de edición.",60,t,t
+auditor,Auditor tenant,"Ejecuta auditorias, revisa evidencias y consulta lineage.",50,t,t
+control_owner,Dueño de Control,"Responsable operativo de controles, evidencias y acciones asignadas.",40,t,t
+compliance_manager,Responsable de Cumplimiento,"Responsable operativo de cumplimiento, evidencias, planes y controles.",30,t,t
+admin,Administrador tenant,"Administra tenant, GRC, datos, metricas y reportes.",25,t,t
+tenant_admin,Administrador Empresa,Administrador principal de una empresa cliente.,20,t,t
+dealer,Dealer / Partner,Partner comercial o tercero autorizado para ver clientes asignados y solicitar cambios.,10,t,t
+platform_admin,Administrador Plataforma,Usuario interno TECDEX con capacidades operativas y de soporte sobre clientes.,2,t,t
+superadmin,Superadmin,Administrador total de la plataforma SaaS TECDEX.,1,t,t

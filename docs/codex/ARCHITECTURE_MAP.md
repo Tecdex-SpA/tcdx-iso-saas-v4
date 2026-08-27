@@ -12,6 +12,12 @@ Frontend (`frontend/src/app`, `frontend/src/components`)
         |
         v
 Backend Node/Express
+        +--> Auth/RBAC
+        |      + canonical/compatibility role resolver (`roleCompatibility.service.js`)
+        |      + raw legacy effective role preserved for permission checks
+        |      + API RBAC middleware remains backend authority
+        |      + commercial gates evaluate entitlement + module active + permission
+        |
         |
         +--> PostgreSQL / dominios operacionales
         |

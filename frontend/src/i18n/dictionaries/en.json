@@ -187,8 +187,8 @@
       "surveys": "Surveys",
       "aiCompliance": "AI Compliance",
       "exports": "Exports",
-      "bi": "BI",
-      "reportStudio": "Report Studio",
+      "bi": "Data and Analytics",
+      "reportStudio": "Report Designer",
       "reportGenerations": "Generations",
       "settings": "Settings",
       "users": "Users",
@@ -220,7 +220,7 @@
     },
     "reports": {
       "eyebrow": "Reports",
-      "title": "BI and Reports",
+      "title": "Analytics and Reports",
       "description": "Exports, BI, Studio, and generations based on official results, templates, and authorized downloads."
     }
   },
@@ -248,7 +248,7 @@
     "profile": "Edit Profile",
     "logout": "Log out",
     "userFallback": "User",
-    "profileHint": "TCDX premium environment ready for daily operations.",
+    "profileHint": "Tecdex GRC Compliance premium environment ready for daily operations.",
     "clientLogoAlt": "Client logo"
   },
   "app": {
@@ -257,14 +257,14 @@
     "restrictedAccess": "Restricted Access",
     "logoutAndSwitch": "Log out and sign in with another account",
     "moduleDisabled": "The \"{{module}}\" module is not enabled for this company.",
-    "serviceSuspended": "{{tenantName}} is suspended due to non-payment. Contact the TCDX commercial administrator to regularize the account.",
+    "serviceSuspended": "{{tenantName}} is suspended due to non-payment. Contact the Tecdex GRC Compliance commercial administrator to regularize the account.",
     "serviceDeleted": "{{tenantName}} is no longer active. The company was administratively deactivated.",
     "permissionsError": "Error validating access permissions.",
     "modulesError": "Error checking contracted modules",
     "invalidModulesResponse": "Invalid backend response from /api/me/modules. HTTP {{status}}."
   },
   "dashboard": {
-    "title": "Welcome to TCDX",
+    "title": "Welcome to Tecdex GRC Compliance",
     "subtitle": "Operational view of compliance and ISO management.",
     "executiveView": "Operational View",
     "kpiView": "KPI View",
@@ -393,7 +393,7 @@
   },
   "exports": {
     "title": "Premium Executive Reports",
-    "brand": "TCDX by Tecdex",
+    "brand": "Tecdex GRC Compliance",
     "reportTypesLabel": "Report types",
     "reportTypes": {
       "executive_summary": {
@@ -426,7 +426,7 @@
     "clientHelp": "The selected tenant defines the data source for the report.",
     "currentContext": "Current Context",
     "clientNotSelected": "No client selected",
-    "premiumDocument": "Premium document focused on executive reporting and TCDX by Tecdex branding.",
+    "premiumDocument": "Premium document focused on executive reporting and Tecdex GRC Compliance branding.",
     "readOnlyMode": "Read-only mode: your role can review and download generated reports, but cannot generate new reports.",
     "generateTab": "Generate Reports",
     "history": "History",
@@ -656,9 +656,9 @@
     },
     "ai": {
       "bestEffort": "Best effort",
-      "engine": "TCDX AI Engine",
+      "engine": "Tecdex GRC Compliance AI Engine",
       "notReported": "Not reported",
-      "orchestration": "TCDX AI orchestration",
+      "orchestration": "Tecdex GRC Compliance AI orchestration",
       "traceability": "This assessment preserves traceability from the central AI engine used to validate the evidence.",
       "source": "Source",
       "confidence": "Confidence",

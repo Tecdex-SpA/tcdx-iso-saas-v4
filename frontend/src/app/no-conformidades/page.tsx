@@ -411,7 +411,7 @@ function AiOrchestrationTrace({ result }: { result?: unknown }) {
 
   const sourceLabels: Record<string, string> = {
     tenant_internal: 'Tenant',
-    tcdx_knowledge: 'Base TCDX',
+    tcdx_knowledge: 'Base Tecdex GRC Compliance',
     anonymized_benchmark: 'Benchmark',
     external_web: 'Internet',
     best_effort: 'Mejor esfuerzo',
@@ -421,7 +421,7 @@ function AiOrchestrationTrace({ result }: { result?: unknown }) {
     trace.sourceLabel ||
     sourceLabels[trace.sourceLevel] ||
     trace.sourceLevel ||
-    'Motor IA TCDX';
+    'Motor IA Tecdex GRC Compliance';
 
   const sourceOrderText = trace.sourceOrder.length
     ? trace.sourceOrder.map((item) => sourceLabels[item] || item).join(' → ')
@@ -443,7 +443,7 @@ function AiOrchestrationTrace({ result }: { result?: unknown }) {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="text-xs font-black uppercase tracking-[0.14em] text-blue-600">
-            Orquestación IA TCDX
+            Orquestación IA Tecdex GRC Compliance
           </div>
           <div className="mt-2 text-sm leading-6 text-blue-950">
             Este borrador fue enriquecido por el motor central usando capas de conocimiento y trazabilidad.
@@ -479,7 +479,7 @@ function AiOrchestrationTrace({ result }: { result?: unknown }) {
         </div>
 
         <div className="rounded-xl bg-white px-3 py-2 text-xs font-semibold text-slate-700 ring-1 ring-blue-100">
-          TCDX: {trace.knowledgeHits}
+          Tecdex GRC Compliance: {trace.knowledgeHits}
         </div>
 
         <div className="rounded-xl bg-white px-3 py-2 text-xs font-semibold text-slate-700 ring-1 ring-blue-100">

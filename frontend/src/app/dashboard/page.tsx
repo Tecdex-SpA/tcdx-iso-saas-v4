@@ -3365,7 +3365,7 @@ function ExecutiveReportPanel({
       <div className="grid gap-5 md:grid-cols-[150px_minmax(0,1fr)]">
         <div className="overflow-hidden rounded-sm border border-[var(--tcdx-color-border)] bg-white shadow-sm">
           <div className="bg-white p-4">
-            <div className="text-xl font-black text-[var(--tcdx-color-primary)]">TCDX</div>
+            <div className="text-xl font-black text-[var(--tcdx-color-primary)]">Tecdex GRC Compliance</div>
             <div className="text-[10px] font-bold uppercase text-[var(--tcdx-color-text-ink)]">{t('dashboard.reportTitle')}</div>
             <div className="mt-1 text-[8px] text-[var(--tcdx-color-text-muted)]">{t('dashboard.reportSubtitle')}</div>
           </div>

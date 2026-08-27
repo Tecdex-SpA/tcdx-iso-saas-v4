@@ -142,7 +142,7 @@ export default function LoginPage() {
               width={260}
               height={72}
               className="mb-9 h-16 w-auto object-contain"
-              alt="TECDEX"
+              alt="Tecdex GRC Compliance"
               priority
             />
 
@@ -219,7 +219,7 @@ export default function LoginPage() {
                 width={260}
                 height={72}
                 className="h-16 w-auto object-contain"
-                alt="TECDEX"
+                alt="Tecdex GRC Compliance"
                 priority
               />
             </div>

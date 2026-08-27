@@ -4,7 +4,7 @@ const { TenantResolutionError, resolveEffectiveTenant } = require('../utils/effe
 function responseForDecision(decision, req, res) {
   const code = decision.reason_code === 'RBAC_PERMISSION_REQUIRED'
     ? 'PERMISSION_DENIED'
-    : ['CAPABILITY_NOT_ENTITLED', 'CAPABILITY_DISABLED', 'OVERRIDE_DISABLED'].includes(decision.reason_code)
+    : ['CAPABILITY_NOT_ENTITLED', 'CAPABILITY_DISABLED', 'OVERRIDE_DISABLED', 'MODULE_NOT_ACTIVE'].includes(decision.reason_code)
       ? 'CAPABILITY_NOT_INCLUDED'
       : decision.reason_code || 'CAPABILITY_DENIED';
   const payload = {

@@ -1,13 +1,12 @@
 const pool = require('../../config/db');
-
-const PLATFORM_ROLES = new Set(['superadmin', 'super_admin', 'platform_admin', 'admin_global', 'global_admin', 'owner']);
+const { isPlatformRole, normalizeRoleKey } = require('../auth/roleCompatibility.service');
 
 function normalizeKey(value) {
   return String(value || '').trim().toLowerCase().replace(/[^a-z0-9_.:-]+/g, '_');
 }
 
 function normalizeRole(role) {
-  return String(role || '').trim().toLowerCase();
+  return normalizeRoleKey(role);
 }
 
 function getUserId(user) {
@@ -19,7 +18,59 @@ function getTenantId(user, explicitTenantId) {
 }
 
 function isPlatformUser(user) {
-  return PLATFORM_ROLES.has(normalizeRole(user?.role || user?.user_role || user?.userRole));
+  return isPlatformRole(user?.role || user?.user_role || user?.userRole);
+}
+
+function normalizeModuleKey(value) {
+  return normalizeKey(value);
+}
+
+function moduleRowIsActive(row) {
+  if (!row) return false;
+  if (row.is_enabled === false || row.enabled === false || row.included === false) return false;
+  if (row.is_active === false || row.status === 'disabled' || row.status === 'retired') return false;
+  if (
+    row.is_enabled === true ||
+    row.enabled === true ||
+    row.included === true ||
+    row.is_active === true ||
+    row.status === 'active'
+  ) return true;
+  return true;
+}
+
+function buildModuleState(modules = []) {
+  const state = {};
+  for (const row of modules || []) {
+    const key = normalizeModuleKey(row.module_key || row.key);
+    if (!key) continue;
+    state[key] = moduleRowIsActive(row);
+  }
+  return state;
+}
+
+function applyModuleGate(decision, moduleState = {}) {
+  const moduleKey = normalizeModuleKey(decision.module_key);
+  if (!moduleKey) {
+    return { ...decision, module_key: decision.module_key || null, module_active: true };
+  }
+
+  const moduleActive = Object.prototype.hasOwnProperty.call(moduleState, moduleKey)
+    ? moduleState[moduleKey] === true
+    : false;
+
+  if (moduleActive !== true) {
+    return {
+      ...decision,
+      module_key: moduleKey,
+      module_active: false,
+      enabled: false,
+      decision: 'denied',
+      reason_code: 'MODULE_NOT_ACTIVE',
+    };
+  }
+
+  return { ...decision, module_key: moduleKey, module_active: true };
 }
 
 async function getPermissionMap(userId) {
@@ -108,14 +159,16 @@ async function resolveTenantEntitlements({ tenantId, user = null } = {}) {
     getPermissionMap(userId),
   ]);
 
+  const moduleState = buildModuleState(moduleResult.rows);
   const capabilities = {};
   for (const row of capabilityResult.rows) {
-    capabilities[row.capability_key] = {
+    const decision = {
       ...baseDecision(row.capability_key, actorTenantId),
       enabled: row.enabled === true,
       decision: row.enabled === true ? 'allowed' : 'denied',
       source: row.source || 'plan',
       reason_code: row.enabled === true ? 'ENTITLED' : 'CAPABILITY_DISABLED',
+      module_key: row.module_key || null,
       effective_from: row.effective_from || null,
       effective_until: row.effective_until || null,
       read_only: row.read_only === true,
@@ -123,11 +176,12 @@ async function resolveTenantEntitlements({ tenantId, user = null } = {}) {
       required_permission: row.required_permission || null,
       rbac_allowed: row.required_permission ? permissions[row.required_permission] === true : true,
     };
+    capabilities[row.capability_key] = row.enabled === true ? applyModuleGate(decision, moduleState) : decision;
   }
 
   for (const row of overrideResult.rows) {
     const key = row.capability_key;
-    capabilities[key] = {
+    capabilities[key] = applyModuleGate({
       ...(capabilities[key] || baseDecision(key, actorTenantId)),
       enabled: row.enabled === true,
       decision: row.enabled === true ? 'allowed' : 'denied',
@@ -135,19 +189,19 @@ async function resolveTenantEntitlements({ tenantId, user = null } = {}) {
       reason_code: row.enabled === true ? 'OVERRIDE_ENABLED' : 'OVERRIDE_DISABLED',
       effective_until: row.valid_until || null,
       read_only: row.read_only === true,
-    };
+    }, moduleState);
   }
 
   for (const row of trialResult.rows) {
     const key = row.capability_key;
-    capabilities[key] = {
+    capabilities[key] = applyModuleGate({
       ...(capabilities[key] || baseDecision(key, actorTenantId)),
       enabled: true,
       decision: 'allowed',
       source: 'trial',
       reason_code: 'TRIAL_ACTIVE',
       effective_until: row.ends_at || null,
-    };
+    }, moduleState);
   }
 
   const usageByKey = usageResult.rows.reduce((acc, row) => {
@@ -235,6 +289,8 @@ async function recordCommercialEvent(clientOrPool, event) {
 
 module.exports = {
   normalizeKey,
+  buildModuleState,
+  applyModuleGate,
   resolveTenantEntitlements,
   resolveCapability,
   calculateTenantHealth,

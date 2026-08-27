@@ -140,7 +140,7 @@ export default function SupplierPortalPage() {
     <main className="min-h-screen bg-[#f6f8fb] px-4 py-10 text-slate-950">
       <div className="mx-auto max-w-5xl space-y-6">
         <header className="rounded-2xl bg-slate-950 px-6 py-7 text-white shadow-xl">
-          <p className="text-xs font-bold uppercase tracking-[0.2em] text-orange-400">TCDX · Acceso restringido</p>
+          <p className="text-xs font-bold uppercase tracking-[0.2em] text-orange-400">Tecdex GRC Compliance · Acceso restringido</p>
           <h1 className="mt-2 text-3xl font-black">Portal de proveedores</h1>
           <p className="mt-2 max-w-2xl text-sm text-white/70">Responde únicamente la evaluación asignada. No se exponen datos internos ni información de otros proveedores.</p>
         </header>

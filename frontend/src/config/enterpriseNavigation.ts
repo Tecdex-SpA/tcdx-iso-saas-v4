@@ -93,7 +93,7 @@ export const CLIENT_ENTERPRISE_NAV_DOMAINS: EnterpriseNavDomain[] = [
     moduleKey: 'grc_phase3_operations',
     routes: ['/operaciones-grc', '/operaciones-grc/activacion', '/operaciones-grc/importar', '/procesos', '/servicios', '/unidades', '/bia', '/continuidad', '/crisis', '/incidentes', '/eventos-perdida', '/proveedores', '/portal-proveedor', '/privacidad'],
     items: [
-      { href: '/operaciones-grc', label: 'Operación GRC', labelKey: 'navigation.destinations.grcOperations', feature: 'phase3.read', moduleKey: 'grc_phase3_operations' },
+      { href: '/operaciones-grc', label: 'Riesgo Operativo', labelKey: 'navigation.destinations.grcOperations', feature: 'phase3.read', moduleKey: 'grc_phase3_operations' },
       { href: '/continuidad', label: 'Continuidad', labelKey: 'navigation.destinations.continuity', feature: 'phase3.read', moduleKey: 'grc_phase3_operations' },
       { href: '/incidentes', label: 'Incidentes', labelKey: 'navigation.destinations.incidents', feature: 'phase2.read', moduleKey: 'grc_phase2_integrated' },
       { href: '/proveedores', label: 'Proveedores', labelKey: 'navigation.destinations.suppliers', feature: 'phase2.read', moduleKey: 'grc_phase2_integrated' },
@@ -141,8 +141,8 @@ export const CLIENT_ENTERPRISE_NAV_DOMAINS: EnterpriseNavDomain[] = [
     routes: ['/exportes', '/bi', '/reportes/studio', '/reportes/generaciones'],
     items: [
       { href: '/exportes', label: 'Exportes', labelKey: 'navigation.destinations.exports', feature: 'reports.read' },
-      { href: '/bi', label: 'BI', labelKey: 'navigation.destinations.bi', feature: 'phase5.read', moduleKey: 'metrics_bi' },
-      { href: '/reportes/studio', label: 'Report Studio', labelKey: 'navigation.destinations.reportStudio', feature: 'phase5.read', moduleKey: 'report_studio' },
+      { href: '/bi', label: 'Analítica', labelKey: 'navigation.destinations.bi', feature: 'phase5.read', moduleKey: 'metrics_bi' },
+      { href: '/reportes/studio', label: 'Diseñador de reportes', labelKey: 'navigation.destinations.reportStudio', feature: 'phase5.read', moduleKey: 'report_studio' },
       { href: '/reportes/generaciones', label: 'Generaciones', labelKey: 'navigation.destinations.reportGenerations', feature: 'phase5.read', moduleKey: 'report_studio' },
     ],
   },

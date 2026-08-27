@@ -740,8 +740,8 @@ export default function AuditPreparationPanel({ auditId = '' }: { auditId?: stri
                   <h4 className="text-xs font-black uppercase text-slate-600">Origen y cambios</h4>
                   <div className="mt-2 text-xs leading-5 text-slate-700">
                     <div>Original: {selectedDocument.original_file_url || 'sin original asociado'}</div>
-                    <div>Estrategia: {String(selectedDocument.change_summary_json?.preservation_mode || selectedDocument.change_summary_json?.strategy || 'generado TCDX')}</div>
-                    <div>Layout: {String(selectedDocument.change_summary_json?.layout_preserved || 'formato TCDX')}</div>
+                    <div>Estrategia: {String(selectedDocument.change_summary_json?.preservation_mode || selectedDocument.change_summary_json?.strategy || 'generado por Tecdex GRC Compliance')}</div>
+                    <div>Layout: {String(selectedDocument.change_summary_json?.layout_preserved || 'formato Tecdex GRC Compliance')}</div>
                     <div>{String(selectedDocument.change_summary_json?.preservation_note || 'Sin observaciones de preservación.')}</div>
                   </div>
                 </div>

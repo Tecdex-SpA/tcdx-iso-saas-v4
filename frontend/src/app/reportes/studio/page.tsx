@@ -5,7 +5,7 @@ import Phase5Workspace from '@/components/phase5/Phase5Workspace';
 export default function ReportStudio() {
   return (
     <Phase5Workspace
-      title="Report Studio"
+      title="Diseñador de reportes"
       description="Definiciones de reporte, plantillas, filtros, clasificación, aprobación, scheduling y generación PDF/DOCX/XLSX basadas solo en resultados oficiales versionados."
       endpoint="/api/reports"
       primaryLabel="reportes"

@@ -32,7 +32,7 @@ export default function DashboardBuilder() {
 
   return (
     <Phase5Workspace
-      title="Reportes Business Intelligence"
+      title="Reportes de Datos y Analítica"
       description="Cockpit ejecutivo para interpretar resultados oficiales, priorizar riesgos y convertir indicadores en acciones verificables."
       endpoint="/api/dashboards"
       primaryLabel="dashboards"
