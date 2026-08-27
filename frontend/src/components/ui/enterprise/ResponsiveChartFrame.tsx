@@ -12,6 +12,8 @@ import { ResponsiveContainer } from 'recharts';
 import { cx } from './utils';
 
 type ResponsiveChartFrameProps = {
+  ariaDescription?: string;
+  ariaLabel?: string;
   children: ReactElement;
   className?: string;
   fallback?: ReactNode;
@@ -30,6 +32,8 @@ function toCssSize(value: number | string) {
 }
 
 export default function ResponsiveChartFrame({
+  ariaDescription,
+  ariaLabel,
   children,
   className,
   fallback,
@@ -69,13 +73,17 @@ export default function ResponsiveChartFrame({
   return (
     <div
       ref={frameRef}
+      aria-label={ariaLabel}
+      aria-roledescription={ariaLabel ? 'visualizacion de datos' : undefined}
       className={cx(
         'tcdx-responsive-chart-frame min-w-0 overflow-hidden',
         className
       )}
       data-phase6-chart-frame="true"
+      role={ariaLabel ? 'img' : undefined}
       style={{ '--tcdx-chart-frame-height': toCssSize(height) } as CSSProperties}
     >
+      {ariaDescription ? <span className="sr-only">{ariaDescription}</span> : null}
       {ready ? (
         <ResponsiveContainer debounce={80} height="100%" minHeight={minHeight} minWidth={minWidth} width="100%">
           {children}

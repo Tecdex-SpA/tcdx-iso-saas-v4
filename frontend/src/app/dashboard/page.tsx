@@ -403,6 +403,41 @@ function numberOrZero(value: unknown) {
   return Number.isFinite(n) ? n : 0;
 }
 
+function numberOrNull(value: unknown) {
+  if (value === null || value === undefined || value === '') return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+function formatChartNumber(value: unknown, unit = 'registros') {
+  const n = numberOrNull(value);
+  if (n === null) return 'Sin dato';
+  const formatted = new Intl.NumberFormat('es-CL', { maximumFractionDigits: 2 }).format(n);
+  if (unit === '%' || unit === 'porcentaje') return `${formatted}%`;
+  return `${formatted} ${unit}`;
+}
+
+function formatChartPeriodLabel(value: unknown) {
+  if (!value) return 'Sin período';
+  const text = String(value);
+  const date = new Date(text);
+  if (!Number.isNaN(date.getTime())) {
+    return date.toLocaleDateString('es-CL', { month: 'short', year: 'numeric' });
+  }
+  return text;
+}
+
+function formatChartTooltip(unit = 'registros') {
+  return (value: unknown, name: unknown) => [formatChartNumber(value, unit), String(name || 'Valor')];
+}
+
+function getChartSummary(data: OperationalChartDatum[], unit = 'registros') {
+  if (!data.length) return 'Sin datos registrados para graficar.';
+  const total = data.reduce((acc, item) => acc + item.value, 0);
+  const leader = [...data].sort((a, b) => b.value - a.value)[0];
+  return `${leader.name}: ${formatChartNumber(leader.value, unit)}. Total visible: ${formatChartNumber(total, unit)}.`;
+}
+
 function unwrapApiData(payload: unknown): unknown {
   const raw = asRecord(payload);
   return isRecord(raw.data) ? raw.data : payload;
@@ -559,8 +594,11 @@ function buildOfficialTrend(item: KpiDashboardItem) {
   return snapshots
     .filter((snapshot) => snapshot.value !== null && snapshot.value !== undefined)
     .map((snapshot, index) => ({
-      name: snapshot.period_end || snapshot.period_start || snapshot.period_type || `t-${snapshots.length - index - 1}`,
+      name: formatChartPeriodLabel(
+        snapshot.period_end || snapshot.period_start || snapshot.period_type || `Punto ${snapshots.length - index}`
+      ),
       value: Number(snapshot.value),
+      source: snapshot.snapshot_id || snapshot.checksum || item.code,
     }))
     .filter((point) => Number.isFinite(point.value));
 }
@@ -2100,34 +2138,47 @@ function DashboardPageContent() {
 
                       <div className="grid grid-cols-1 gap-6 xl:grid-cols-[320px_minmax(0,1fr)] xl:items-center">
                         <div className="relative mx-auto w-full max-w-[300px]">
-                          <ResponsiveChartFrame className="bg-transparent" height={260}>
-                            <PieChart>
-                              <Pie
-                                data={kpiStatusData}
-                                dataKey="value"
-                                nameKey="name"
-                                innerRadius={62}
-                                outerRadius={95}
-                                paddingAngle={3}
-                                stroke="#ffffff"
-                                strokeWidth={4}
-                              >
-                                {kpiStatusData.map((entry, index) => (
-                                  <Cell key={index} fill={entry.fill} />
-                                ))}
-                              </Pie>
-                              <Tooltip formatter={(value: unknown, name: unknown) => [String(value), String(name)]} />
-                            </PieChart>
-                          </ResponsiveChartFrame>
+                          {hasChartData(kpiStatusData) ? (
+                            <ResponsiveChartFrame
+                              ariaDescription={`Distribución de estados KPI. ${getChartSummary(kpiStatusData, 'KPI')}`}
+                              ariaLabel="Distribución de estados KPI"
+                              className="bg-transparent"
+                              height={260}
+                            >
+                              <PieChart>
+                                <Pie
+                                  data={kpiStatusData}
+                                  dataKey="value"
+                                  nameKey="name"
+                                  innerRadius={62}
+                                  outerRadius={95}
+                                  paddingAngle={3}
+                                  stroke="#ffffff"
+                                  strokeWidth={4}
+                                >
+                                  {kpiStatusData.map((entry, index) => (
+                                    <Cell key={index} fill={entry.fill} />
+                                  ))}
+                                </Pie>
+                                <Tooltip formatter={formatChartTooltip('KPI')} />
+                              </PieChart>
+                            </ResponsiveChartFrame>
+                          ) : (
+                            <UniversalStateBlock
+                              state="insufficient"
+                              title="Datos insuficientes"
+                              description="No hay estados KPI publicados para graficar esta distribución."
+                            />
+                          )}
 
-                          <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+                          {hasChartData(kpiStatusData) ? <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
                             <div className="text-5xl font-bold tracking-tight text-[var(--tcdx-color-text-ink)]">
                               {kpiSummary?.green || 0}
                             </div>
                             <div className="mt-1 text-base font-medium text-[var(--tcdx-color-text-secondary)]">
                               {t('dashboardKpi.greenStatus')}
                             </div>
-                          </div>
+                          </div> : null}
                         </div>
 
                         <div className="space-y-5">
@@ -2177,12 +2228,17 @@ function DashboardPageContent() {
                       </div>
 
                       <div>
-                        <ResponsiveChartFrame height={300}>
-                          <BarChart data={kpiCategoryData}>
+                        {hasChartData(kpiCategoryData) ? (
+                        <ResponsiveChartFrame
+                          ariaDescription={`Comparación por categoría KPI. ${getChartSummary(kpiCategoryData, 'KPI')}`}
+                          ariaLabel="KPI por categoría"
+                          height={300}
+                        >
+                          <BarChart data={kpiCategoryData} margin={{ top: 10, right: 10, left: -12, bottom: 2 }}>
                             <CartesianGrid vertical={false} stroke="var(--tcdx-color-border)" />
-                            <XAxis dataKey="name" tickFormatter={(value) => getKpiCategoryLabel(String(value))} tickLine={false} axisLine={false} />
-                            <YAxis allowDecimals={false} tickLine={false} axisLine={false} />
-                            <Tooltip />
+                            <XAxis dataKey="name" tickFormatter={(value) => getKpiCategoryLabel(String(value))} tickLine={false} axisLine={false} fontSize={11} interval="preserveStartEnd" />
+                            <YAxis allowDecimals={false} tickFormatter={(value) => String(value)} tickLine={false} axisLine={false} fontSize={11} label={{ value: 'KPI', angle: -90, position: 'insideLeft', style: { fontSize: 11, fill: 'var(--tcdx-color-text-secondary)' } }} />
+                            <Tooltip formatter={formatChartTooltip('KPI')} labelFormatter={(label) => getKpiCategoryLabel(String(label))} />
                             <Bar
                               dataKey="value"
                               radius={[10, 10, 0, 0]}
@@ -2190,6 +2246,13 @@ function DashboardPageContent() {
                             />
                           </BarChart>
                         </ResponsiveChartFrame>
+                        ) : (
+                          <UniversalStateBlock
+                            state="insufficient"
+                            title="Datos insuficientes"
+                            description="No hay categorías KPI publicadas para comparar."
+                          />
+                        )}
                       </div>
                     </section>
                   </div>
@@ -2405,12 +2468,22 @@ function ExecutiveTrendPanel({
             </div>
             <UniversalStateBadge state={mapOfficialStateToUniversal(item?.latest_snapshot)} />
           </div>
-          <ResponsiveChartFrame className="rounded-[var(--tcdx-radius-tecdex-sm)] bg-[var(--tcdx-color-surface)] p-2" height={220}>
+          <ResponsiveChartFrame
+            ariaDescription={`Tendencia de ${item?.name || 'indicador oficial'} con ${trend.length} snapshots oficiales publicados. Unidad: ${item?.unit || 'valor'}. Fuente: ${item?.code || 'snapshot oficial'}.`}
+            ariaLabel="Tendencia oficial comparable"
+            className="rounded-[var(--tcdx-radius-tecdex-sm)] bg-[var(--tcdx-color-surface)] p-2"
+            height={220}
+          >
             <LineChart data={trend}>
               <CartesianGrid vertical={false} stroke="var(--tcdx-color-border)" />
               <XAxis dataKey="name" tickLine={false} axisLine={false} fontSize={11} />
-              <YAxis tickLine={false} axisLine={false} fontSize={11} />
-              <Tooltip />
+              <YAxis
+                tickLine={false}
+                axisLine={false}
+                fontSize={11}
+                label={{ value: item?.unit || 'valor', angle: -90, position: 'insideLeft', style: { fontSize: 11, fill: 'var(--tcdx-color-text-secondary)' } }}
+              />
+              <Tooltip formatter={formatChartTooltip(item?.unit || 'valor')} labelFormatter={(label) => `Período: ${String(label)}`} />
               <Line dataKey="value" stroke="var(--tcdx-color-secondary)" strokeWidth={2.5} dot={{ r: 3 }} />
             </LineChart>
           </ResponsiveChartFrame>
@@ -2596,6 +2669,8 @@ function OperationalChartCard({
   kind: 'bar' | 'donut';
 }) {
   const hasData = hasChartData(data);
+  const unit = 'registros';
+  const summary = getChartSummary(data, unit);
 
   return (
     <article className="rounded-[var(--tcdx-radius-tecdex-sm)] border border-[rgba(216,216,216,0.72)] bg-[var(--tcdx-color-surface)] p-4">
@@ -2605,11 +2680,20 @@ function OperationalChartCard({
       </div>
 
       {!hasData ? (
-        <div className="flex h-[220px] items-center justify-center rounded-[var(--tcdx-radius-tecdex-sm)] border border-dashed border-[var(--tcdx-color-border)] bg-white text-center text-sm text-[var(--tcdx-color-text-secondary)]">
-          Sin datos registrados para graficar.
-        </div>
+        <UniversalStateBlock
+          className="h-[220px] justify-center"
+          state="empty"
+          title="Sin datos"
+          description="No hay registros publicados para graficar esta distribución."
+        />
       ) : (
-        <ResponsiveChartFrame className="rounded-[var(--tcdx-radius-tecdex-sm)] bg-white p-2" height={240}>
+        <>
+          <ResponsiveChartFrame
+            ariaDescription={`${description} ${summary}`}
+            ariaLabel={title}
+            className="rounded-[var(--tcdx-radius-tecdex-sm)] bg-white p-2"
+            height={240}
+          >
             {kind === 'donut' ? (
               <PieChart>
                 <Pie
@@ -2626,14 +2710,14 @@ function OperationalChartCard({
                     <Cell key={entry.name} fill={entry.fill || 'var(--tcdx-color-secondary)'} />
                   ))}
                 </Pie>
-                <Tooltip formatter={(value: unknown, name: unknown) => [String(value), String(name)]} />
+                <Tooltip formatter={formatChartTooltip(unit)} />
               </PieChart>
             ) : (
               <BarChart data={data} margin={{ top: 10, right: 10, left: -18, bottom: 2 }}>
                 <CartesianGrid vertical={false} stroke="var(--tcdx-color-border)" />
-                <XAxis dataKey="name" tickLine={false} axisLine={false} fontSize={11} />
-                <YAxis allowDecimals={false} tickLine={false} axisLine={false} fontSize={11} />
-                <Tooltip />
+                <XAxis dataKey="name" tickLine={false} axisLine={false} fontSize={11} interval="preserveStartEnd" />
+                <YAxis allowDecimals={false} tickLine={false} axisLine={false} fontSize={11} label={{ value: 'Registros', angle: -90, position: 'insideLeft', style: { fontSize: 11, fill: 'var(--tcdx-color-text-secondary)' } }} />
+                <Tooltip formatter={formatChartTooltip(unit)} />
                 <Bar dataKey="value" radius={[8, 8, 0, 0]}>
                   {data.map((entry) => (
                     <Cell key={entry.name} fill={entry.fill || 'var(--tcdx-color-secondary)'} />
@@ -2641,7 +2725,9 @@ function OperationalChartCard({
                 </Bar>
               </BarChart>
             )}
-        </ResponsiveChartFrame>
+          </ResponsiveChartFrame>
+          <p className="mt-3 text-xs leading-5 text-[var(--tcdx-color-text-secondary)]">{summary}</p>
+        </>
       )}
     </article>
   );

@@ -4,7 +4,8 @@ import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { ApiClientError, apiRequestJson, apiRequestJsonSingleFlight } from '@/utils/apiClient';
 import { getUserRoleFromToken } from '@/utils/auth';
-import { DataTrustIndicator, UniversalStateBadge, UniversalStateBlock, type UniversalDataState } from '@/components/ui/enterprise';
+import { DataTrustIndicator, ResponsiveChartFrame, UniversalStateBadge, UniversalStateBlock, type UniversalDataState } from '@/components/ui/enterprise';
+import { CartesianGrid, Line, LineChart, Tooltip, XAxis, YAxis } from 'recharts';
 
 type UnknownRecord = Record<string, unknown>;
 type Definition = { id:string;code:string;name:string;definition:string;domain:string;objective:string;unit:string;direction:string;frequency:string;population:string;version:number;status:string };
@@ -20,6 +21,48 @@ function record(value:unknown):UnknownRecord{return typeof value==='object'&&val
 function data<T>(payload:unknown):T{const root=record(payload);return (root.data??payload) as T}
 function formatValue(snapshot:Snapshot|null){if(!snapshot)return 'Sin datos';if(snapshot.state!=='calculated')return universalSnapshotLabel(snapshot);if(snapshot.value===null)return 'No calculable';return `${new Intl.NumberFormat('es-CL',{maximumFractionDigits:2}).format(snapshot.value)}${snapshot.unit==='%'?' %':snapshot.unit?` ${snapshot.unit}`:''}`}
 function pct(value:number|null|undefined){return value===null||value===undefined?'Desconocida':`${Math.round(value*(value<=1?100:1)*100)/100}%`}
+function numberOrNull(value: unknown) {
+  if (value === null || value === undefined || value === '') return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+function formatSnapshotPeriod(snapshot: Snapshot, index: number) {
+  const raw =
+    snapshot.period?.key ||
+    snapshot.period?.end ||
+    snapshot.period?.start ||
+    snapshot.effective_at ||
+    snapshot.updated_at;
+  if (!raw) return `Snapshot ${index + 1}`;
+  const date = new Date(raw);
+  if (!Number.isNaN(date.getTime())) {
+    return date.toLocaleDateString('es-CL', { month: 'short', year: 'numeric' });
+  }
+  return String(raw);
+}
+
+function buildSnapshotTrend(history: Snapshot[]) {
+  return history
+    .map((snapshot, index) => ({
+      name: formatSnapshotPeriod(snapshot, index),
+      value: snapshot.state === 'calculated' ? numberOrNull(snapshot.value) : null,
+      unit: snapshot.unit || '',
+      snapshotId: snapshot.snapshot_id,
+    }))
+    .filter(
+      (point): point is { name: string; value: number; unit: string; snapshotId: string } =>
+        point.value !== null
+    );
+}
+
+function formatChartValue(value: unknown, unit?: string) {
+  const n = numberOrNull(value);
+  if (n === null) return 'Sin dato';
+  const formatted = new Intl.NumberFormat('es-CL', { maximumFractionDigits: 2 }).format(n);
+  if (unit === '%') return `${formatted}%`;
+  return unit ? `${formatted} ${unit}` : formatted;
+}
 function universalSnapshotState(snapshot: Snapshot | null): UniversalDataState { if(!snapshot)return'empty';const state=String(snapshot.state||'').toLowerCase();const freshness=String(snapshot.freshness?.status||'').toLowerCase();if(state==='calculated'&&snapshot.value===0)return'zero';if(state==='calculated')return'measured';if(['failed','error','technical_error'].includes(state))return'error';if(['dependency_pending','not_applicable','source_incompatible'].includes(state))return'not_calculable';if(state==='source_unavailable')return'not_available';if(state==='partial')return'partial';if(['unmeasured','insufficient','insufficient_data'].includes(state))return'insufficient';if(['stale','expired'].includes(freshness))return'stale';return'not_available'}
 function universalSnapshotLabel(snapshot: Snapshot | null){const state=universalSnapshotState(snapshot);const labels:Record<UniversalDataState,string>={measured:'Con medición',zero:'0',empty:'Sin datos',insufficient:'Datos insuficientes',not_calculable:'No calculable',not_available:'No disponible',error:'Error',stale:'Desactualizado',partial:'Datos parciales',loading:'Cargando'};return labels[state]}
 function actionRoute(component:string){const routes:Record<string,string>={lineage:'/datos/lineage',stability:'/metricas',dataTrust:'/metricas',risk:'/riesgos',compliance:'/cumplimiento-auditoria',actions:'/planes-accion',evidence:'/evidencias'};return routes[component]||'/datos/calidad'}
@@ -52,11 +95,97 @@ export default function FunctionalIndicatorCatalog({ metricCode }: { metricCode?
       <dl className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4"><Field label="Resultado oficial" value={formatValue(selected.latest_snapshot)}/><Field label="Período" value={selected.latest_snapshot?.period?.key||'No disponible'}/><Field label="Cobertura" value={pct(selected.latest_snapshot?.coverage)}/><div><dt className="text-xs text-slate-500">Data Trust</dt><dd className="mt-1"><DataTrustIndicator status={selected.latest_snapshot?.trust?.status || null} confidence={selected.latest_snapshot?.trust?.score ?? null} coverage={selected.latest_snapshot?.coverage ?? null} freshness={selected.latest_snapshot?.freshness?.status || null} provenance={selected.latest_snapshot?.checksum ? <span className="break-all">Checksum: {selected.latest_snapshot.checksum}</span> : null} label="Data Trust del snapshot" /></dd></div><Field label="Freshness" value={selected.latest_snapshot?.freshness?.status||'No disponible'}/><Field label="Suficiencia" value={selected.latest_snapshot?.sufficiency?.status||'No disponible'}/><Field label="Tendencia" value={selected.latest_snapshot?.interpretation?.trend||'No disponible'}/><Field label="Actualizado" value={selected.latest_snapshot?.updated_at?new Date(selected.latest_snapshot.updated_at).toLocaleString('es-CL'):'Sin evidencia'}/></dl>
       <section className="mt-6 grid gap-4 lg:grid-cols-3"><TextBlock title="Causa" value={selected.latest_snapshot?.interpretation?.cause}/><TextBlock title="Impacto" value={selected.latest_snapshot?.interpretation?.impact}/><TextBlock title="Recomendación" value={selected.latest_snapshot?.interpretation?.recommendation}/></section>
       <ActionableStatePanel state={actionable(selected.latest_snapshot)} />
+      {metricCode&&<OfficialSnapshotTrend history={history} comparisons={comparisons} title={selected.definition.name} unit={selected.latest_snapshot?.unit||selected.definition.unit}/>}
       {canOperate&&<div className="mt-6 flex flex-wrap gap-2"><Action disabled={Boolean(busy)} onClick={()=>operate('calculate')}>{busy==='calculate'?'Calculando…':'Calcular desde fuentes'}</Action><Action disabled={Boolean(busy)} onClick={()=>operate('snapshot')}>{busy==='snapshot'?'Creando…':'Crear snapshot draft'}</Action>{draftSnapshotId&&<Action disabled={Boolean(busy)} onClick={()=>operate('publish')}>{busy==='publish'?'Publicando…':'Publicar snapshot revisado'}</Action>}{selected.latest_snapshot&&<Action disabled={Boolean(busy)} onClick={()=>operate('proposal')}>{busy==='proposal'?'Registrando…':'Proponer acción'}</Action>}</div>}
       {metricCode&&<section className="mt-6 grid gap-4 lg:grid-cols-2"><div className="rounded-lg border border-slate-200 p-4"><h2 className="font-bold text-slate-900">Historial oficial</h2>{history.length?<ol className="mt-3 space-y-2">{history.map((snapshot)=><li key={snapshot.snapshot_id} className="flex justify-between gap-3 text-sm"><span>{snapshot.period?.key||'Período sin etiqueta'}</span><strong>{formatValue(snapshot)}</strong></li>)}</ol>:<p className="mt-2 text-sm text-slate-600">Aún no hay snapshots publicados.</p>}</div><div className="rounded-lg border border-slate-200 p-4"><h2 className="font-bold text-slate-900">Comparabilidad metodológica</h2>{comparisons.length?<ol className="mt-3 space-y-2">{comparisons.map((comparison,index)=><li key={comparison.id||String(index)} className="text-sm"><strong>{comparison.methodology_compatible===false?'No comparable':comparison.status||'Comparable'}</strong><span className="block text-slate-600">{comparison.compatibility_reason||`Cambio absoluto: ${comparison.absolute_change??'desconocido'}`}</span></li>)}</ol>:<p className="mt-2 text-sm text-slate-600">Sin comparaciones publicadas.</p>}</div></section>}
       {canTechnical&&<details className="mt-6 rounded-lg border border-slate-200 bg-slate-50 p-4" onToggle={(event)=>{if(event.currentTarget.open&&!technical&&!busy)void loadTechnical()}}><summary className="cursor-pointer font-semibold text-slate-800">Detalle técnico autorizado</summary>{busy==='technical'?<p className="mt-3 text-sm text-slate-600">Cargando trazabilidad…</p>:technical?<TechnicalDetail value={technical}/>:<p className="mt-3 text-sm text-slate-600">Metodología, binding, versiones y lineage.</p>}</details>}
     </article>}
   </div>
+}
+
+function OfficialSnapshotTrend({
+  history,
+  comparisons,
+  title,
+  unit,
+}: {
+  history: Snapshot[];
+  comparisons: Comparison[];
+  title: string;
+  unit?: string;
+}) {
+  const trend = buildSnapshotTrend(history);
+  const incompatible = comparisons.find((comparison) => comparison.methodology_compatible === false);
+  const summary =
+    trend.length > 0
+      ? `${trend[0].name} a ${trend[trend.length - 1].name}; ${trend.length} snapshots calculados.`
+      : 'Sin puntos calculados.';
+
+  return (
+    <section
+      aria-labelledby="official-snapshot-trend-title"
+      className="mt-6 rounded-lg border border-slate-200 bg-slate-50 p-4"
+    >
+      <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+        <div>
+          <h2 id="official-snapshot-trend-title" className="font-bold text-slate-900">
+            Tendencia oficial publicada
+          </h2>
+          <p className="mt-1 text-sm leading-6 text-slate-600">
+            Se grafica sólo con snapshots oficiales calculados; ausencia o no calculable no se reemplaza por cero.
+          </p>
+        </div>
+        <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-700">
+          Unidad: {unit || 'valor'}
+        </span>
+      </div>
+
+      {incompatible ? (
+        <UniversalStateBlock
+          className="mt-4"
+          state="partial"
+          title="Histórico no comparable"
+          description={
+            incompatible.compatibility_reason ||
+            'Existe una comparación metodológica marcada como no compatible para este indicador.'
+          }
+        />
+      ) : trend.length < 2 ? (
+        <UniversalStateBlock
+          className="mt-4"
+          state="insufficient"
+          title="Datos insuficientes"
+          description="Se requieren al menos dos snapshots oficiales calculados para mostrar tendencia."
+        />
+      ) : (
+        <>
+          <ResponsiveChartFrame
+            ariaDescription={`Tendencia de ${title}. ${summary} Unidad: ${unit || 'valor'}.`}
+            ariaLabel={`Tendencia oficial de ${title}`}
+            className="mt-4 rounded-md bg-white p-2"
+            height={220}
+          >
+            <LineChart data={trend} margin={{ top: 10, right: 12, left: -8, bottom: 2 }}>
+              <CartesianGrid vertical={false} stroke="#e5e7eb" />
+              <XAxis dataKey="name" tickLine={false} axisLine={false} fontSize={11} interval="preserveStartEnd" />
+              <YAxis
+                tickLine={false}
+                axisLine={false}
+                fontSize={11}
+                label={{ value: unit || 'valor', angle: -90, position: 'insideLeft', style: { fontSize: 11, fill: '#64748b' } }}
+              />
+              <Tooltip
+                formatter={(value: unknown) => [formatChartValue(value, unit), 'Resultado oficial']}
+                labelFormatter={(label) => `Período: ${String(label)}`}
+              />
+              <Line dataKey="value" stroke="var(--tcdx-color-secondary)" strokeWidth={2.5} dot={{ r: 3 }} activeDot={{ r: 5 }} />
+            </LineChart>
+          </ResponsiveChartFrame>
+          <p className="mt-3 text-xs leading-5 text-slate-600">{summary}</p>
+        </>
+      )}
+    </section>
+  );
 }
 
 function Field({label,value}:{label:string;value:string}){return <div><dt className="text-xs text-slate-500">{label}</dt><dd className="font-semibold text-slate-950">{value}</dd></div>}
