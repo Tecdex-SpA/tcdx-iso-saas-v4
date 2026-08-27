@@ -232,6 +232,7 @@ MIGRATION_RUNNERS=(
   "Fase 6.10|scripts/f6-10/apply-f6-10-migration.js"
   "Fase 6.11|scripts/f6-11/apply-f6-11-migration.js"
   "Fase 6.13|scripts/f6-13/apply-f6-13-migration.js"
+  "RBAC-01|scripts/rbac01/apply-rbac01-migration.js"
 )
 
 run_registered_migrations() {
