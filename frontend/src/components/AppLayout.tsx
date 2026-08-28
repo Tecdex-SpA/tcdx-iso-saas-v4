@@ -172,7 +172,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       adminOrPlatform: [],
       moduleProtected: [
         {
-          module_key: 'ai',
+          module_key: 'ai_compliance',
           routes: ['/ia-compliance'],
           fallback: '/dashboard',
           label: 'IA Compliance',
@@ -212,7 +212,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           permission_denied_message: 'No tienes permisos para ver Health ISO.',
         },
         {
-          module_key: 'grc_phase2_integrated',
+          module_key: 'integrated_grc',
           routes: ['/grc-global', '/privacidad', '/incidentes', '/proveedores', '/conectores'],
           fallback: '/dashboard',
           label: 'GRC integrado',
@@ -220,7 +220,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           permission_denied_message: null,
         },
         {
-          module_key: 'grc_phase3_operations',
+          module_key: 'operations_grc',
           routes: [
             '/operaciones-grc',
             '/importaciones',

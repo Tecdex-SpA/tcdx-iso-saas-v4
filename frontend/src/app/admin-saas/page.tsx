@@ -41,6 +41,12 @@ function responseErrorMessage(
   return fallback;
 }
 
+const STANDARD_CONTRACT_PLAN_FALLBACK: StandardCommercialPlan[] = [
+  { plan_key: 'pyme', display_name: 'ISO', modules: [] },
+  { plan_key: 'empresa', display_name: 'ISO + Riesgo Operativo', modules: [] },
+  { plan_key: 'enterprise', display_name: 'GRC', modules: [] },
+];
+
 type TenantRow = {
   id?: string;
   tenant_id: string;
@@ -173,6 +179,21 @@ type TenantModulesCatalogResponse = {
   modules: TenantModuleCatalogItem[];
 };
 
+type StandardCommercialPlan = {
+  plan_key: string;
+  display_name: string;
+  description?: string | null;
+  modules?: Array<{
+    module_key: string;
+    display_name?: string | null;
+    description?: string | null;
+  }>;
+  capabilities?: Array<{
+    capability_key: string;
+    module_key?: string | null;
+  }>;
+};
+
 type TenantContract = {
   id?: string;
   tenant_id?: string;
@@ -198,6 +219,8 @@ type TenantContractResponse = {
     rut?: string;
   };
   contract: TenantContract | null;
+  commercial_plan?: JsonObject | null;
+  standard_plans?: StandardCommercialPlan[];
 };
 
 type PrebillingRecord = {
@@ -500,10 +523,11 @@ export default function AdminSaasPage() {
   const [externalQuotaAudit, setExternalQuotaAudit] = useState<ExternalLookupQuotaAudit[]>([]);
   const [prebilling, setPrebilling] = useState<PrebillingResponse | null>(null);
   const [tenantContract, setTenantContract] = useState<TenantContract | null>(null);
+  const [standardContractPlans, setStandardContractPlans] = useState<StandardCommercialPlan[]>(STANDARD_CONTRACT_PLAN_FALLBACK);
   const [tenantModulesCatalog, setTenantModulesCatalog] = useState<TenantModulesCatalogResponse | null>(null);
   const [priceCatalog, setPriceCatalog] = useState<SaasPriceCatalogItem[]>([]);
   const [tenantContractForm, setTenantContractForm] = useState<Record<string, string>>({
-    plan_key: 'demo',
+    plan_key: 'pyme',
     contract_status: 'trial',
     started_at: '',
     ends_at: '',
@@ -554,6 +578,19 @@ export default function AdminSaasPage() {
   const [success, setSuccess] = useState('');
   const [isSuperadminUi] = useState(false);
   const [activeAdminTab, setActiveAdminTab] = useState('empresa');
+
+  const contractPlanOptions = standardContractPlans.length > 0 ? standardContractPlans : STANDARD_CONTRACT_PLAN_FALLBACK;
+  const selectedContractPlan =
+    contractPlanOptions.find((plan) => plan.plan_key === tenantContractForm.plan_key) ||
+    contractPlanOptions[0] ||
+    null;
+  const selectedContractPlanModules = selectedContractPlan?.modules || [];
+  const selectedContractPlanCapabilityCount = selectedContractPlan?.capabilities?.length || 0;
+
+  function getCommercialPlanLabel(planKey?: string | null) {
+    if (!planKey) return 'Sin plan';
+    return contractPlanOptions.find((plan) => plan.plan_key === planKey)?.display_name || planKey;
+  }
 
   const isPlatform = governance?.data?.scope?.is_platform === true;
   const canViewAdminSaas =
@@ -702,6 +739,7 @@ export default function AdminSaasPage() {
 
       alert(json?.message || 'Servicio suspendido correctamente.');
 
+      clearTenantEntitlementsCache();
       await loadTenants();
       await loadTenantDetail(selectedTenantId);
       await loadTenantContract(selectedTenantId);
@@ -750,6 +788,7 @@ export default function AdminSaasPage() {
 
       alert(json?.message || 'Servicio reactivado correctamente.');
 
+      clearTenantEntitlementsCache();
       await loadTenants();
       await loadTenantDetail(selectedTenantId);
       await loadTenantContract(selectedTenantId);
@@ -977,9 +1016,10 @@ export default function AdminSaasPage() {
       const contract = data?.contract || null;
 
       setTenantContract(contract);
+      setStandardContractPlans(data?.standard_plans?.length ? data.standard_plans : STANDARD_CONTRACT_PLAN_FALLBACK);
 
       setTenantContractForm({
-        plan_key: contract?.plan_key || 'demo',
+        plan_key: contract?.plan_key || 'pyme',
         contract_status: contract?.contract_status || 'trial',
         started_at: contract?.started_at ? String(contract.started_at).slice(0, 10) : '',
         ends_at: contract?.ends_at ? String(contract.ends_at).slice(0, 10) : '',
@@ -994,8 +1034,9 @@ export default function AdminSaasPage() {
       console.error('ERROR LOAD TENANT CONTRACT:', err);
 
       setTenantContract(null);
+      setStandardContractPlans(STANDARD_CONTRACT_PLAN_FALLBACK);
       setTenantContractForm({
-        plan_key: 'demo',
+        plan_key: 'pyme',
         contract_status: 'trial',
         started_at: '',
         ends_at: '',
@@ -1013,7 +1054,7 @@ export default function AdminSaasPage() {
     if (!selectedTenantId || !canManageAdminSaas) return;
 
     const ok = window.confirm(
-      `Guardar contrato SaaS para esta empresa con plan ${tenantContractForm.plan_key}?`
+      `Guardar contrato SaaS para esta empresa con plan ${getCommercialPlanLabel(tenantContractForm.plan_key)}?`
     );
 
     if (!ok) return;
@@ -1025,7 +1066,7 @@ export default function AdminSaasPage() {
       const json = await fetchJson<TenantContract>(`/api/admin-saas/tenants/${selectedTenantId}/contract`, {
         method: 'PUT',
         body: JSON.stringify({
-          plan_key: tenantContractForm.plan_key || 'demo',
+          plan_key: tenantContractForm.plan_key || 'pyme',
           contract_status: tenantContractForm.contract_status || 'trial',
           started_at: tenantContractForm.started_at || null,
           ends_at: tenantContractForm.ends_at || null,
@@ -1044,6 +1085,7 @@ export default function AdminSaasPage() {
 
       setTenantContract(json.data || null);
 
+      clearTenantEntitlementsCache();
       await loadTenantContract(selectedTenantId);
       await loadTenants();
       await loadTenantDetail(selectedTenantId);
@@ -1686,6 +1728,7 @@ async function uploadSelectedTenantLogo(file: File) {
 
 
   async function refreshAll() {
+    clearTenantEntitlementsCache();
     await loadTenants();
     await loadDealers();
     await loadExternalQuotas();
@@ -2385,7 +2428,7 @@ async function uploadSelectedTenantLogo(file: File) {
                             </span>
 
                             <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-600">
-                              Plan: {tenantDetail.contract?.plan_key || 'N/A'}
+                              Plan: {getCommercialPlanLabel(tenantDetail.contract?.plan_key)}
                             </span>
 
                             <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
@@ -3233,10 +3276,11 @@ async function uploadSelectedTenantLogo(file: File) {
                             disabled={!canManageAdminSaas}
                             className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm disabled:bg-slate-50"
                           >
-                            <option value="demo">Demo</option>
-                            <option value="pyme">Pyme</option>
-                            <option value="empresa">Empresa</option>
-                            <option value="enterprise">Enterprise</option>
+                            {contractPlanOptions.map((plan) => (
+                              <option key={plan.plan_key} value={plan.plan_key}>
+                                {plan.display_name || plan.plan_key}
+                              </option>
+                            ))}
                           </select>
                         </div>
 
@@ -3416,9 +3460,49 @@ async function uploadSelectedTenantLogo(file: File) {
                         </div>
                       </div>
 
+                      {selectedContractPlan && (
+                        <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                          <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
+                            <div>
+                              <div className="text-xs font-bold uppercase tracking-wide text-slate-400">
+                                Módulos incluidos en este plan
+                              </div>
+                              <div className="mt-1 text-sm font-semibold text-slate-900">
+                                {selectedContractPlan.display_name}
+                              </div>
+                              {selectedContractPlan.description && (
+                                <div className="mt-1 max-w-3xl text-xs leading-5 text-slate-600">
+                                  {selectedContractPlan.description}
+                                </div>
+                              )}
+                            </div>
+                            <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600">
+                              {selectedContractPlanCapabilityCount} capabilities
+                            </span>
+                          </div>
+
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            {selectedContractPlanModules.map((module) => (
+                              <span
+                                key={module.module_key}
+                                className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-700"
+                                title={module.description || module.module_key}
+                              >
+                                {module.display_name || module.module_key}
+                              </span>
+                            ))}
+                            {selectedContractPlanModules.length === 0 && (
+                              <span className="text-xs text-slate-500">
+                                La matriz se resuelve desde el catálogo comercial al guardar el contrato.
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
                       <div className="mt-5 flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
                         <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-xs leading-5 text-blue-800">
-                          Al guardar el contrato, recalcula la prefacturación para aplicar el precio del plan seleccionado.
+                          Al guardar el contrato, se sincroniza la suscripción comercial y se recalcula la prefacturación para aplicar el plan seleccionado.
                         </div>
 
                         <button
@@ -3505,7 +3589,7 @@ async function uploadSelectedTenantLogo(file: File) {
                             </span>
 
                             <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-600">
-                              Plan: {prebilling.prebilling.plan_key || prebilling.context?.plan_key || 'demo'}
+                              Plan: {getCommercialPlanLabel(prebilling.prebilling.plan_key || prebilling.context?.plan_key || 'pyme')}
                             </span>
 
                             <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-600">
@@ -3627,7 +3711,7 @@ async function uploadSelectedTenantLogo(file: File) {
                       <div className={`${activeAdminTab === 'operacion' ? 'block' : 'hidden'} mb-5 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between`}>
                         <SectionTitle
                           title="Módulos contratados"
-                          subtitle="Activa o desactiva módulos SaaS respetando el máximo contratado. Los módulos no se habilitan automáticamente al convertir una cotización."
+                          subtitle="Control avanzado para add-ons, pilotos o excepciones comerciales. El flujo estándar deriva módulos desde el plan del contrato."
                         />
 
                         <button

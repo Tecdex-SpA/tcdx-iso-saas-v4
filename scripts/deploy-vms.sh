@@ -234,6 +234,7 @@ MIGRATION_RUNNERS=(
   "Fase 6.13|scripts/f6-13/apply-f6-13-migration.js"
   "RBAC-01|scripts/rbac01/apply-rbac01-migration.js"
   "RBAC-02|scripts/rbac02/apply-rbac02-migration.js"
+  "Commercial Plan Matrix|scripts/commercial-plan/apply-commercial-plan-matrix-migration.js"
 )
 
 run_registered_migrations() {

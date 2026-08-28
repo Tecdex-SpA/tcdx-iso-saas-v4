@@ -26,8 +26,8 @@ assert(
 );
 
 assert(
-  /'\/exportes'\s*:\s*'reports\.premium'/.test(permissions),
-  '/exportes must be explicitly guarded by the reports.premium commercial capability.'
+  /'\/exportes'\s*:\s*'core\.reports'/.test(permissions),
+  '/exportes must be explicitly guarded by the core.reports ISO commercial capability.'
 );
 
 assert(

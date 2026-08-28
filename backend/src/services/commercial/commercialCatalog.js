@@ -1,3 +1,7 @@
+const {
+  COMMERCIAL_PLAN_CAPABILITIES,
+} = require('./commercialPlanMatrix.service');
+
 const COMMERCIAL_PERMISSIONS = [
   'commercial.catalog.read',
   'commercial.catalog.manage',
@@ -32,31 +36,43 @@ const RESOURCE_KEYS = [
   'api_calls_monthly',
 ];
 
-const INITIAL_CAPABILITIES = [
-  ['core.dashboard', 'Dashboard operativo', 'Acceso al resumen operacional del tenant'],
-  ['core.reports', 'Reportes operacionales', 'Generacion y descarga de reportes habilitados'],
-  ['grc.phase1', 'Nucleo GRC avanzado', 'Workflow, evidencias, auditoria y readiness'],
-  ['grc.phase2', 'GRC integrado', 'Privacidad, incidentes, TPRM y conectores controlados'],
-  ['grc.phase3', 'Operacion integrada', 'Procesos, servicios, BIA, continuidad e importaciones'],
-  ['imports.excel', 'Importacion Excel', 'Motor universal de plantillas, preview, confirmacion y rollback'],
-  ['ai.compliance', 'IA Compliance', 'Analisis asistido de cumplimiento con limites de uso'],
-  ['reports.premium', 'Reportes Premium', 'Exportacion avanzada PDF y ZIP'],
-  ['tprm.suppliers', 'Proveedores y terceros', 'Gestion de proveedores, evaluaciones y evidencias asociadas'],
-  ['risk.quantitative', 'Riesgo cuantitativo', 'Escenarios cuantitativos y exposicion financiera'],
-  ['methodology.risk', 'Metodologias de riesgo', 'Escalas, matrices y scoring versionado'],
-  ['workpapers.audit', 'Papeles de trabajo', 'Plantillas reutilizables para auditoria interna'],
-];
+const INITIAL_CAPABILITIES = COMMERCIAL_PLAN_CAPABILITIES.map((capability) => [
+  capability.capability_key,
+  capability.capability_key,
+  capability.functional_capability,
+]);
 
-const INITIAL_MODULES = [
-  ['core', 'Core operativo', 'Base operativa multi-tenant', 10, ['core.dashboard', 'core.reports']],
-  ['grc_core', 'GRC central', 'Workflow, evidencias y auditoria', 20, ['grc.phase1']],
-  ['integrated_grc', 'GRC integrado', 'Privacidad, incidentes, TPRM y conectores', 30, ['grc.phase2', 'tprm.suppliers']],
-  ['operations_grc', 'Operacion GRC', 'Procesos, servicios, BIA y continuidad', 40, ['grc.phase3', 'imports.excel']],
-  ['risk_manager', 'Risk Manager', 'Riesgo operacional y cuantitativo', 50, ['risk.quantitative', 'methodology.risk']],
-  ['ai_compliance', 'IA Compliance', 'Inteligencia asistida y limites', 60, ['ai.compliance']],
-  ['premium_reports', 'Reportes Premium', 'Exportaciones ejecutivas', 70, ['reports.premium']],
-  ['audit_workpapers', 'Papeles de trabajo', 'Estructuras reutilizables de auditoria', 80, ['workpapers.audit']],
-];
+const MODULE_DESCRIPTIONS = {
+  core: ['Core ISO', 'Dashboard base y reportes/exportes ISO'],
+  iso: ['Gestion ISO', 'Cumplimiento, diagnostico, controles, auditorias, hallazgos y acciones ISO'],
+  risks: ['Riesgo ISO', 'Riesgos y matriz de riesgo ISO'],
+  evidences: ['Evidencias ISO', 'Evidencias y documentos normativos ISO'],
+  health: ['Health ISO', 'Estado y KPIs minimos de gestion ISO'],
+  operations_grc: ['Riesgo Operativo', 'Procesos, unidades, servicios, BIA, continuidad y crisis'],
+  risk_manager: ['Riesgo Operativo cuantitativo', 'Riesgo cuantitativo y metodologia operacional'],
+  operational_losses: ['Eventos de perdida', 'Eventos de perdida operacional'],
+  grc_core: ['GRC transversal', 'Workflow GRC, readiness y auditoria avanzada'],
+  integrated_grc: ['GRC integrado', 'Privacidad, incidentes, proveedores, TPRM y conectores'],
+  data_governance: ['Gobierno de datos', 'Gobierno, calidad, catalogo, lineage y semantica de datos'],
+  metrics_bi: ['Metricas y BI', 'Metricas avanzadas, indicadores oficiales y BI'],
+  surveys_assessments: ['Encuestas y evaluaciones', 'Encuestas y evaluaciones GRC'],
+  assurance_loss: ['Assurance avanzado', 'Assurance GRC avanzado'],
+  report_studio: ['Report Studio', 'Reportes avanzados y generaciones'],
+  premium_reports: ['Reportes Premium', 'Reportes premium y exportaciones ejecutivas'],
+  audit_workpapers: ['Papeles de trabajo', 'Papeles de trabajo avanzados de auditoria'],
+  ai_compliance: ['IA Compliance', 'IA Compliance e IA Auditor'],
+};
+
+const INITIAL_MODULES = [...COMMERCIAL_PLAN_CAPABILITIES.reduce((acc, capability) => {
+  const current = acc.get(capability.module_key) || [];
+  current.push(capability.capability_key);
+  acc.set(capability.module_key, current);
+  return acc;
+}, new Map()).entries()]
+  .map(([moduleKey, capabilityKeys], index) => {
+    const [displayName, description] = MODULE_DESCRIPTIONS[moduleKey] || [moduleKey, moduleKey];
+    return [moduleKey, displayName, description, (index + 1) * 10, capabilityKeys];
+  });
 
 const INITIAL_PACKS = [
   ['implementation_quickstart', 'Acelerador quickstart', 'implementation', 'published', false],

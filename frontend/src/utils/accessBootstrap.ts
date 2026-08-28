@@ -28,8 +28,13 @@ function getRegistry(): AccessBootstrapRegistry {
   return globalScope[REGISTRY_KEY];
 }
 
+function getActiveTenantContext() {
+  if (typeof window === 'undefined') return '';
+  return localStorage.getItem('activeTenantId') || '';
+}
+
 function makeCacheKey(token: string, url: string) {
-  return `${token}:${url}`;
+  return `${token}:${getActiveTenantContext()}:${url}`;
 }
 
 function getRetryAfterSeconds(response: Response) {
@@ -64,9 +69,11 @@ export async function fetchAccessBootstrap<T>({
   if (pending) return pending;
 
   const request = (async (): Promise<T> => {
+    const activeTenantId = getActiveTenantContext();
     const response = await fetch(url, {
       headers: {
         Authorization: `Bearer ${token}`,
+        ...(activeTenantId ? { 'X-Tenant-Id': activeTenantId } : {}),
       },
     });
 

@@ -1,6 +1,13 @@
 import { getMvpHomePathByRole } from './mvpPermissions';
 import { clearAccessBootstrapCache } from './accessBootstrap';
 
+const AUTH_CONTEXT_EVENT = 'tcdx:auth-context-changed';
+
+function notifyAuthContextChanged() {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new Event(AUTH_CONTEXT_EVENT));
+}
+
 export function decodeJwtPayload(token: string) {
   try {
     const base64Url = token.split('.')[1];
@@ -26,14 +33,26 @@ export function getToken() {
 
 export function setToken(token: string) {
   if (typeof window === 'undefined') return;
-  if (localStorage.getItem('token') !== token) clearAccessBootstrapCache();
+  if (localStorage.getItem('token') !== token) {
+    clearAccessBootstrapCache();
+    localStorage.removeItem('activeTenantId');
+    localStorage.removeItem('tenant_id');
+    localStorage.removeItem('user_id');
+    localStorage.removeItem('email');
+  }
   localStorage.setItem('token', token);
+  notifyAuthContextChanged();
 }
 
 export function clearToken() {
   if (typeof window === 'undefined') return;
   clearAccessBootstrapCache();
   localStorage.removeItem('token');
+  localStorage.removeItem('activeTenantId');
+  localStorage.removeItem('tenant_id');
+  localStorage.removeItem('user_id');
+  localStorage.removeItem('email');
+  notifyAuthContextChanged();
 }
 
 export function getUserFromToken() {

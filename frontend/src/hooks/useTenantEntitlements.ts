@@ -2,8 +2,11 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { getActiveTenantId, getApiBaseUrl } from '@/utils/apiClient';
+import { getTenantIdFromToken, getUserIdFromToken, getUserRoleFromToken } from '@/utils/auth';
 
 const API_URL = getApiBaseUrl();
+const AUTH_CONTEXT_EVENT = 'tcdx:auth-context-changed';
+const TENANT_CONTEXT_EVENT = 'tcdx:tenant-context-changed';
 
 type AiFeatures = {
   auditor: boolean;
@@ -111,11 +114,13 @@ const DISABLED_ENTITLEMENTS: Entitlements = {
 const cache = new Map<string, Entitlements>();
 const pending = new Map<string, Promise<Entitlements>>();
 
-function cacheKey(token: string) {
+function entitlementContextKey(token: string) {
   if (typeof window === 'undefined') return 'server';
-  const tenantId = getActiveTenantId() || localStorage.getItem('tenant_id') || 'no-tenant-selected';
-  const userId = localStorage.getItem('user_id') || localStorage.getItem('email') || token.slice(-16) || 'default-user';
-  return `${tenantId}:${userId}`;
+  const selectedTenantId = getActiveTenantId() || 'no-active-tenant';
+  const tokenTenantId = getTenantIdFromToken() || localStorage.getItem('tenant_id') || 'no-token-tenant';
+  const userId = getUserIdFromToken() || localStorage.getItem('user_id') || localStorage.getItem('email') || 'default-user';
+  const role = getUserRoleFromToken() || 'unknown-role';
+  return `${selectedTenantId}:${tokenTenantId}:${userId}:${role}:${token.slice(-16)}`;
 }
 
 function normalizeDecision(key: string, value: unknown): EntitlementDecision {
@@ -198,7 +203,7 @@ function normalizeEntitlements(payload: unknown): Entitlements {
 async function fetchEntitlements(): Promise<Entitlements> {
   const token = typeof window !== 'undefined' ? localStorage.getItem('token') || '' : '';
   if (!token) return DISABLED_ENTITLEMENTS;
-  const key = cacheKey(token);
+  const key = entitlementContextKey(token);
   const current = cache.get(key);
   if (current) return current;
   const currentPending = pending.get(key);
@@ -239,6 +244,10 @@ export function clearTenantEntitlementsCache() {
 export function useTenantEntitlements() {
   const [entitlements, setEntitlements] = useState<Entitlements>(DISABLED_ENTITLEMENTS);
   const [loading, setLoading] = useState(true);
+  const [contextKey, setContextKey] = useState(() => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('token') || '' : '';
+    return entitlementContextKey(token);
+  });
 
   useEffect(() => {
     let cancelled = false;
@@ -254,6 +263,26 @@ export function useTenantEntitlements() {
       });
     return () => {
       cancelled = true;
+    };
+  }, [contextKey]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+
+    const refreshContext = () => {
+      clearTenantEntitlementsCache();
+      setLoading(true);
+      setContextKey(entitlementContextKey(localStorage.getItem('token') || ''));
+    };
+
+    window.addEventListener(AUTH_CONTEXT_EVENT, refreshContext);
+    window.addEventListener(TENANT_CONTEXT_EVENT, refreshContext);
+    window.addEventListener('storage', refreshContext);
+
+    return () => {
+      window.removeEventListener(AUTH_CONTEXT_EVENT, refreshContext);
+      window.removeEventListener(TENANT_CONTEXT_EVENT, refreshContext);
+      window.removeEventListener('storage', refreshContext);
     };
   }, []);
 

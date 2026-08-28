@@ -7,6 +7,16 @@ const path = require('path');
 const { errorDetail } = require('../utils/errorResponse');
 const { normalizeAiSettingsPayload } = require('../services/tenantAiSettings.service');
 const {
+  syncTenantContractSubscription,
+} = require('../services/commercial/contractSubscriptionSync.service');
+const {
+  STANDARD_COMMERCIAL_PLANS,
+  normalizeCommercialPlanKey,
+  getAllowedContractPlanKeys,
+  decorateCommercialPlan,
+  buildStandardCommercialPlans,
+} = require('../services/commercial/commercialPlanModel.service');
+const {
   IMAGE_MIME_TYPES,
   createDiskUpload,
   safeUploadError,
@@ -4202,11 +4212,26 @@ router.get('/tenants/:tenant_id/contract', auth, async (req, res) => {
       [tenant_id]
     );
 
+    const standardPlanKeys = STANDARD_COMMERCIAL_PLANS.map((plan) => plan.plan_key);
+    const [plansResult, versionsResult, modulesResult, planCapabilitiesResult] = await Promise.all([
+      pool.query('SELECT * FROM commercial_plans WHERE plan_key = ANY($1::text[]) ORDER BY plan_key', [standardPlanKeys]),
+      pool.query('SELECT * FROM commercial_plan_versions WHERE plan_key = ANY($1::text[]) ORDER BY plan_key, version_number', [standardPlanKeys]),
+      pool.query('SELECT * FROM commercial_modules ORDER BY sort_order, module_key'),
+      pool.query('SELECT * FROM v_commercial_plan_capabilities WHERE plan_key = ANY($1::text[]) ORDER BY plan_key, module_key, capability_key', [standardPlanKeys]),
+    ]);
+
     return res.json({
       ok: true,
       data: {
         tenant: tenantResult.rows[0],
         contract: contractResult.rows[0] || null,
+        commercial_plan: contractResult.rows[0] ? decorateCommercialPlan(contractResult.rows[0]) : null,
+        standard_plans: buildStandardCommercialPlans({
+          plans: plansResult.rows,
+          versions: versionsResult.rows,
+          modules: modulesResult.rows,
+          planCapabilities: planCapabilitiesResult.rows,
+        }),
       },
     });
   } catch (error) {
@@ -4233,7 +4258,7 @@ router.put('/tenants/:tenant_id/contract', auth, async (req, res) => {
 
     const { tenant_id } = req.params;
 
-    const planKey = String(req.body?.plan_key || 'demo').trim();
+    const planKey = normalizeCommercialPlanKey(req.body?.plan_key || 'demo', 'demo');
     const contractStatus = String(req.body?.contract_status || 'trial').trim();
 
     const startedAt = req.body?.started_at || null;
@@ -4275,7 +4300,7 @@ router.put('/tenants/:tenant_id/contract', auth, async (req, res) => {
         ? req.body.metadata
         : {};
 
-    const allowedPlans = ['demo', 'pyme', 'empresa', 'enterprise'];
+    const allowedPlans = getAllowedContractPlanKeys();
     const allowedStatuses = ['trial', 'active', 'suspended', 'cancelled'];
 
     if (!allowedPlans.includes(planKey)) {
@@ -4427,6 +4452,12 @@ router.put('/tenants/:tenant_id/contract', auth, async (req, res) => {
     }
 
     const updated = result.rows[0];
+    const subscriptionSync = await syncTenantContractSubscription(client, {
+      tenantId: tenant_id,
+      contract: updated,
+      actorUserId: ctx.user.id,
+      requestId: req.requestId,
+    });
 
     try {
       await client.query(
@@ -4466,6 +4497,10 @@ router.put('/tenants/:tenant_id/contract', auth, async (req, res) => {
               crm_reference: updated.crm_reference,
             },
             source: 'admin_saas',
+            subscription_sync: {
+              synced: subscriptionSync.synced === true,
+              action: subscriptionSync.action || null,
+            },
           }),
         ]
       );
@@ -5188,7 +5223,7 @@ router.post('/tenants/:tenant_id/suspend-service', auth, async (req, res) => {
     const contract = await getLatestTenantContract(client, tenant_id);
 
     if (contract) {
-      await client.query(
+      const contractUpdate = await client.query(
         `
         UPDATE tenant_contracts
         SET
@@ -5202,6 +5237,7 @@ router.post('/tenants/:tenant_id/suspend-service', auth, async (req, res) => {
           metadata = COALESCE(metadata, '{}'::jsonb) || $3::jsonb,
           updated_at = now()
         WHERE id = $1::uuid
+        RETURNING *
         `,
         [
           contract.id,
@@ -5215,6 +5251,12 @@ router.post('/tenants/:tenant_id/suspend-service', auth, async (req, res) => {
           }),
         ]
       );
+      await syncTenantContractSubscription(client, {
+        tenantId: tenant_id,
+        contract: contractUpdate.rows[0] || contract,
+        actorUserId: userId || null,
+        requestId: req.requestId,
+      });
     }
 
     await client.query('COMMIT');
@@ -5309,7 +5351,7 @@ router.post('/tenants/:tenant_id/reactivate-service', auth, async (req, res) => 
     const contract = await getLatestTenantContract(client, tenant_id);
 
     if (contract) {
-      await client.query(
+      const contractUpdate = await client.query(
         `
         UPDATE tenant_contracts
         SET
@@ -5323,6 +5365,7 @@ router.post('/tenants/:tenant_id/reactivate-service', auth, async (req, res) => 
           metadata = COALESCE(metadata, '{}'::jsonb) || $3::jsonb,
           updated_at = now()
         WHERE id = $1::uuid
+        RETURNING *
         `,
         [
           contract.id,
@@ -5335,6 +5378,12 @@ router.post('/tenants/:tenant_id/reactivate-service', auth, async (req, res) => 
           }),
         ]
       );
+      await syncTenantContractSubscription(client, {
+        tenantId: tenant_id,
+        contract: contractUpdate.rows[0] || contract,
+        actorUserId: userId || null,
+        requestId: req.requestId,
+      });
     }
 
     await client.query('COMMIT');

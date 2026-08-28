@@ -1,5 +1,6 @@
 const express = require('express');
 const pool = require('../config/db');
+const { requireCommercialCapability } = require('../middleware/commercialEntitlement.middleware');
 const { Phase2Error, createPhase2Service } = require('../services/grc/phase2.service');
 
 const router = express.Router();
@@ -21,6 +22,7 @@ router.use((_req, res, next) => {
   res.setHeader('Cache-Control', 'no-store');
   next();
 });
+router.use(requireCommercialCapability('grc.phase2', { requiredPermission: 'workflow.read' }));
 
 function roleOf(req) {
   return String(req.user?.role || req.user?.user_role || req.user?.userRole || '').toLowerCase().trim();

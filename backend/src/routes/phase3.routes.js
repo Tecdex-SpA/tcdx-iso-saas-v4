@@ -1,5 +1,6 @@
 const express = require('express');
 const pool = require('../config/db');
+const { requireCommercialCapability } = require('../middleware/commercialEntitlement.middleware');
 const { Phase3Error, createPhase3Service } = require('../services/grc/phase3.service');
 
 const router = express.Router();
@@ -11,6 +12,7 @@ router.use((_req, res, next) => {
   res.setHeader('Cache-Control', 'no-store');
   next();
 });
+router.use(requireCommercialCapability('grc.phase3', { requiredPermission: 'operations.dashboard.read' }));
 
 function normalizePayload(value, key = '') {
   if (Array.isArray(value)) {

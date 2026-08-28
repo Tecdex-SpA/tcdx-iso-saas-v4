@@ -11,6 +11,10 @@ const {
   getTenantAiSettings,
 } = require('../services/tenantAiSettings.service');
 const { resolveTenantEntitlements } = require('../services/commercial/entitlementResolver.service');
+const {
+  TenantResolutionError,
+  resolveEffectiveTenant,
+} = require('../utils/effectiveTenant');
 
 function normalizeRole(role) {
   return String(role || '').trim().toLowerCase();
@@ -261,8 +265,9 @@ router.get('/permissions', auth, async (req, res) => {
 // Devuelve capacidades contratadas del tenant autenticado
 // =====================================================
 router.get('/entitlements', auth, async (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
   try {
-    const tenantId = getUserTenantId(req.user);
+    const tenantId = await resolveEffectiveTenant(req, { required: false });
     const role =
       req.user?.role ||
       req.user?.user_role ||
@@ -275,7 +280,7 @@ router.get('/entitlements', auth, async (req, res) => {
 
     return res.json({
       ok: true,
-      tenant_id: tenantId || null,
+      tenant_id: commercial.tenant_id || tenantId || null,
       subscription: commercial.subscription || {},
       modules: commercial.modules || [],
       capabilities: commercial.capabilities || {},
@@ -285,6 +290,15 @@ router.get('/entitlements', auth, async (req, res) => {
       ai: buildAiEntitlements(settings, { platform }),
     });
   } catch (error) {
+    if (error instanceof TenantResolutionError) {
+      return res.status(error.status || 403).json({
+        ok: false,
+        code: error.code,
+        error: error.message,
+        request_id: req.requestId || null,
+      });
+    }
+
     console.error('ERROR /api/me/entitlements:', error);
 
     return res.status(500).json({

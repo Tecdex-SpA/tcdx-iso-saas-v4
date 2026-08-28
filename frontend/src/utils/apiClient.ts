@@ -1,4 +1,5 @@
 import { getStoredValidToken, getTenantIdFromToken, getUserRoleFromToken } from './auth';
+import { clearAccessBootstrapCache } from './accessBootstrap';
 
 export function getApiBaseUrl() {
   return String(
@@ -12,6 +13,7 @@ type ApiJsonObject = Record<string, unknown>;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const PLATFORM_ROLES = new Set(['superadmin', 'super_admin', 'platform_admin', 'admin_global', 'global_admin', 'owner']);
 const pendingJsonRequests = new Map<string, Promise<unknown>>();
+const TENANT_CONTEXT_EVENT = 'tcdx:tenant-context-changed';
 
 export class ApiClientError extends Error {
   code: string;
@@ -121,10 +123,17 @@ export function getActiveTenantId() {
 
 export function setActiveTenantId(tenantId: string | null) {
   if (typeof window === 'undefined') return;
+  const previousTenantId = localStorage.getItem('activeTenantId');
   if (tenantId && isUuid(tenantId)) {
     localStorage.setItem('activeTenantId', tenantId);
   } else {
     localStorage.removeItem('activeTenantId');
+  }
+  const nextTenantId = localStorage.getItem('activeTenantId');
+  if (previousTenantId !== nextTenantId) {
+    pendingJsonRequests.clear();
+    clearAccessBootstrapCache();
+    window.dispatchEvent(new Event(TENANT_CONTEXT_EVENT));
   }
 }
 

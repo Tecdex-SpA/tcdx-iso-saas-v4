@@ -6,8 +6,19 @@ import { getApiBaseUrl } from '@/utils/apiClient';
 const API_URL = getApiBaseUrl();
 
 type ApiResponse<T> = { ok?: boolean; data?: T; error?: string; message?: string };
+type CatalogPlan = Record<string, unknown> & {
+  plan_key?: string;
+  display_name?: string;
+  commercial_display_name?: string;
+  standard_commercial_plan?: boolean;
+  modules?: Array<Record<string, unknown> & {
+    module_key?: string;
+    display_name?: string;
+  }>;
+};
 type Catalog = {
-  plans?: Array<Record<string, unknown>>;
+  plans?: CatalogPlan[];
+  standard_plans?: CatalogPlan[];
   versions?: Array<Record<string, unknown>>;
   modules?: Array<Record<string, unknown>>;
   capabilities?: Array<Record<string, unknown>>;
@@ -76,7 +87,7 @@ function Badge({ children, tone = 'slate' }: { children: ReactNode; tone?: 'slat
 export default function Phase4CommercialPanel({ selectedTenantId, canManage, onChanged }: Props) {
   const [catalog, setCatalog] = useState<Catalog>({});
   const [tenantState, setTenantState] = useState<TenantState>({});
-  const [targetPlan, setTargetPlan] = useState('enterprise');
+  const [targetPlan, setTargetPlan] = useState('pyme');
   const [preview, setPreview] = useState<Record<string, unknown> | null>(null);
   const [packKey, setPackKey] = useState('implementation_quickstart');
   const [capabilityKey, setCapabilityKey] = useState('tprm.suppliers');
@@ -92,6 +103,18 @@ export default function Phase4CommercialPanel({ selectedTenantId, canManage, onC
   const capabilities = useMemo(() => Object.values(tenantState.capabilities || {}), [tenantState.capabilities]);
   const limits = useMemo(() => Object.values(tenantState.limits || {}), [tenantState.limits]);
   const health = tenantState.health || {};
+  const planOptions = useMemo(() => {
+    const standardPlans = catalog.standard_plans || [];
+    if (standardPlans.length > 0) return standardPlans;
+    return (catalog.plans || []).filter((plan) => plan.standard_commercial_plan !== false);
+  }, [catalog.plans, catalog.standard_plans]);
+  const selectedPlan = planOptions.find((plan) => String(plan.plan_key) === targetPlan);
+
+  function planLabel(planKey: unknown) {
+    const key = String(planKey || '');
+    const plan = planOptions.find((item) => String(item.plan_key) === key);
+    return String(plan?.display_name || plan?.commercial_display_name || key || 'Sin plan');
+  }
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -105,7 +128,15 @@ export default function Phase4CommercialPanel({ selectedTenantId, canManage, onC
     ]);
 
     if (catalogResult.status === 'fulfilled') {
-      setCatalog(catalogResult.value || {});
+      const nextCatalog = catalogResult.value || {};
+      setCatalog(nextCatalog);
+      const nextPlanOptions = nextCatalog.standard_plans?.length
+        ? nextCatalog.standard_plans
+        : (nextCatalog.plans || []).filter((plan) => plan.standard_commercial_plan !== false);
+      setTargetPlan((current) => {
+        if (nextPlanOptions.length === 0 || nextPlanOptions.some((plan) => String(plan.plan_key) === current)) return current;
+        return String(nextPlanOptions[0].plan_key || 'pyme');
+      });
     } else {
       setCatalogError(catalogResult.reason instanceof Error ? catalogResult.reason.message : 'No fue posible cargar catálogo comercial.');
     }
@@ -236,7 +267,7 @@ export default function Phase4CommercialPanel({ selectedTenantId, canManage, onC
       {message && <div role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">{message}</div>}
 
       <div className="grid gap-3 md:grid-cols-4">
-        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4"><div className="text-xs font-semibold text-slate-500">Plan vigente</div><div className="mt-1 text-lg font-bold text-slate-950">{text(tenantState.subscription?.plan_key, 'Sin plan')}</div></div>
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4"><div className="text-xs font-semibold text-slate-500">Plan vigente</div><div className="mt-1 text-lg font-bold text-slate-950">{planLabel(tenantState.subscription?.plan_key)}</div></div>
         <div className="rounded-xl border border-slate-200 bg-slate-50 p-4"><div className="text-xs font-semibold text-slate-500">Capabilities</div><div className="mt-1 text-lg font-bold text-slate-950">{capabilities.filter((item) => item.enabled === true).length}/{capabilities.length}</div></div>
         <div className="rounded-xl border border-slate-200 bg-slate-50 p-4"><div className="text-xs font-semibold text-slate-500">Salud</div><div className="mt-1 text-lg font-bold text-slate-950">{text(health.status, 'Sin cálculo')}</div></div>
         <div className="rounded-xl border border-slate-200 bg-slate-50 p-4"><div className="text-xs font-semibold text-slate-500">Score</div><div className="mt-1 text-lg font-bold text-slate-950">{numberText(health.score)}</div></div>
@@ -274,8 +305,18 @@ export default function Phase4CommercialPanel({ selectedTenantId, canManage, onC
           <div className="rounded-xl border border-slate-200 p-4">
             <h3 className="font-semibold text-slate-900">Cambio de plan</h3>
             <select value={targetPlan} onChange={(event) => setTargetPlan(event.target.value)} className="mt-3 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm">
-              {(catalog.plans || []).map((plan) => <option key={String(plan.plan_key)} value={String(plan.plan_key)}>{String(plan.display_name || plan.plan_key)}</option>)}
+              {planOptions.map((plan) => <option key={String(plan.plan_key)} value={String(plan.plan_key)}>{String(plan.display_name || plan.commercial_display_name || plan.plan_key)}</option>)}
             </select>
+            {selectedPlan && (
+              <div className="mt-3 rounded-lg bg-slate-50 p-3">
+                <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Módulos derivados</div>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {Array.isArray(selectedPlan.modules) && selectedPlan.modules.length > 0 ? selectedPlan.modules.map((module) => (
+                    <Badge key={String(module.module_key)}>{String(module.display_name || module.module_key)}</Badge>
+                  )) : <span className="text-xs text-slate-500">Resueltos por matriz comercial publicada.</span>}
+                </div>
+              </div>
+            )}
             <div className="mt-3 flex gap-2"><button type="button" onClick={runPreview} disabled={saving === 'preview'} className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700">Preview</button><button type="button" onClick={changePlan} disabled={!preview || saving === 'change-plan'} className="rounded-xl bg-[#F97316] px-3 py-2 text-sm font-semibold text-white disabled:opacity-50">Aplicar</button></div>
             {preview && <pre className="mt-3 max-h-40 overflow-auto rounded-lg bg-slate-950 p-3 text-xs text-slate-100">{JSON.stringify(preview, null, 2)}</pre>}
           </div>

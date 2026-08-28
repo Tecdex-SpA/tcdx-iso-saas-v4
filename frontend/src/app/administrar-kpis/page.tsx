@@ -1168,8 +1168,8 @@ export default function AdministrarKpisPage() {
   const canAdministerKpis = canRefreshHealth;
   const canViewOfficialIndicators =
     !entitlementsLoading &&
-    canAccessMvpFeature(userRole, 'phase5.read') &&
-    hasCapability('metrics.catalog');
+    canAccessMvpFeature(userRole, 'health.view') &&
+    (hasCapability('iso.health') || hasCapability('metrics.catalog'));
 
   const kpiStatusOverview = useMemo(() => {
     const counts = {

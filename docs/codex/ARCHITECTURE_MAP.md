@@ -20,9 +20,28 @@ Backend Node/Express
         |      + RBAC-02 strict base capability exception only for `core.dashboard`
         |        on active commercial tenants with `dashboards.read`; no generic
         |        missing-module fallback
+        |      + RBAC-03 re-evaluation: no role/permission reconciliation required
+        |        for the confirmed Dashboard incident
+        |      + Admin SaaS contract saves synchronize `tenant_contracts` to
+        |        `tenant_subscriptions`, keeping `v_commercial_tenant_*`
+        |        aligned with the contract surface
+        |      + `/api/me/entitlements` resolves the effective tenant through the
+        |        central tenant resolver; tenant mismatch fails closed
+        |      + standard commercial plan aliases are backend-owned:
+        |        `iso -> pyme`, `iso_operational_risk -> empresa`,
+        |        `grc -> enterprise`; frontend only displays backend-derived
+        |        standard plans/modules
         |
         |
         +--> PostgreSQL / dominios operacionales
+        |
+        +--> Commercial product authority
+        |      + `commercial_plans`, `commercial_plan_versions`
+        |      + `plan_version_modules`, `commercial_modules`
+        |      + `commercial_technical_capabilities`
+        |      + `v_commercial_plan_capabilities`
+        |      + `tenant_subscriptions`, `v_commercial_tenant_*`
+        |      + manual module controls remain add-on/pilot/exception surface
         |
         +--> math-governance
         |      + source contracts/resolver
@@ -156,3 +175,4 @@ Knowledge/RAG y Regulatory Intelligence alimentan Intelligence/Impact sin conver
 - F6.12-A: CLOSED / PASS_RUNTIME; Context Builders, Pattern/Trend, Anomaly and Cross-GRC Intelligence validated in runtime on production/main `6aed2555524e1ab146ab9c25af4015401abfd7be` as runtime projections under existing Intelligence services with no migration, no new route/RBAC, no parallel Observation/Gap/Graph/Priority/KB/RAG truth and no LLM operational truth.
 - F6.13-A: CLOSED / PASS_RUNTIME; Operational Learning adds a governed tenant-scoped ledger/effectiveness/memory layer in `backend/src/services/intelligence/operationalLearning.service.js` with forward migration `20260824_f6_13_a_operational_learning`. Runtime closure confirmed migration, tests, deploy runner and no parallel Priority/Observation/Gap/KB/Retrieval/AI truth.
 - F6.14-A: DONE_LOCAL; AI Governance and AI Evaluation Suite formalize governed capability registry, provider/model/prompt/context/schema/policy/authority/failure semantics and synthetic regression evaluation in `backend/src/services/intelligence/aiGovernance.service.js` and `backend/src/services/intelligence/aiEvaluationSuite.service.js`. No DDL, no second AI orchestrator, no AI truth store and no frontend/UI work. Runtime validation pending user deploy.
+- RBAC-03 commercial correction: DONE_LOCAL; commercial plan authority is capability-based in `backend/src/services/commercial/commercialPlanMatrix.service.js` and materialized by `database/migrations/20260828_commercial_standard_plan_matrix.sql`. `ISO = ONLY_ISO`, `ISO_RISK = ISO + OPERATIONAL_RISK_ONLY`, `GRC = ALL_TENANT_COMMERCIAL_CAPABILITIES`; authorization still requires active tenant, active subscription, entitled capability, active module, RBAC permission and scope. No RBAC/schema privilege model changes.

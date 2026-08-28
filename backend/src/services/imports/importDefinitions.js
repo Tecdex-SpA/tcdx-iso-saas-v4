@@ -23,7 +23,7 @@ const choice = (key, label, values, options = {}) => ({
 const common = {
   version: VERSION,
   requiredPermissions: ['operations.import'],
-  requiredCapability: 'grc_phase3_operations',
+  requiredCapability: 'imports.excel',
   duplicatePolicies: ['create_only', 'update_existing', 'create_or_update', 'reject_duplicates'],
   maximumRows: 5000,
   maximumFileSize: 5 * 1024 * 1024,

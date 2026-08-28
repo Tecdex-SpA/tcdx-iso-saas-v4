@@ -6,6 +6,9 @@ const userId = '70000000-0000-0000-0000-000000000799';
 const planVersionId = '70000000-0000-0000-0000-000000000901';
 const subscriptionId = '70000000-0000-0000-0000-000000000902';
 const nextSubscriptionId = '70000000-0000-0000-0000-000000000903';
+const {
+  capabilitiesForPlan,
+} = require('./commercialPlanMatrix.service');
 
 const state = {
   badSqlReferences: [],
@@ -19,6 +22,27 @@ const state = {
 
 function rows(rows) {
   return { rows, rowCount: rows.length };
+}
+
+function planCapabilityRows(planKey) {
+  return capabilitiesForPlan(planKey).map((capability) => ({
+    plan_key: planKey,
+    module_key: capability.module_key,
+    capability_key: capability.capability_key,
+    required_permission: capability.required_permission,
+  }));
+}
+
+function moduleRows() {
+  const modules = new Map();
+  for (const capability of capabilitiesForPlan('enterprise')) {
+    modules.set(capability.module_key, {
+      module_key: capability.module_key,
+      display_name: capability.module_key,
+      status: 'active',
+    });
+  }
+  return [...modules.values()].sort((left, right) => left.module_key.localeCompare(right.module_key));
 }
 
 function assertProductionTenantSchemaSql(sql) {
@@ -38,9 +62,17 @@ async function query(sql, params = []) {
   if (text === 'BEGIN' || text === 'COMMIT' || text === 'ROLLBACK') return rows([]);
   if (/SELECT \* FROM product_families ORDER BY family_key/i.test(text)) return rows([{ family_key: 'iso_saas', display_name: 'ISO SaaS' }]);
   if (/SELECT \* FROM commercial_editions ORDER BY edition_key/i.test(text)) return rows([{ edition_key: 'empresa', display_name: 'Empresa' }]);
-  if (/SELECT \* FROM commercial_plans ORDER BY plan_key/i.test(text)) return rows([{ plan_key: 'enterprise', display_name: 'Enterprise', status: 'active' }]);
-  if (/SELECT \* FROM commercial_plan_versions ORDER BY plan_key, version_number/i.test(text)) return rows([{ id: planVersionId, plan_key: 'enterprise', version_number: 2, status: 'published' }]);
-  if (/SELECT \* FROM commercial_modules ORDER BY sort_order, module_key/i.test(text)) return rows([{ module_key: 'tprm', display_name: 'TPRM', status: 'active' }]);
+  if (/SELECT \* FROM commercial_plans ORDER BY plan_key/i.test(text)) return rows([
+    { plan_key: 'pyme', display_name: 'Pyme', status: 'active' },
+    { plan_key: 'empresa', display_name: 'Empresa', status: 'active' },
+    { plan_key: 'enterprise', display_name: 'Enterprise', status: 'active' },
+  ]);
+  if (/SELECT \* FROM commercial_plan_versions ORDER BY plan_key, version_number/i.test(text)) return rows([
+    { id: '70000000-0000-0000-0000-000000000904', plan_key: 'pyme', version_number: 1, status: 'published' },
+    { id: '70000000-0000-0000-0000-000000000905', plan_key: 'empresa', version_number: 1, status: 'published' },
+    { id: planVersionId, plan_key: 'enterprise', version_number: 2, status: 'published' },
+  ]);
+  if (/SELECT \* FROM commercial_modules ORDER BY sort_order, module_key/i.test(text)) return rows(moduleRows());
   if (/SELECT \* FROM commercial_addons ORDER BY addon_key/i.test(text)) return rows([]);
   if (/SELECT \* FROM commercial_features ORDER BY feature_key/i.test(text)) return rows([{ feature_key: 'suppliers', display_name: 'Proveedores' }]);
   if (/SELECT \* FROM commercial_technical_capabilities ORDER BY capability_key/i.test(text)) return rows([{ capability_key: 'tprm.suppliers', display_name: 'Proveedores', status: 'active' }]);
@@ -69,6 +101,9 @@ async function query(sql, params = []) {
   if (/SELECT \* FROM commercial_events WHERE tenant_id = \$1::uuid ORDER BY created_at DESC LIMIT 100/i.test(text)) return rows(state.events);
   if (/SELECT \* FROM trials WHERE tenant_id = \$1::uuid ORDER BY created_at DESC/i.test(text)) return rows([]);
   if (/SELECT \* FROM tenant_pack_installations WHERE tenant_id = \$1::uuid ORDER BY installed_at DESC/i.test(text)) return rows([]);
+  if (/SELECT \* FROM v_commercial_plan_capabilities WHERE plan_key = ANY\(\$1::text\[\]\) ORDER BY plan_key, module_key, capability_key/i.test(text)) {
+    return rows((params[0] || []).flatMap((planKey) => planCapabilityRows(planKey)));
+  }
   if (/SELECT \* FROM v_commercial_plan_capabilities WHERE plan_key = \$1 ORDER BY capability_key/i.test(text)) return rows([
     { plan_key: params[0], module_key: 'tprm', capability_key: 'tprm.suppliers' },
     { plan_key: params[0], module_key: 'commercial', capability_key: 'commercial.subscription.manage' },
@@ -236,6 +271,9 @@ async function run() {
   const preview = await previewPlanChange({ tenantId, body: { target_plan_key: 'enterprise' } });
   assert.strictEqual(preview.target_plan_key, 'enterprise');
 
+  const aliasedPreview = await previewPlanChange({ tenantId, body: { target_plan_key: 'iso_operational_risk' } });
+  assert.strictEqual(aliasedPreview.target_plan_key, 'empresa');
+
   const firstChange = await changePlan({
     tenantId,
     body: { target_plan_key: 'enterprise', idempotency_key: 'phase4-idempotency-regression' },
@@ -260,6 +298,34 @@ async function run() {
   await withTestServer(async (baseUrl) => {
     const catalog = await requestJson(baseUrl, '/api/admin-saas/catalog');
     assert.ok(Array.isArray(catalog.plans));
+    assert.ok(Array.isArray(catalog.standard_plans));
+    assert.strictEqual(catalog.standard_plans.find((plan) => plan.plan_key === 'pyme')?.display_name, 'ISO');
+    assert.strictEqual(
+      catalog.standard_plans.find((plan) => plan.plan_key === 'empresa')?.display_name,
+      'ISO + Riesgo Operativo'
+    );
+    assert.deepStrictEqual(
+      catalog.standard_plans.map((plan) => plan.plan_key),
+      ['pyme', 'empresa', 'enterprise']
+    );
+    const modulesFor = (planKey) =>
+      (catalog.standard_plans.find((plan) => plan.plan_key === planKey)?.modules || [])
+        .map((module) => module.module_key)
+        .sort();
+    assert.deepStrictEqual(modulesFor('pyme'), ['core', 'evidences', 'health', 'iso', 'risks'].sort());
+    assert.deepStrictEqual(
+      modulesFor('empresa'),
+      ['core', 'evidences', 'health', 'iso', 'operational_losses', 'operations_grc', 'risk_manager', 'risks'].sort()
+    );
+    assert.deepStrictEqual(
+      modulesFor('enterprise'),
+      [...new Set(capabilitiesForPlan('enterprise').map((capability) => capability.module_key))].sort()
+    );
+    assert.equal(modulesFor('pyme').includes('operations_grc'), false);
+    assert.equal(modulesFor('pyme').includes('risk_manager'), false);
+    assert.equal(modulesFor('empresa').includes('data_governance'), false);
+    assert.equal(modulesFor('empresa').includes('metrics_bi'), false);
+    assert.equal(modulesFor('empresa').includes('integrated_grc'), false);
 
     const endpointEntitlements = await requestJson(baseUrl, `/api/admin-saas/tenants/${tenantId}/entitlements`);
     assert.strictEqual(endpointEntitlements.subscription.plan_key, 'enterprise');

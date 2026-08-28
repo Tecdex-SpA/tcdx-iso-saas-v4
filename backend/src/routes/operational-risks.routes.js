@@ -1,12 +1,14 @@
 const express = require('express');
 const pool = require('../config/db');
 const { errorDetail } = require('../utils/errorResponse');
+const { requireCommercialCapability } = require('../middleware/commercialEntitlement.middleware');
 const monteCarlo = require('../services/operationalRiskMonteCarlo.service');
 const aiEngineClient = require('../services/aiEngineClient.service');
 const operationalRiskAi = require('../services/operationalRiskAi.service');
 const operationalRiskAiJobs = require('../services/operationalRiskAiJobs.service');
 
 const router = express.Router();
+router.use(requireCommercialCapability('risk.quantitative', { requiredPermission: 'quantitative_risk.read' }));
 
 function sendData(res, data, extra = {}) {
   return res.json({

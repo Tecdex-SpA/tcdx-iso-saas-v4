@@ -1,5 +1,11 @@
 const pool = require('../../config/db');
 const { normalizeKey, resolveTenantEntitlements, calculateTenantHealth, recordCommercialEvent } = require('./entitlementResolver.service');
+const {
+  STANDARD_COMMERCIAL_PLANS,
+  normalizeCommercialPlanKey,
+  decorateCommercialPlan,
+  buildStandardCommercialPlans,
+} = require('./commercialPlanModel.service');
 
 class CommercialError extends Error {
   constructor(code, message, status = 400, details = {}) {
@@ -26,7 +32,8 @@ async function assertTenantExists(client, tenantId) {
 }
 
 async function listCatalog() {
-  const [families, editions, plans, versions, modules, addons, features, capabilities, limits, packs, methodologies, workpapers] = await Promise.all([
+  const standardPlanKeys = STANDARD_COMMERCIAL_PLANS.map((plan) => plan.plan_key);
+  const [families, editions, plans, versions, modules, addons, features, capabilities, limits, packs, methodologies, workpapers, planCapabilities] = await Promise.all([
     pool.query('SELECT * FROM product_families ORDER BY family_key'),
     pool.query('SELECT * FROM commercial_editions ORDER BY edition_key'),
     pool.query('SELECT * FROM commercial_plans ORDER BY plan_key'),
@@ -39,11 +46,18 @@ async function listCatalog() {
     pool.query('SELECT * FROM pack_definitions ORDER BY pack_key'),
     pool.query('SELECT * FROM risk_methodology_versions ORDER BY methodology_key, version_number'),
     pool.query('SELECT * FROM audit_workpaper_template_versions ORDER BY template_key, version_number'),
+    pool.query('SELECT * FROM v_commercial_plan_capabilities WHERE plan_key = ANY($1::text[]) ORDER BY plan_key, module_key, capability_key', [standardPlanKeys]),
   ]);
   return {
     families: families.rows,
     editions: editions.rows,
-    plans: plans.rows,
+    plans: plans.rows.map(decorateCommercialPlan),
+    standard_plans: buildStandardCommercialPlans({
+      plans: plans.rows,
+      versions: versions.rows,
+      modules: modules.rows,
+      planCapabilities: planCapabilities.rows,
+    }),
     versions: versions.rows,
     modules: modules.rows,
     addons: addons.rows,
@@ -129,7 +143,7 @@ async function getTenantCommercialState(tenantId) {
 }
 
 async function previewPlanChange({ tenantId, body }) {
-  const targetPlanKey = normalizeKey(body?.target_plan_key || body?.plan_key || '');
+  const targetPlanKey = normalizeCommercialPlanKey(body?.target_plan_key || body?.plan_key || '');
   if (!targetPlanKey) throw new CommercialError('TARGET_PLAN_REQUIRED', 'target_plan_key es obligatorio.', 422);
   const current = await resolveTenantEntitlements({ tenantId });
   const targetResult = await pool.query(`SELECT * FROM v_commercial_plan_capabilities WHERE plan_key = $1 ORDER BY capability_key`, [targetPlanKey]);
