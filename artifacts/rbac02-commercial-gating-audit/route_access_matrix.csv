@@ -1,0 +1,9 @@
+route,route_group,required_permission,capability_key,module_key,plan_requirement,scope_requirement,mutation,canonical_roles_allowed,expected_access
+/dashboard,home,dashboards.read,core.dashboard,core,ANY_ACTIVE_COMMERCIAL_TENANT,tenant,f,"tenant_admin,auditor,area_owner,executive",ALLOW_IF_PERMISSION_AND_ACTIVE_TENANT
+/grc-global,home,workflow.read,grc.phase2,integrated_grc,GRC_OR_EXPLICIT_MODULE,tenant,f,"tenant_admin,auditor,area_owner",ALLOW_IF_MODULE_ACTIVE
+/privacidad,operations-resilience,privacy.read,grc.phase2,integrated_grc,GRC_OR_EXPLICIT_MODULE,tenant,f,"tenant_admin,auditor,area_owner",ALLOW_IF_MODULE_ACTIVE
+/incidentes,operations-resilience,incidents.read,grc.phase2,integrated_grc,GRC_OR_EXPLICIT_MODULE,tenant,f,"tenant_admin,auditor,area_owner",ALLOW_IF_MODULE_ACTIVE
+/operaciones-grc,operations-resilience,operations.dashboard.read,grc.phase3,operations_grc,ISO_RIESGO_OPERATIVO_OR_GRC,tenant,f,"tenant_admin,auditor,area_owner",ALLOW_IF_MODULE_ACTIVE
+/bia,operations-resilience,bia.read,grc.phase3,operations_grc,ISO_RIESGO_OPERATIVO_OR_GRC,tenant,f,"tenant_admin,auditor,area_owner",ALLOW_IF_MODULE_ACTIVE
+/riesgo-cuantitativo,risk-control,quantitative_risk.read,risk.quantitative,risk_manager,ISO_RIESGO_OPERATIVO_OR_GRC,tenant,f,"tenant_admin,auditor,area_owner",ALLOW_IF_MODULE_ACTIVE
+/reportes/studio,reports,reports.read,reporting.studio,report_studio,GRC_OR_EXPLICIT_MODULE,tenant,f,"tenant_admin,auditor",ALLOW_IF_MODULE_ACTIVE

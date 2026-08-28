@@ -431,7 +431,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           if (!hasCapability(requiredCapability)) {
             if (!cancelled) {
               setAccessDeniedMessage(
-                t('app.moduleDisabled', { module: requiredCapability })
+                t('app.capabilityDisabled')
               );
               setCheckingAccess(false);
             }

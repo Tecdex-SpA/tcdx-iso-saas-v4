@@ -1,0 +1,5 @@
+role_classification,raw_role,user_count,tenant_count
+DEPRECATED_LEGACY_ROLE,admin,19,12
+DEPRECATED_LEGACY_ROLE,operativo,7,6
+DEPRECATED_LEGACY_ROLE,superadmin,2,1
+DEPRECATED_LEGACY_ROLE,viewer,6,6

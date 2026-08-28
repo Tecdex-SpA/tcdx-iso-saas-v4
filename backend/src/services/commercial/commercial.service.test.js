@@ -12,6 +12,7 @@ const state = {
   tenant: { id: tenantId, name: 'Tenant Comercial QA', service_status: 'active' },
   subscription: { id: subscriptionId, tenant_id: tenantId, plan_key: 'empresa', status: 'active', metadata: {} },
   moduleEnabled: true,
+  coreModuleVisible: false,
   events: [],
   insertedSubscriptions: 0,
 };
@@ -48,8 +49,12 @@ async function query(sql, params = []) {
   if (/SELECT \* FROM risk_methodology_versions ORDER BY methodology_key, version_number/i.test(text)) return rows([]);
   if (/SELECT \* FROM audit_workpaper_template_versions ORDER BY template_key, version_number/i.test(text)) return rows([]);
   if (/SELECT id, name, service_status FROM tenants WHERE id = \$1::uuid LIMIT 1/i.test(text)) return rows([state.tenant]);
+  if (/SELECT id, service_status, suspended_at, deleted_at FROM tenants WHERE id = \$1::uuid LIMIT 1/i.test(text)) return rows([state.tenant]);
   if (/SELECT \* FROM v_commercial_tenant_subscription WHERE tenant_id = \$1::uuid LIMIT 1/i.test(text)) return rows([state.subscription]);
-  if (/SELECT \* FROM v_commercial_tenant_modules WHERE tenant_id = \$1::uuid/i.test(text)) return rows([{ tenant_id: tenantId, module_key: 'tprm', display_name: 'TPRM', sort_order: 10, is_enabled: state.moduleEnabled }]);
+  if (/SELECT \* FROM v_commercial_tenant_modules WHERE tenant_id = \$1::uuid/i.test(text)) return rows([
+    ...(state.coreModuleVisible ? [{ tenant_id: tenantId, module_key: 'core', display_name: 'Core', sort_order: 1, is_enabled: true }] : []),
+    { tenant_id: tenantId, module_key: 'tprm', display_name: 'TPRM', sort_order: 10, is_enabled: state.moduleEnabled },
+  ]);
   if (/SELECT \* FROM v_commercial_tenant_capabilities WHERE tenant_id = \$1::uuid/i.test(text)) return rows([
     { tenant_id: tenantId, capability_key: 'tprm.suppliers', enabled: true, source: 'plan', module_key: 'tprm', required_permission: null, read_only: false, dependencies: [] },
   ]);
@@ -194,6 +199,9 @@ async function run() {
   const entitlements = await resolveTenantEntitlements({ tenantId, user: { id: userId, tenant_id: tenantId } });
   assert.strictEqual(entitlements.subscription.plan_key, 'empresa');
   assert.ok(entitlements.capabilities['tprm.suppliers'].enabled);
+  assert.ok(entitlements.capabilities['core.dashboard'].enabled);
+  assert.strictEqual(entitlements.capabilities['core.dashboard'].module_active, true);
+  assert.strictEqual(entitlements.capabilities['core.dashboard'].module_active_source, 'rbac02_core_dashboard_base_capability');
   assert.ok(entitlements.limits.active_users);
   assert.strictEqual(entitlements.health.status, 'healthy');
 
@@ -214,6 +222,16 @@ async function run() {
   assert.strictEqual(inactiveModuleCapability.enabled, false);
   assert.strictEqual(inactiveModuleCapability.reason_code, 'MODULE_NOT_ACTIVE');
   state.moduleEnabled = true;
+
+  const baseDashboardCapability = await resolveCapability({
+    tenantId,
+    user: { id: userId, tenant_id: tenantId },
+    capabilityKey: 'core.dashboard',
+    requiredPermission: 'dashboards.read',
+    mode: 'read',
+  });
+  assert.strictEqual(baseDashboardCapability.enabled, false);
+  assert.strictEqual(baseDashboardCapability.reason_code, 'RBAC_PERMISSION_REQUIRED');
 
   const preview = await previewPlanChange({ tenantId, body: { target_plan_key: 'enterprise' } });
   assert.strictEqual(preview.target_plan_key, 'enterprise');

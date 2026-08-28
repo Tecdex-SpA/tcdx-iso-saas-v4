@@ -17,6 +17,9 @@ Backend Node/Express
         |      + raw legacy effective role preserved for permission checks
         |      + API RBAC middleware remains backend authority
         |      + commercial gates evaluate entitlement + module active + permission
+        |      + RBAC-02 strict base capability exception only for `core.dashboard`
+        |        on active commercial tenants with `dashboards.read`; no generic
+        |        missing-module fallback
         |
         |
         +--> PostgreSQL / dominios operacionales

@@ -1,0 +1,4 @@
+source_table,dealer_user_id,tenant_id,status,created_at
+dealer_tenants,aac3446d-80e0-42f9-b60e-68279bfe331e,284dea3d-7f2c-411c-831c-1e8301608e91,active,2026-04-22 14:59:03.738395
+dealer_tenants,aac3446d-80e0-42f9-b60e-68279bfe331e,444cb18c-831a-4964-b7d9-c1d302f73fc6,active,2026-04-22 15:01:31.574588
+dealer_tenants,aac3446d-80e0-42f9-b60e-68279bfe331e,697eefa4-3b56-4c8a-a7d4-6d512c40233e,active,2026-04-17 15:05:22.119744

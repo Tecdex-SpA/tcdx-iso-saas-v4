@@ -1,0 +1,13 @@
+role_key,display_name,role_level,is_system,is_active,role_classification
+superadmin,Superadmin,1,t,t,DEPRECATED_LEGACY_ROLE
+platform_admin,Administrador Plataforma,2,t,t,CANONICAL_ROLE
+dealer,Dealer / Partner,10,t,t,CANONICAL_ROLE
+tenant_admin,Administrador Empresa,20,t,t,CANONICAL_ROLE
+admin,Administrador tenant,25,t,t,DEPRECATED_LEGACY_ROLE
+compliance_manager,Responsable de Cumplimiento,30,t,t,DEPRECATED_LEGACY_ROLE
+area_owner,Responsable de Area,40,t,t,CANONICAL_ROLE
+control_owner,Dueño de Control,40,t,t,DEPRECATED_LEGACY_ROLE
+operativo,Operativo legacy,45,t,t,DEPRECATED_LEGACY_ROLE
+auditor,Auditor tenant,50,t,t,CANONICAL_ROLE
+executive,Ejecutivo,60,t,t,CANONICAL_ROLE
+viewer,Solo Lectura,60,t,t,DEPRECATED_LEGACY_ROLE

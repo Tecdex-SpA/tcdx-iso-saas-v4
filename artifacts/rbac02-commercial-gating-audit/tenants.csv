@@ -1,0 +1,15 @@
+tenant_id,tenant_name,service_status,suspended_at,deleted_at,plan_key,subscription_status
+e679a958-f2c6-4611-9880-1002124f2861,Cliente Demo Admin SaaS OK,active,,,,
+284dea3d-7f2c-411c-831c-1e8301608e91,Credex test,active,,,,
+6bd63a82-c6af-425a-bed7-270ce09c60ae,Demo 27001,active,,,,
+df9add48-3404-4a51-aaa9-6beb68775f8f,Demo 3,active,,,,
+abc8c711-b099-4dc9-b0cc-8546fcb4437b,Demo 9001,active,,,,
+25314175-a727-4b69-8315-9021ff512cd5,Demo Isos,active,,,,
+76c44a0e-6041-8bda-99c7-b740fccea001,Demo Tecdex,active,,,enterprise,active
+444cb18c-831a-4964-b7d9-c1d302f73fc6,Empresa Demo,active,,,legacy,active
+70000000-0000-0000-0000-000000000701,Empresa Demo TCDX Compliance,active,,,enterprise,active
+4d9db214-5e4f-449a-84eb-c6db5e59f4a5,Empresa demo 2,active,,,,
+697eefa4-3b56-4c8a-a7d4-6d512c40233e,Rieltec fake,active,,,pyme,active
+3e88abb4-b346-4ba5-9b6e-aa58c3d84606,Servicios de Información Credex SPA,active,,,pyme,active
+4f8c5522-190c-4ace-bf59-1e7cc96003e7,Servicios tecnologicos tecdex SPA,active,,,enterprise,active
+8b161984-85b5-4632-a446-472a56fb3660,Test 77,active,2026-04-29 13:45:42.093964,,,

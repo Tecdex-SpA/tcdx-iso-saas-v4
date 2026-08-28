@@ -48,12 +48,12 @@ type Config = {
 const configs: Record<Phase2View, Config> = {
   executive: {
     title: 'Vista ejecutiva GRC global',
-    eyebrow: 'Fase 2 integrada',
+    eyebrow: 'Vista global GRC',
     description: 'Exposición transversal de privacidad, incidentes, terceros, controles, remediales, obligaciones e integraciones.',
     endpoint: '/executive',
   },
   'privacy-overview': {
-    title: 'Privacy Overview',
+    title: 'Resumen de privacidad',
     eyebrow: 'Gobierno de datos personales',
     description: 'Actividades, DPIA, solicitudes, brechas y brechas operacionales derivadas de reglas explicables.',
     endpoint: '/privacy/overview',
@@ -67,7 +67,7 @@ const configs: Record<Phase2View, Config> = {
     create: 'processing',
   },
   'processing-detail': {
-    title: 'Processing Activity 360',
+    title: 'Actividad de tratamiento 360',
     eyebrow: 'Privacidad 360',
     description: 'Relaciones, DPIA, encargados, solicitudes, brechas, historia y alertas de una actividad.',
     endpoint: '/privacy/processing-activities',
@@ -93,7 +93,7 @@ const configs: Record<Phase2View, Config> = {
     create: 'breach',
   },
   incidents: {
-    title: 'Incident Dashboard',
+    title: 'Panel de incidentes',
     eyebrow: 'Gestión de incidentes',
     description: 'Severidad explicable, contención, recuperación, causa raíz, postmortem y eficacia.',
     endpoint: '/incidents/workspace',
@@ -102,13 +102,13 @@ const configs: Record<Phase2View, Config> = {
     create: 'incident',
   },
   'incident-detail': {
-    title: 'Incident 360',
+    title: 'Incidente 360',
     eyebrow: 'Respuesta y aprendizaje',
     description: 'Timeline, impactos, obligaciones, notificaciones, evidencias, causas y cierre eficaz.',
     endpoint: '/incidents',
   },
   suppliers: {
-    title: 'Supplier Portfolio',
+    title: 'Portafolio de terceros',
     eyebrow: 'TPRM',
     description: 'Criticidad, acceso a datos, riesgo, evaluación vigente, monitoreo, incidentes y salida.',
     endpoint: '/suppliers/workspace',
@@ -117,7 +117,7 @@ const configs: Record<Phase2View, Config> = {
     create: 'supplier',
   },
   'supplier-detail': {
-    title: 'Supplier 360',
+    title: 'Tercero 360',
     eyebrow: 'Riesgo de terceros',
     description: 'Servicios, contratos, dependencias, evaluaciones, incidentes, remediales y evidencia de salida.',
     endpoint: '/suppliers',
@@ -136,7 +136,7 @@ const configs: Record<Phase2View, Config> = {
     create: 'questionnaire',
   },
   connectors: {
-    title: 'Connector Catalog',
+    title: 'Catálogo de conectores',
     eyebrow: 'Integraciones prioritarias',
     description: 'Microsoft, Google Workspace, Jira/Confluence y GitHub con sandbox determinista o autorización live.',
     endpoint: '/connectors',
@@ -144,19 +144,19 @@ const configs: Record<Phase2View, Config> = {
     create: 'connector',
   },
   'connector-detail': {
-    title: 'Connector 360',
+    title: 'Conector 360',
     eyebrow: 'Procedencia y operación',
     description: 'Configuración segura, salud, ejecuciones, registros normalizados, alertas y dead-letter.',
     endpoint: '/connectors',
   },
   'sync-history': {
-    title: 'Sync History',
+    title: 'Historial de sincronización',
     eyebrow: 'Trazabilidad de ejecución',
     description: 'Intentos, cursores, idempotencia, registros, fallos, retry y resultados.',
     endpoint: '/connectors/runs',
   },
   'integration-health': {
-    title: 'Integration Health',
+    title: 'Salud de integraciones',
     eyebrow: 'Salud y frescura',
     description: 'Última sincronización, tasa de fallo, normalización, errores y alertas generadas.',
     endpoint: '/connectors/health',
@@ -190,6 +190,30 @@ function text(value: unknown) {
 }
 
 function label(key: string) {
+  const normalized = String(key || '').trim().toLowerCase();
+  const labels: Record<string, string> = {
+    generated_at: 'Generado el',
+    active_activities: 'Actividades activas',
+    activities_without_legal_basis: 'Actividades sin base jurídica',
+    activities_without_retention: 'Actividades sin retención',
+    dpia_required: 'DPIA requerido',
+    open_requests: 'Solicitudes abiertas',
+    overdue_requests: 'Solicitudes vencidas',
+    privacy: 'Privacidad',
+    incidents: 'Incidentes',
+    suppliers: 'Terceros',
+    connectors: 'Integraciones',
+    sync_history: 'Historial de sincronización',
+    integration_health: 'Salud de integraciones',
+    supplier_assessments: 'Evaluaciones de terceros',
+    supplier_evidence: 'Evidencia de terceros',
+    privacy_inventory: 'Inventario de privacidad',
+    privacy_risk: 'Riesgo de privacidad',
+    privacy_requests: 'Solicitudes de titulares',
+    postmortem: 'Postmortem',
+    executive_phase2: 'Resumen ejecutivo GRC',
+  };
+  if (labels[normalized]) return labels[normalized];
   return key
     .replace(/_id$/, '')
     .replace(/_/g, ' ')

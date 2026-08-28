@@ -28,6 +28,7 @@ type EntitlementDecision = {
   remaining: number | null;
   dependencies: string[];
   read_only: boolean;
+  rbac_allowed: boolean;
 };
 
 type LimitState = {
@@ -132,6 +133,7 @@ function normalizeDecision(key: string, value: unknown): EntitlementDecision {
     remaining: numberOrNull(row.remaining),
     dependencies: Array.isArray(row.dependencies) ? row.dependencies.map(String) : [],
     read_only: row.read_only === true,
+    rbac_allowed: row.rbac_allowed !== false,
   };
 }
 
@@ -256,7 +258,10 @@ export function useTenantEntitlements() {
   }, []);
 
   const hasCapability = useCallback(
-    (capabilityKey: string) => entitlements.capabilities[capabilityKey]?.enabled === true,
+    (capabilityKey: string) => {
+      const decision = entitlements.capabilities[capabilityKey];
+      return decision?.enabled === true && decision.rbac_allowed !== false;
+    },
     [entitlements.capabilities]
   );
   const hasModule = useCallback(

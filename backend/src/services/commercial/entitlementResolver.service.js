@@ -55,6 +55,19 @@ function applyModuleGate(decision, moduleState = {}) {
     return { ...decision, module_key: decision.module_key || null, module_active: true };
   }
 
+  if (
+    moduleKey === 'core' &&
+    normalizeKey(decision.capability_key) === 'core.dashboard' &&
+    !Object.prototype.hasOwnProperty.call(moduleState, moduleKey)
+  ) {
+    return {
+      ...decision,
+      module_key: moduleKey,
+      module_active: true,
+      module_active_source: 'rbac02_core_dashboard_base_capability',
+    };
+  }
+
   const moduleActive = Object.prototype.hasOwnProperty.call(moduleState, moduleKey)
     ? moduleState[moduleKey] === true
     : false;
@@ -105,6 +118,36 @@ function baseDecision(capabilityKey, tenantId) {
   };
 }
 
+function requiredPermissionForCapability(capabilityKey, configuredPermission = null) {
+  if (normalizeKey(capabilityKey) === 'core.dashboard') return 'dashboards.read';
+  return configuredPermission || null;
+}
+
+function tenantIsActiveForBaseCapabilities(tenant) {
+  if (!tenant) return false;
+  const serviceStatus = normalizeKey(tenant.service_status || 'active');
+  return ['active', 'trialing'].includes(serviceStatus) && !tenant.suspended_at && !tenant.deleted_at;
+}
+
+function ensureBaseTenantCapabilities(capabilities, { tenantId, tenant, subscription, moduleState, permissions }) {
+  const subscriptionStatus = normalizeKey(subscription?.status);
+  const tenantIsCommerciallyActive = ['active', 'trialing', 'past_due'].includes(subscriptionStatus);
+  if (!tenantId || !tenantIsActiveForBaseCapabilities(tenant) || !tenantIsCommerciallyActive || capabilities['core.dashboard']) return capabilities;
+
+  capabilities['core.dashboard'] = applyModuleGate({
+    ...baseDecision('core.dashboard', tenantId),
+    enabled: true,
+    decision: 'allowed',
+    source: 'rbac02_base_capability',
+    reason_code: 'BASE_TENANT_CAPABILITY',
+    module_key: 'core',
+    required_permission: 'dashboards.read',
+    rbac_allowed: permissions['dashboards.read'] === true,
+  }, moduleState);
+
+  return capabilities;
+}
+
 async function resolveTenantEntitlements({ tenantId, user = null } = {}) {
   const actorTenantId = getTenantId(user, tenantId);
   const userId = getUserId(user);
@@ -147,7 +190,8 @@ async function resolveTenantEntitlements({ tenantId, user = null } = {}) {
     };
   }
 
-  const [subscriptionResult, moduleResult, capabilityResult, limitResult, usageResult, overrideResult, trialResult, healthResult, permissions] = await Promise.all([
+  const [tenantResult, subscriptionResult, moduleResult, capabilityResult, limitResult, usageResult, overrideResult, trialResult, healthResult, permissions] = await Promise.all([
+    pool.query(`SELECT id, service_status, suspended_at, deleted_at FROM tenants WHERE id = $1::uuid LIMIT 1`, [actorTenantId]).catch(() => ({ rows: [] })),
     pool.query(`SELECT * FROM v_commercial_tenant_subscription WHERE tenant_id = $1::uuid LIMIT 1`, [actorTenantId]).catch(() => ({ rows: [] })),
     pool.query(`SELECT * FROM v_commercial_tenant_modules WHERE tenant_id = $1::uuid ORDER BY sort_order, module_key`, [actorTenantId]).catch(() => ({ rows: [] })),
     pool.query(`SELECT * FROM v_commercial_tenant_capabilities WHERE tenant_id = $1::uuid ORDER BY capability_key`, [actorTenantId]).catch(() => ({ rows: [] })),
@@ -162,6 +206,7 @@ async function resolveTenantEntitlements({ tenantId, user = null } = {}) {
   const moduleState = buildModuleState(moduleResult.rows);
   const capabilities = {};
   for (const row of capabilityResult.rows) {
+    const requiredPermission = requiredPermissionForCapability(row.capability_key, row.required_permission);
     const decision = {
       ...baseDecision(row.capability_key, actorTenantId),
       enabled: row.enabled === true,
@@ -173,14 +218,15 @@ async function resolveTenantEntitlements({ tenantId, user = null } = {}) {
       effective_until: row.effective_until || null,
       read_only: row.read_only === true,
       dependencies: Array.isArray(row.dependencies) ? row.dependencies : [],
-      required_permission: row.required_permission || null,
-      rbac_allowed: row.required_permission ? permissions[row.required_permission] === true : true,
+      required_permission: requiredPermission,
+      rbac_allowed: requiredPermission ? permissions[requiredPermission] === true : true,
     };
     capabilities[row.capability_key] = row.enabled === true ? applyModuleGate(decision, moduleState) : decision;
   }
 
   for (const row of overrideResult.rows) {
     const key = row.capability_key;
+    const requiredPermission = requiredPermissionForCapability(key, capabilities[key]?.required_permission || null);
     capabilities[key] = applyModuleGate({
       ...(capabilities[key] || baseDecision(key, actorTenantId)),
       enabled: row.enabled === true,
@@ -189,11 +235,14 @@ async function resolveTenantEntitlements({ tenantId, user = null } = {}) {
       reason_code: row.enabled === true ? 'OVERRIDE_ENABLED' : 'OVERRIDE_DISABLED',
       effective_until: row.valid_until || null,
       read_only: row.read_only === true,
+      required_permission: requiredPermission,
+      rbac_allowed: requiredPermission ? permissions[requiredPermission] === true : true,
     }, moduleState);
   }
 
   for (const row of trialResult.rows) {
     const key = row.capability_key;
+    const requiredPermission = requiredPermissionForCapability(key, capabilities[key]?.required_permission || null);
     capabilities[key] = applyModuleGate({
       ...(capabilities[key] || baseDecision(key, actorTenantId)),
       enabled: true,
@@ -201,8 +250,18 @@ async function resolveTenantEntitlements({ tenantId, user = null } = {}) {
       source: 'trial',
       reason_code: 'TRIAL_ACTIVE',
       effective_until: row.ends_at || null,
+      required_permission: requiredPermission,
+      rbac_allowed: requiredPermission ? permissions[requiredPermission] === true : true,
     }, moduleState);
   }
+
+  ensureBaseTenantCapabilities(capabilities, {
+    tenantId: actorTenantId,
+    tenant: tenantResult.rows[0] || null,
+    subscription: subscriptionResult.rows[0] || null,
+    moduleState,
+    permissions,
+  });
 
   const usageByKey = usageResult.rows.reduce((acc, row) => {
     acc[row.resource_key] = Number(row.quantity || 0);
@@ -239,7 +298,7 @@ async function resolveCapability({ tenantId, user, capabilityKey, requiredPermis
   const entitlements = await resolveTenantEntitlements({ tenantId, user });
   const decision = entitlements.capabilities[key] || baseDecision(key, entitlements.tenant_id);
   const permissions = await getPermissionMap(getUserId(user));
-  const required = requiredPermission || decision.required_permission || null;
+  const required = requiredPermission || requiredPermissionForCapability(key, decision.required_permission) || null;
 
   if (decision.enabled !== true) {
     return { ...decision, reason_code: decision.reason_code || 'CAPABILITY_NOT_ENTITLED', rbac_allowed: required ? permissions[required] === true : true };
@@ -291,6 +350,9 @@ module.exports = {
   normalizeKey,
   buildModuleState,
   applyModuleGate,
+  tenantIsActiveForBaseCapabilities,
+  requiredPermissionForCapability,
+  ensureBaseTenantCapabilities,
   resolveTenantEntitlements,
   resolveCapability,
   calculateTenantHealth,

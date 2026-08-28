@@ -52,6 +52,7 @@ backups/
 *.dump
 *.sql
 !RBAC01_DB_READONLY_AUDIT.sql
+!RBAC02_COMMERCIAL_GATING_READONLY_AUDIT.sql
 !database/migrations/*.sql
 !tests/fixtures/phase1-base-schema.sql
 *.bak

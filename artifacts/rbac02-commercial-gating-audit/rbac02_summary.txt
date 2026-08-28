@@ -1,0 +1,40 @@
+  ?column?  
+------------
+ tenants=14
+(1 row)
+
+ ?column? 
+----------
+ users=50
+(1 row)
+
+ ?column? 
+----------
+ roles=12
+(1 row)
+
+        ?column?        
+------------------------
+ active_subscriptions=6
+(1 row)
+
+     ?column?      
+-------------------
+ tenant_modules=59
+(1 row)
+
+        ?column?         
+-------------------------
+ tenant_capabilities=188
+(1 row)
+
+           ?column?            
+-------------------------------
+ dashboard_module_mismatches=0
+(1 row)
+
+    ?column?     
+-----------------
+ unknown_roles=0
+(1 row)
+

@@ -257,6 +257,7 @@
     "restrictedAccess": "Acceso restringido",
     "logoutAndSwitch": "Cerrar sesión e ingresar con otra cuenta",
     "moduleDisabled": "El módulo \"{{module}}\" no está habilitado para esta empresa.",
+    "capabilityDisabled": "Tu empresa no tiene habilitada esta función.",
     "serviceSuspended": "El servicio de {{tenantName}} está suspendido por no pago. Contacta al administrador comercial de Tecdex GRC Compliance para regularizar la cuenta.",
     "serviceDeleted": "El servicio de {{tenantName}} ya no se encuentra activo. La empresa fue dada de baja administrativamente.",
     "permissionsError": "Error validando permisos de acceso.",

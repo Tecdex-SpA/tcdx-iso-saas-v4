@@ -1,0 +1,60 @@
+tenant_id,plan_key,module_key,display_name,is_enabled,source
+3e88abb4-b346-4ba5-9b6e-aa58c3d84606,pyme,core,Core operativo,t,plan
+3e88abb4-b346-4ba5-9b6e-aa58c3d84606,pyme,grc_core,GRC central,t,plan
+3e88abb4-b346-4ba5-9b6e-aa58c3d84606,pyme,metrics_bi,Metricas y BI,t,plan
+3e88abb4-b346-4ba5-9b6e-aa58c3d84606,pyme,operations_grc,Operacion GRC,t,plan
+3e88abb4-b346-4ba5-9b6e-aa58c3d84606,pyme,report_studio,Report Studio,t,plan
+3e88abb4-b346-4ba5-9b6e-aa58c3d84606,pyme,risk_manager,Risk Manager,t,plan
+444cb18c-831a-4964-b7d9-c1d302f73fc6,legacy,ai_compliance,IA Compliance,t,plan
+444cb18c-831a-4964-b7d9-c1d302f73fc6,legacy,audit_workpapers,Papeles de trabajo,t,plan
+444cb18c-831a-4964-b7d9-c1d302f73fc6,legacy,core,Core operativo,t,plan
+444cb18c-831a-4964-b7d9-c1d302f73fc6,legacy,grc_core,GRC central,t,plan
+444cb18c-831a-4964-b7d9-c1d302f73fc6,legacy,integrated_grc,GRC integrado,t,plan
+444cb18c-831a-4964-b7d9-c1d302f73fc6,legacy,operations_grc,Operacion GRC,t,plan
+444cb18c-831a-4964-b7d9-c1d302f73fc6,legacy,premium_reports,Reportes Premium,t,plan
+444cb18c-831a-4964-b7d9-c1d302f73fc6,legacy,risk_manager,Risk Manager,t,plan
+4f8c5522-190c-4ace-bf59-1e7cc96003e7,enterprise,ai_compliance,IA Compliance,t,plan
+4f8c5522-190c-4ace-bf59-1e7cc96003e7,enterprise,assurance_loss,Assurance y perdidas,t,plan
+4f8c5522-190c-4ace-bf59-1e7cc96003e7,enterprise,audit_workpapers,Papeles de trabajo,t,plan
+4f8c5522-190c-4ace-bf59-1e7cc96003e7,enterprise,core,Core operativo,t,plan
+4f8c5522-190c-4ace-bf59-1e7cc96003e7,enterprise,data_governance,Datos y confianza,t,plan
+4f8c5522-190c-4ace-bf59-1e7cc96003e7,enterprise,grc_core,GRC central,t,plan
+4f8c5522-190c-4ace-bf59-1e7cc96003e7,enterprise,integrated_grc,GRC integrado,t,plan
+4f8c5522-190c-4ace-bf59-1e7cc96003e7,enterprise,metrics_bi,Metricas y BI,t,plan
+4f8c5522-190c-4ace-bf59-1e7cc96003e7,enterprise,operations_grc,Operacion GRC,t,plan
+4f8c5522-190c-4ace-bf59-1e7cc96003e7,enterprise,premium_reports,Reportes Premium,t,plan
+4f8c5522-190c-4ace-bf59-1e7cc96003e7,enterprise,report_studio,Report Studio,t,plan
+4f8c5522-190c-4ace-bf59-1e7cc96003e7,enterprise,risk_manager,Risk Manager,t,plan
+4f8c5522-190c-4ace-bf59-1e7cc96003e7,enterprise,surveys_assessments,Encuestas y evaluaciones,t,plan
+697eefa4-3b56-4c8a-a7d4-6d512c40233e,pyme,core,Core operativo,t,plan
+697eefa4-3b56-4c8a-a7d4-6d512c40233e,pyme,grc_core,GRC central,t,plan
+697eefa4-3b56-4c8a-a7d4-6d512c40233e,pyme,metrics_bi,Metricas y BI,t,plan
+697eefa4-3b56-4c8a-a7d4-6d512c40233e,pyme,operations_grc,Operacion GRC,t,plan
+697eefa4-3b56-4c8a-a7d4-6d512c40233e,pyme,report_studio,Report Studio,t,plan
+697eefa4-3b56-4c8a-a7d4-6d512c40233e,pyme,risk_manager,Risk Manager,t,plan
+70000000-0000-0000-0000-000000000701,enterprise,ai_compliance,IA Compliance,t,plan
+70000000-0000-0000-0000-000000000701,enterprise,assurance_loss,Assurance y perdidas,t,plan
+70000000-0000-0000-0000-000000000701,enterprise,audit_workpapers,Papeles de trabajo,t,plan
+70000000-0000-0000-0000-000000000701,enterprise,core,Core operativo,t,plan
+70000000-0000-0000-0000-000000000701,enterprise,data_governance,Datos y confianza,t,plan
+70000000-0000-0000-0000-000000000701,enterprise,grc_core,GRC central,t,plan
+70000000-0000-0000-0000-000000000701,enterprise,integrated_grc,GRC integrado,t,plan
+70000000-0000-0000-0000-000000000701,enterprise,metrics_bi,Metricas y BI,t,plan
+70000000-0000-0000-0000-000000000701,enterprise,operations_grc,Operacion GRC,t,plan
+70000000-0000-0000-0000-000000000701,enterprise,premium_reports,Reportes Premium,t,plan
+70000000-0000-0000-0000-000000000701,enterprise,report_studio,Report Studio,t,plan
+70000000-0000-0000-0000-000000000701,enterprise,risk_manager,Risk Manager,t,plan
+70000000-0000-0000-0000-000000000701,enterprise,surveys_assessments,Encuestas y evaluaciones,t,plan
+76c44a0e-6041-8bda-99c7-b740fccea001,enterprise,ai_compliance,IA Compliance,t,plan
+76c44a0e-6041-8bda-99c7-b740fccea001,enterprise,assurance_loss,Assurance y perdidas,t,plan
+76c44a0e-6041-8bda-99c7-b740fccea001,enterprise,audit_workpapers,Papeles de trabajo,t,plan
+76c44a0e-6041-8bda-99c7-b740fccea001,enterprise,core,Core operativo,t,plan
+76c44a0e-6041-8bda-99c7-b740fccea001,enterprise,data_governance,Datos y confianza,t,plan
+76c44a0e-6041-8bda-99c7-b740fccea001,enterprise,grc_core,GRC central,t,plan
+76c44a0e-6041-8bda-99c7-b740fccea001,enterprise,integrated_grc,GRC integrado,t,plan
+76c44a0e-6041-8bda-99c7-b740fccea001,enterprise,metrics_bi,Metricas y BI,t,plan
+76c44a0e-6041-8bda-99c7-b740fccea001,enterprise,operations_grc,Operacion GRC,t,plan
+76c44a0e-6041-8bda-99c7-b740fccea001,enterprise,premium_reports,Reportes Premium,t,plan
+76c44a0e-6041-8bda-99c7-b740fccea001,enterprise,report_studio,Report Studio,t,plan
+76c44a0e-6041-8bda-99c7-b740fccea001,enterprise,risk_manager,Risk Manager,t,plan
+76c44a0e-6041-8bda-99c7-b740fccea001,enterprise,surveys_assessments,Encuestas y evaluaciones,t,plan
