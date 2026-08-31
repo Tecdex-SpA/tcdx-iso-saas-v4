@@ -26,6 +26,7 @@ import {
   type UniversalDataState,
 } from '@/components/ui/enterprise';
 import { useTranslation } from '@/hooks/useTranslation';
+import { useTenantEntitlements } from '@/hooks/useTenantEntitlements';
 import {
   PieChart,
   Pie,
@@ -882,6 +883,10 @@ function DashboardPageContent() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const {
+    loading: entitlementsLoading,
+    canShowCapability,
+  } = useTenantEntitlements();
   const requestedView = normalizeDashboardView(searchParams.get('view'));
   const [activeView, setActiveView] = useState<DashboardView>(requestedView);
 
@@ -923,6 +928,16 @@ function DashboardPageContent() {
     'admin',
     'tenant_admin',
   ].includes(currentRole);
+  const canShowIsoHealth = !entitlementsLoading && canShowCapability('iso.health');
+  const canShowAdvancedMetrics =
+    !entitlementsLoading &&
+    (canShowCapability('metrics.catalog') || canShowCapability('metrics.indicators.read'));
+  const canShowMetricsEngine =
+    !entitlementsLoading &&
+    (canShowCapability('metrics.engine') || canShowCapability('metrics.jobs.run'));
+  const canShowDataQuality = !entitlementsLoading && canShowCapability('metrics.data_trust');
+  const canShowGrcAnalysis = !entitlementsLoading && canShowCapability('data.governance');
+  const canShowGrcAdvanced = !entitlementsLoading && canShowCapability('grc.phase1');
 
   const [controls, setControls] = useState<ControlDashboardRow[]>([]);
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
@@ -945,6 +960,13 @@ function DashboardPageContent() {
 
   const [kpiData, setKpiData] = useState<KpiDashboardResponse | null>(null);
   const loadSystemHealthDashboard = useCallback(async () => {
+    if (!canShowIsoHealth) {
+      setSystemHealthDashboard(null);
+      setSystemHealthError('');
+      setSystemHealthLoading(false);
+      return;
+    }
+
     const token = localStorage.getItem('token');
     if (!token) {
       setSystemHealthDashboard(null);
@@ -965,9 +987,15 @@ function DashboardPageContent() {
     } finally {
       setSystemHealthLoading(false);
     }
-  }, []);
+  }, [canShowIsoHealth]);
 
   const loadEffectiveHealthSummary = useCallback(async () => {
+    if (!canShowIsoHealth) {
+      setEffectiveHealthRows([]);
+      setEffectiveHealthLoading(false);
+      return;
+    }
+
     const token = localStorage.getItem('token');
     const user = getUserFromToken();
 
@@ -1016,7 +1044,7 @@ function DashboardPageContent() {
     } finally {
       setEffectiveHealthLoading(false);
     }
-  }, []);
+  }, [canShowIsoHealth]);
 
 
 
@@ -1077,6 +1105,12 @@ function DashboardPageContent() {
 
 
   const loadKpiDashboard = useCallback(async () => {
+    if (!canShowAdvancedMetrics) {
+      setKpiData(null);
+      setLoadingKpis(false);
+      return;
+    }
+
     const token = localStorage.getItem('token');
     if (!token) return;
 
@@ -1105,14 +1139,15 @@ function DashboardPageContent() {
     } finally {
       setLoadingKpis(false);
     }
-  }, []);
+  }, [canShowAdvancedMetrics]);
 
   useEffect(() => {
+    if (entitlementsLoading) return;
     loadSystemHealthDashboard();
     loadEffectiveHealthSummary();
     loadExecutiveDashboard();
     loadKpiDashboard();
-  }, [loadSystemHealthDashboard, loadEffectiveHealthSummary, loadExecutiveDashboard, loadKpiDashboard]);
+  }, [entitlementsLoading, loadSystemHealthDashboard, loadEffectiveHealthSummary, loadExecutiveDashboard, loadKpiDashboard]);
 
   const handleRefreshDashboard = async () => {
     try {
@@ -1131,10 +1166,12 @@ function DashboardPageContent() {
   const handleRecalculateKpis = async () => {
     setKpiRecalculateNotice(null);
 
-    if (!canManageKpis) {
+    if (!canManageKpis || !canShowMetricsEngine) {
       setKpiRecalculateNotice({
         type: 'error',
-        message: 'Tu rol no permite recalcular KPIs. Esta acción está reservada para administradores.',
+        message: canManageKpis
+          ? 'El motor de indicadores oficiales no está contratado para esta empresa.'
+          : 'Tu rol no permite recalcular KPIs. Esta acción está reservada para administradores.',
       });
       return;
     }
@@ -1521,7 +1558,7 @@ function DashboardPageContent() {
       });
     }
 
-    if (pendingKpis > 0) {
+    if (canShowAdvancedMetrics && pendingKpis > 0) {
       items.push({
         id: 'official-kpis-without-data',
         label: 'Datos',
@@ -1533,7 +1570,7 @@ function DashboardPageContent() {
       });
     }
 
-    if (systemHealthDashboard?.data_quality_warnings?.length) {
+    if (canShowDataQuality && systemHealthDashboard?.data_quality_warnings?.length) {
       items.push({
         id: 'data-quality-warnings',
         label: 'Data Trust',
@@ -1561,6 +1598,8 @@ function DashboardPageContent() {
   }, [
     activeActionPlans,
     auditSummary,
+    canShowAdvancedMetrics,
+    canShowDataQuality,
     highRisks,
     loading,
     loadingKpis,
@@ -1862,7 +1901,7 @@ function DashboardPageContent() {
                     effectiveStatus={effectiveGlobalStatus}
                   />
 
-                  {totalKpis > 0 && (
+                  {canShowAdvancedMetrics && totalKpis > 0 && (
                     <ExecutiveKpiPulse
                       score={scoreKpiGlobal}
                       coverage={kpiCoveragePct ?? 0}
@@ -1872,14 +1911,20 @@ function DashboardPageContent() {
                     />
                   )}
 
-                  <div className="grid grid-cols-1 gap-4 2xl:grid-cols-[1.05fr_0.95fr]">
-                    <ExecutiveTrendPanel item={executiveTrendItem} loading={loadingKpis} />
-                    <ExecutiveDataTrustPanel
-                      items={kpiItems}
-                      healthWarnings={systemHealthDashboard?.data_quality_warnings || []}
-                      loading={loadingKpis || systemHealthLoading}
-                    />
-                  </div>
+                  {(canShowAdvancedMetrics || canShowDataQuality) && (
+                    <div className="grid grid-cols-1 gap-4 2xl:grid-cols-[1.05fr_0.95fr]">
+                      {canShowAdvancedMetrics && (
+                        <ExecutiveTrendPanel item={executiveTrendItem} loading={loadingKpis} />
+                      )}
+                      {canShowDataQuality && (
+                        <ExecutiveDataTrustPanel
+                          items={kpiItems}
+                          healthWarnings={systemHealthDashboard?.data_quality_warnings || []}
+                          loading={loadingKpis || systemHealthLoading}
+                        />
+                      )}
+                    </div>
+                  )}
 
                   <OperationalChartsPanel
                     controlStatus={controlStatusChartData}
@@ -1904,12 +1949,14 @@ function DashboardPageContent() {
                     />
                   </div>
 
-                  <SystemHealthDashboardSection
-                    data={systemHealthDashboard}
-                    loading={systemHealthLoading}
-                    error={systemHealthError}
-                    compact
-                  />
+                  {canShowIsoHealth && (
+                    <SystemHealthDashboardSection
+                      data={systemHealthDashboard}
+                      loading={systemHealthLoading}
+                      error={systemHealthError}
+                      compact
+                    />
+                  )}
                 </>
               )}
             </>
@@ -1929,26 +1976,30 @@ function DashboardPageContent() {
                   </div>
 
                   <div className="flex flex-wrap gap-3">
-                    <a
-                      href="/iso-health"
-                      className="rounded-[var(--tcdx-radius-tecdex-sm)] border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-700 shadow-sm transition hover:bg-emerald-100"
-                    >{t('dashboardKpi.viewHealth')}</a>
+                    {canShowIsoHealth && (
+                      <a
+                        href="/iso-health"
+                        className="rounded-[var(--tcdx-radius-tecdex-sm)] border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-semibold text-emerald-700 shadow-sm transition hover:bg-emerald-100"
+                      >{t('dashboardKpi.viewHealth')}</a>
+                    )}
 
-                    {canManageKpis && (
+                    {canManageKpis && canShowIsoHealth && (
                       <>
                         <a
                           href="/administrar-kpis"
                           className="rounded-[var(--tcdx-radius-tecdex-sm)] border border-[var(--tcdx-color-border)] bg-white px-4 py-2.5 text-sm font-semibold text-[var(--tcdx-color-text-primary)] shadow-sm transition hover:bg-[var(--tcdx-color-surface)]"
                         >{t('dashboardKpi.administerKpis')}</a>
 
-                        <button
-                          type="button"
-                          onClick={handleRecalculateKpis}
-                          disabled={recalculatingKpis}
-                          className="rounded-[var(--tcdx-radius-tecdex-sm)] bg-[var(--tcdx-color-primary)] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--tcdx-color-primary-hover)] disabled:opacity-60"
-                        >
-                          {recalculatingKpis ? 'Recalculando...' : t('dashboardKpi.recalculateKpis')}
-                        </button>
+                        {canShowMetricsEngine && (
+                          <button
+                            type="button"
+                            onClick={handleRecalculateKpis}
+                            disabled={recalculatingKpis}
+                            className="rounded-[var(--tcdx-radius-tecdex-sm)] bg-[var(--tcdx-color-primary)] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--tcdx-color-primary-hover)] disabled:opacity-60"
+                          >
+                            {recalculatingKpis ? 'Recalculando...' : t('dashboardKpi.recalculateKpis')}
+                          </button>
+                        )}
                       </>
                     )}
                   </div>
@@ -1967,6 +2018,7 @@ function DashboardPageContent() {
                   </div>
                 )}
 
+                {canShowAdvancedMetrics && (
                 <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2 2xl:grid-cols-6">
                   <TopCard
                     title={t('dashboard.kpiGlobalScore')}
@@ -2028,8 +2080,9 @@ function DashboardPageContent() {
                     icon={<TcdxIcon name="heart" className="h-6 w-6" />}
                   />
                 </div>
+                )}
 
-                {scoreKpiGlobal === null && (
+                {canShowAdvancedMetrics && scoreKpiGlobal === null && (
                   <div className="mt-4 rounded-[var(--tcdx-radius-tecdex-sm)] border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
                     <p className="font-semibold">{t('dashboardKpi.scoreGlobalPendingTitle')}</p>
                     <p className="mt-1 leading-6">
@@ -2073,7 +2126,7 @@ function DashboardPageContent() {
                 )}
               </div>
 
-              {loadingKpis && (
+              {canShowAdvancedMetrics && loadingKpis && (
                 <div className="rounded-[var(--tcdx-radius-tecdex-sm)] border border-[var(--tcdx-color-border)] bg-white p-8 text-[var(--tcdx-color-text-secondary)] shadow-[var(--tcdx-shadow-tecdex-sm)]">
                   Cargando vista KPI...
                 </div>
@@ -2081,6 +2134,7 @@ function DashboardPageContent() {
 
               {!loadingKpis && (
                 <>
+                  {canShowIsoHealth && (
                   <section className="rounded-[var(--tcdx-radius-tecdex-sm)] border border-emerald-200 bg-emerald-50/60 p-6 shadow-[var(--tcdx-shadow-tecdex-sm)]">
                     <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                       <div>
@@ -2123,7 +2177,9 @@ function DashboardPageContent() {
                       </div>
                     )}
                   </section>
+                  )}
 
+                  {canShowAdvancedMetrics && (
                   <div className="grid grid-cols-1 gap-4 2xl:grid-cols-[minmax(0,1.35fr)_minmax(340px,1fr)]">
                     <section className="rounded-[var(--tcdx-radius-tecdex-sm)] border border-[var(--tcdx-color-border)] bg-white p-6 shadow-[var(--tcdx-shadow-tecdex-sm)]">
                       <div className="mb-5 flex items-center justify-between">
@@ -2256,7 +2312,9 @@ function DashboardPageContent() {
                       </div>
                     </section>
                   </div>
+                  )}
 
+                  {canShowAdvancedMetrics && (
                   <div className="grid grid-cols-1 gap-4 2xl:grid-cols-2">
                     <section className="rounded-[var(--tcdx-radius-tecdex-sm)] border border-[var(--tcdx-color-border)] bg-white p-6 shadow-[var(--tcdx-shadow-tecdex-sm)]">
                       <div className="mb-4 flex items-center justify-between">
@@ -2304,7 +2362,9 @@ function DashboardPageContent() {
                       )}
                     </section>
                   </div>
+                  )}
 
+                  {canShowAdvancedMetrics && (
                   <section className="rounded-[var(--tcdx-radius-tecdex-sm)] border border-[var(--tcdx-color-border)] bg-white p-6 shadow-[var(--tcdx-shadow-tecdex-sm)]">
                     <div className="mb-4 flex items-center justify-between">
                       <h2 className="text-2xl font-semibold tracking-tight text-[var(--tcdx-color-text-ink)]">
@@ -2334,12 +2394,13 @@ function DashboardPageContent() {
                       </div>
                     )}
                   </section>
+                  )}
                 </>
               )}
             </>
           )}
 
-          {activeView === 'iso' && (
+          {activeView === 'iso' && canShowIsoHealth && (
             <SystemHealthDashboardSection
               data={systemHealthDashboard}
               loading={systemHealthLoading}
@@ -2348,6 +2409,7 @@ function DashboardPageContent() {
             />
           )}
         </div>
+        {canShowGrcAnalysis && (
         <div className="mx-auto w-full max-w-[1720px]">
           <GrcDecisionCenter
             compact
@@ -2357,9 +2419,12 @@ function DashboardPageContent() {
             ctaLabel={t('grcDecisionCenter.cta')}
           />
         </div>
+        )}
+        {canShowGrcAdvanced && (
         <div className="mx-auto mt-6 max-w-[1720px]">
           <GrcPhase1Panel mode="dashboard" />
         </div>
+        )}
       </div>
     </AppLayout>
   );

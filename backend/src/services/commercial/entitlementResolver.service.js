@@ -1,5 +1,9 @@
 const pool = require('../../config/db');
 const { isPlatformRole, normalizeRoleKey } = require('../auth/roleCompatibility.service');
+const {
+  ADDON_CAPABILITIES,
+  capabilitiesForAddon,
+} = require('./commercialPlanMatrix.service');
 
 function normalizeKey(value) {
   return String(value || '').trim().toLowerCase().replace(/[^a-z0-9_.:-]+/g, '_');
@@ -148,6 +152,109 @@ function ensureBaseTenantCapabilities(capabilities, { tenantId, tenant, subscrip
   return capabilities;
 }
 
+function addonIsActive(row) {
+  if (!row) return false;
+  return normalizeKey(row.status) === 'active' && normalizeKey(row.addon_status || 'active') === 'active';
+}
+
+async function getActiveSubscriptionAddons(tenantId) {
+  if (!tenantId) return [];
+  const result = await pool.query(
+    `
+    SELECT
+      tsa.id,
+      tsa.tenant_subscription_id,
+      tsa.addon_key,
+      tsa.status,
+      tsa.started_at,
+      tsa.ended_at,
+      ca.status AS addon_status,
+      ca.display_name,
+      ca.metadata
+    FROM v_commercial_tenant_subscription vts
+    JOIN tenant_subscription_addons tsa
+      ON tsa.tenant_subscription_id = vts.id
+     AND tsa.status = 'active'
+     AND (tsa.ended_at IS NULL OR tsa.ended_at > now())
+    JOIN commercial_addons ca
+      ON ca.addon_key = tsa.addon_key
+     AND ca.status = 'active'
+    WHERE vts.tenant_id = $1::uuid
+    ORDER BY tsa.addon_key
+    `,
+    [tenantId]
+  ).catch(() => ({ rows: [] }));
+  return result.rows.filter(addonIsActive);
+}
+
+function applyAddonEntitlements(capabilities, modules, addons, { tenantId, moduleState, permissions }) {
+  const moduleRows = [...modules];
+  const seenModules = new Set(moduleRows.map((row) => normalizeModuleKey(row.module_key)));
+
+  for (const addon of addons || []) {
+    const addonKey = normalizeKey(addon.addon_key);
+    for (const capability of capabilitiesForAddon(addonKey)) {
+      const moduleKey = normalizeModuleKey(capability.module_key);
+      if (moduleKey && !seenModules.has(moduleKey)) {
+        seenModules.add(moduleKey);
+        moduleState[moduleKey] = true;
+        moduleRows.push({
+          tenant_id: tenantId,
+          plan_key: null,
+          module_key: moduleKey,
+          display_name: capability.module_key,
+          description: null,
+          sort_order: 900,
+          enabled: true,
+          source: 'addon',
+        });
+      }
+
+      const requiredPermission = requiredPermissionForCapability(
+        capability.capability_key,
+        capability.required_permission
+      );
+      capabilities[capability.capability_key] = applyModuleGate({
+        ...(capabilities[capability.capability_key] || baseDecision(capability.capability_key, tenantId)),
+        enabled: true,
+        decision: 'allowed',
+        source: 'addon',
+        reason_code: 'ADDON_ENTITLED',
+        module_key: moduleKey,
+        effective_from: addon.started_at || null,
+        effective_until: addon.ended_at || null,
+        read_only: false,
+        dependencies: capability.dependencies || [],
+        required_permission: requiredPermission,
+        rbac_allowed: requiredPermission ? permissions[requiredPermission] === true : true,
+        addon_key: addonKey,
+      }, moduleState);
+    }
+  }
+
+  return moduleRows;
+}
+
+function enforceAddonRequirements(capabilities, addons, tenantId) {
+  const activeAddonKeys = new Set(
+    (addons || []).filter(addonIsActive).map((addon) => normalizeKey(addon.addon_key))
+  );
+
+  for (const [addonKey, capabilityKeys] of Object.entries(ADDON_CAPABILITIES)) {
+    const normalizedAddonKey = normalizeKey(addonKey);
+    if (activeAddonKeys.has(normalizedAddonKey)) continue;
+    for (const capabilityKey of capabilityKeys) {
+      capabilities[capabilityKey] = {
+        ...(capabilities[capabilityKey] || baseDecision(capabilityKey, tenantId)),
+        enabled: false,
+        decision: 'denied',
+        reason_code: 'ADDON_REQUIRED',
+        addon_key: normalizedAddonKey,
+      };
+    }
+  }
+}
+
 async function resolveTenantEntitlements({ tenantId, user = null } = {}) {
   const actorTenantId = getTenantId(user, tenantId);
   const userId = getUserId(user);
@@ -190,11 +297,12 @@ async function resolveTenantEntitlements({ tenantId, user = null } = {}) {
     };
   }
 
-  const [tenantResult, subscriptionResult, moduleResult, capabilityResult, limitResult, usageResult, overrideResult, trialResult, healthResult, permissions] = await Promise.all([
+  const [tenantResult, subscriptionResult, moduleResult, capabilityResult, addonResult, limitResult, usageResult, overrideResult, trialResult, healthResult, permissions] = await Promise.all([
     pool.query(`SELECT id, service_status, suspended_at, deleted_at FROM tenants WHERE id = $1::uuid LIMIT 1`, [actorTenantId]).catch(() => ({ rows: [] })),
     pool.query(`SELECT * FROM v_commercial_tenant_subscription WHERE tenant_id = $1::uuid LIMIT 1`, [actorTenantId]).catch(() => ({ rows: [] })),
     pool.query(`SELECT * FROM v_commercial_tenant_modules WHERE tenant_id = $1::uuid ORDER BY sort_order, module_key`, [actorTenantId]).catch(() => ({ rows: [] })),
     pool.query(`SELECT * FROM v_commercial_tenant_capabilities WHERE tenant_id = $1::uuid ORDER BY capability_key`, [actorTenantId]).catch(() => ({ rows: [] })),
+    getActiveSubscriptionAddons(actorTenantId).then((rows) => ({ rows })),
     pool.query(`SELECT * FROM tenant_usage_limits WHERE tenant_id = $1::uuid AND status = 'active'`, [actorTenantId]).catch(() => ({ rows: [] })),
     pool.query(`SELECT DISTINCT ON (resource_key) resource_key, quantity, period_key, source, updated_at FROM usage_measurements WHERE tenant_id = $1::uuid ORDER BY resource_key, updated_at DESC`, [actorTenantId]).catch(() => ({ rows: [] })),
     pool.query(`SELECT capability_key, enabled, read_only, reason, valid_until FROM tenant_feature_overrides WHERE tenant_id = $1::uuid AND status = 'active' AND (valid_until IS NULL OR valid_until > now())`, [actorTenantId]).catch(() => ({ rows: [] })),
@@ -223,6 +331,12 @@ async function resolveTenantEntitlements({ tenantId, user = null } = {}) {
     };
     capabilities[row.capability_key] = row.enabled === true ? applyModuleGate(decision, moduleState) : decision;
   }
+
+  const effectiveModules = applyAddonEntitlements(capabilities, moduleResult.rows, addonResult.rows, {
+    tenantId: actorTenantId,
+    moduleState,
+    permissions,
+  });
 
   for (const row of overrideResult.rows) {
     const key = row.capability_key;
@@ -262,6 +376,7 @@ async function resolveTenantEntitlements({ tenantId, user = null } = {}) {
     moduleState,
     permissions,
   });
+  enforceAddonRequirements(capabilities, addonResult.rows, actorTenantId);
 
   const usageByKey = usageResult.rows.reduce((acc, row) => {
     acc[row.resource_key] = Number(row.quantity || 0);
@@ -285,7 +400,8 @@ async function resolveTenantEntitlements({ tenantId, user = null } = {}) {
   return {
     tenant_id: actorTenantId,
     subscription: subscriptionResult.rows[0] || null,
-    modules: moduleResult.rows,
+    modules: effectiveModules,
+    addons: addonResult.rows,
     capabilities,
     limits,
     usage: usageByKey,

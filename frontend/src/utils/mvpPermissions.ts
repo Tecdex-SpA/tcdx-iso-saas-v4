@@ -518,7 +518,8 @@ export const MVP_ROUTE_RULES: MvpRouteRule[] = [
     feature: 'phase5.read',
     moduleKey: 'report_studio',
   },
-  { routes: ['/ia-compliance'], feature: 'ai_compliance.read', moduleKey: 'ai_compliance' },
+  { routes: ['/ia', '/ia-compliance'], feature: 'ai_compliance.read', moduleKey: 'ai_compliance' },
+  { routes: ['/ia-auditor', '/auditorias/ia'], feature: 'ai_compliance.read', moduleKey: 'ai_compliance' },
   { routes: ['/perfil'], feature: 'configuration.profile.self' },
   { routes: ['/configuracion', '/usuarios', '/perfil-empresa'], feature: 'configuration.users.manage' },
 ];

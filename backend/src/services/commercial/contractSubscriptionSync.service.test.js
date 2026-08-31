@@ -17,7 +17,7 @@ function rows(value) {
   return { rows: value, rowCount: value.length };
 }
 
-function fakeClient({ current = null, existingSynced = null } = {}) {
+function fakeClient({ current = null, existingSynced = null, currentAddons = [] } = {}) {
   const calls = [];
   return {
     calls,
@@ -61,6 +61,20 @@ function fakeClient({ current = null, existingSynced = null } = {}) {
           plan_version_id: params[1],
           plan_key: params[2],
           status: params[3],
+        }]);
+      }
+
+      if (/FROM tenant_subscription_addons/i.test(text) && /FOR UPDATE/i.test(text)) {
+        return rows(currentAddons);
+      }
+
+      if (/INSERT INTO tenant_subscription_addons/i.test(text)) {
+        return rows([{
+          tenant_subscription_id: params[0],
+          addon_key: params[1],
+          status: params[2],
+          started_at: params[3],
+          ended_at: params[4],
         }]);
       }
 
@@ -132,7 +146,16 @@ async function run() {
     plan_version_id: '95000000-0000-0000-0000-000000000950',
     plan_key: 'legacy',
   };
-  const replaceClient = fakeClient({ current: replacedCurrent });
+  const replaceClient = fakeClient({
+    current: replacedCurrent,
+    currentAddons: [{
+      addon_key: 'ai',
+      status: 'active',
+      started_at: '2026-08-01T00:00:00.000Z',
+      ended_at: null,
+      created_by: actorUserId,
+    }],
+  });
   const replaced = await syncTenantContractSubscription(replaceClient, {
     tenantId,
     contract,
@@ -140,8 +163,10 @@ async function run() {
     requestId: 'contract-sync-replace',
   });
   assert.equal(replaced.action, 'replaced_and_inserted_subscription');
+  assert.deepEqual(replaced.copied_addons.map((addon) => addon.addon_key), ['ai']);
   assert.equal(replaceClient.calls.some((call) => /UPDATE tenant_subscriptions SET status = 'replaced'/i.test(call.text)), true);
   assert.equal(replaceClient.calls.some((call) => /INSERT INTO tenant_subscriptions/i.test(call.text)), true);
+  assert.equal(replaceClient.calls.some((call) => /INSERT INTO tenant_subscription_addons/i.test(call.text)), true);
 }
 
 run()

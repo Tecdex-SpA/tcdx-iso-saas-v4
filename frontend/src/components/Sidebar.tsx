@@ -71,11 +71,11 @@ function domainIconKind(domainId: EnterpriseNavDomain['id']) {
 
 export default function Sidebar({ collapsed = false, onToggle, moduleMap = {}, role = '' }: SidebarProps) {
   const pathname = usePathname(); const { t } = useTranslation();
-  const { loading: entitlementsLoading, aiEnabled, canUseAiFeature, hasCapability } = useTenantEntitlements();
-  const normalizedRole=String(role||'').toLowerCase(); const roleGroup=getMvpRoleGroup(normalizedRole); const isDealer=roleGroup==='dealer'; const isPlatformAdmin=roleGroup==='platform'; const canSeeAiCompliance=!entitlementsLoading&&aiEnabled&&canUseAiFeature('suggestions'); const iconClass='h-5 w-5';
+  const { loading: entitlementsLoading, canShowCapability } = useTenantEntitlements();
+  const normalizedRole=String(role||'').toLowerCase(); const roleGroup=getMvpRoleGroup(normalizedRole); const isDealer=roleGroup==='dealer'; const isPlatformAdmin=roleGroup==='platform'; const canSeeAiCompliance=!entitlementsLoading&&canShowCapability('ai.compliance'); const iconClass='h-5 w-5';
   const isActive=(href:string,routes?:string[])=>isPathInRoutes(pathname,routes || [href]);
   const hasModule=useCallback((moduleKey:string)=>{if(isPlatformAdmin||isDealer)return true;if(!Object.prototype.hasOwnProperty.call(moduleMap,moduleKey))return true;return moduleMap[moduleKey]?.is_enabled===true;},[isDealer,isPlatformAdmin,moduleMap]);
-  const hasRouteCapability=useCallback((href:string)=>{if(isPlatformAdmin)return true;const capability=getMvpRouteCapability(href);return !capability || (!entitlementsLoading && hasCapability(capability));},[entitlementsLoading,hasCapability,isPlatformAdmin]);
+  const hasRouteCapability=useCallback((href:string)=>{if(isPlatformAdmin)return true;const capability=getMvpRouteCapability(href);return !capability || (!entitlementsLoading && canShowCapability(capability));},[canShowCapability,entitlementsLoading,isPlatformAdmin]);
 
   const canAccessEntry=useCallback((item:EnterpriseNavItem)=>{if(!canAccessMvpFeature(normalizedRole,item.feature))return false;if(item.href==='/ia-compliance'&&!canSeeAiCompliance)return false;if(item.moduleKey&&!hasModule(item.moduleKey))return false;if(!hasRouteCapability(item.href))return false;return true;},[canSeeAiCompliance,hasModule,hasRouteCapability,normalizedRole]);
 

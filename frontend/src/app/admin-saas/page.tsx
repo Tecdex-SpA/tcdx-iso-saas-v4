@@ -72,6 +72,16 @@ type TenantRow = {
   ai_monthly_quota?: number | null;
   ai_quota_used?: number;
   ai_features_json?: JsonObject | null;
+  ai_addon_status?: string;
+};
+
+type TenantAddon = {
+  id?: string;
+  addon_key: string;
+  status: string;
+  started_at?: string | null;
+  ended_at?: string | null;
+  display_name?: string | null;
 };
 
 type TenantDetail = {
@@ -91,6 +101,7 @@ type TenantDetail = {
     ai_report_enabled?: boolean;
     ai_auditor_enabled?: boolean;
     ai_monthly_quota?: number | null;
+    ai_addon_status?: string;
   };
   summary?: {
     last_admin_event_at?: string | null;
@@ -101,6 +112,7 @@ type TenantDetail = {
   modules: TenantModuleCatalogItem[];
   users: TenantUser[];
   dealers: TenantDealer[];
+  addons?: TenantAddon[];
 };
 
 
@@ -446,6 +458,11 @@ function formatDateTime(value?: string | null) {
   });
 }
 
+function selectedAiSourceStatus(value?: string | null) {
+  const status = String(value || '').trim().toLowerCase();
+  return status || null;
+}
+
 function badgeColor(value?: string) {
   const v = String(value || '').toLowerCase();
 
@@ -457,11 +474,11 @@ function badgeColor(value?: string) {
     return 'border-blue-200 bg-blue-50 text-blue-700';
   }
 
-  if (['inactive', 'inactivo', 'revoked', 'cancelled', 'false'].includes(v)) {
+  if (['inactive', 'inactivo', 'revoked', 'cancelled', 'not_contracted', 'false'].includes(v)) {
     return 'border-red-200 bg-red-50 text-red-700';
   }
 
-  if (['pending', 'pendiente', 'open', 'in_review'].includes(v)) {
+  if (['pending', 'pendiente', 'open', 'in_review', 'suspended'].includes(v)) {
     return 'border-amber-200 bg-amber-50 text-amber-700';
   }
 
@@ -1803,8 +1820,41 @@ async function uploadSelectedTenantLogo(file: File) {
     }
   }
 
+  async function setTenantAiAddonStatus(status: 'active' | 'suspended' | 'cancelled') {
+    if (!selectedTenantId || !canManageAdminSaas) return;
+
+    try {
+      setSavingKey(`tenant-ai-addon-${status}`);
+      setError('');
+      await fetchJson(`/api/admin-saas/tenants/${selectedTenantId}/addons/ai`, {
+        method: 'PUT',
+        body: JSON.stringify({ status }),
+      });
+      clearTenantEntitlementsCache();
+      await loadTenants();
+      await loadTenantDetail(selectedTenantId);
+      await loadTenantContract(selectedTenantId);
+      setSuccess(
+        status === 'active'
+          ? 'Add-on IA contratado/reactivado.'
+          : status === 'suspended'
+            ? 'Add-on IA suspendido.'
+            : 'Add-on IA cancelado.'
+      );
+    } catch (err: unknown) {
+      setError(getErrorMessage(err, 'Error actualizando add-on IA'));
+    } finally {
+      setSavingKey('');
+    }
+  }
+
   async function saveTenantAiSettings() {
     if (!selectedTenantId || !canManageAdminSaas) return;
+
+    if (!selectedAiAddonContracted) {
+      setError('IA no está contratada para esta empresa. Contrata el add-on antes de habilitar runtime IA.');
+      return;
+    }
 
     try {
       setSavingKey('tenant-ai-settings');
@@ -2117,6 +2167,17 @@ async function uploadSelectedTenantLogo(file: File) {
     return tenants.find((tenant) => tenant.tenant_id === selectedTenantId);
   }, [tenants, selectedTenantId]);
 
+  const selectedAiAddon = useMemo(() => {
+    return tenantDetail?.addons?.find((addon) => addon.addon_key === 'ai') || null;
+  }, [tenantDetail?.addons]);
+  const selectedAiAddonStatus =
+    selectedAiAddon?.status ||
+    selectedAiSourceStatus(tenantDetail?.tenant?.ai_addon_status) ||
+    selectedAiSourceStatus(selectedTenant?.ai_addon_status) ||
+    'not_contracted';
+  const selectedAiAddonContracted = ['active', 'suspended'].includes(selectedAiAddonStatus);
+  const selectedAiAddonRuntimeActive = selectedAiAddonStatus === 'active';
+
   const selectedExternalQuota = useMemo(() => {
     return externalQuotas.find((quota) => quota.tenant_id === selectedTenantId) || null;
   }, [externalQuotas, selectedTenantId]);
@@ -2387,6 +2448,10 @@ async function uploadSelectedTenantLogo(file: File) {
                             <span className="rounded-full border border-blue-200 bg-blue-50 px-2 py-1 text-[11px] font-semibold text-blue-700">
                               Módulos: {tenant.enabled_modules || 0}
                             </span>
+
+                            <span className={`rounded-full border px-2 py-1 text-[11px] font-semibold ${badgeColor(tenant.ai_addon_status)}`}>
+                              IA contratada: {tenant.ai_addon_status === 'active' || tenant.ai_addon_status === 'suspended' ? 'Sí' : 'No'}
+                            </span>
                           </div>
                         </button>
                       );
@@ -2437,6 +2502,10 @@ async function uploadSelectedTenantLogo(file: File) {
 
                             <span className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">
                               Módulos activos: {enabledModules.length}
+                            </span>
+
+                            <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${badgeColor(selectedAiAddonStatus)}`}>
+                              IA contratada: {selectedAiAddonContracted ? 'Sí' : 'No'}
                             </span>
                           </div>
                         </div>
@@ -2621,8 +2690,8 @@ async function uploadSelectedTenantLogo(file: File) {
                     <div data-admin-tab-section="ia" className="rounded-2xl border border-indigo-200 bg-white p-6 shadow-sm">
                       <div className={`${activeAdminTab === 'ia' ? 'block' : 'hidden'} mb-5 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between`}>
                         <SectionTitle
-                          title="Respaldo externo IA"
-                          subtitle="Controla habilitación IA por plan, módulos permitidos y cuota mensual de apoyo externo."
+                          title="Add-on IA"
+                          subtitle="Contratación transversal independiente del plan base y configuración IA tenant-scoped."
                         />
 
                         {!canManageAdminSaas && (
@@ -2636,21 +2705,64 @@ async function uploadSelectedTenantLogo(file: File) {
                         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
                           <div>
                             <div className="flex flex-wrap items-center gap-2">
+                              <span className={`rounded-full border px-3 py-1 text-xs font-bold ${badgeColor(selectedAiAddonStatus)}`}>
+                                IA contratada: {selectedAiAddonContracted ? 'Sí' : 'No'}
+                              </span>
                               <span
                                 className={`rounded-full border px-3 py-1 text-xs font-bold ${
-                                  selectedAiDraft.ai_enabled
+                                  selectedAiAddonRuntimeActive && selectedAiDraft.ai_enabled
                                     ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
                                     : 'border-slate-200 bg-white text-slate-500'
                                 }`}
                               >
-                                {selectedAiDraft.ai_enabled ? 'IA habilitada' : 'IA no incluida en este plan'}
+                                {selectedAiAddonRuntimeActive && selectedAiDraft.ai_enabled ? 'Runtime IA habilitado' : 'Runtime IA inactivo'}
                               </span>
                               <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600">
                                 Plan {selectedAiDraft.ai_plan}
                               </span>
                             </div>
                             <p className="mt-2 text-sm text-slate-600">
-                              Si se deshabilita, Perfil Empresa, reportes, auditor IA y web/Brave entregan salida determinística sin consumir ai-engine.
+                              El plan base no habilita IA. Los flags se mantienen como configuración/preconfiguración, pero runtime IA exige add-on activo.
+                            </p>
+                          </div>
+
+                          <div className="flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setTenantAiAddonStatus('active')}
+                              disabled={!canManageAdminSaas || savingKey === 'tenant-ai-addon-active'}
+                              className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-700 disabled:opacity-60"
+                            >
+                              {selectedAiAddonStatus === 'active' ? 'IA activa' : 'Contratar/reactivar IA'}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setTenantAiAddonStatus('suspended')}
+                              disabled={!canManageAdminSaas || !selectedAiAddonContracted || savingKey === 'tenant-ai-addon-suspended'}
+                              className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-sm font-bold text-amber-700 hover:bg-amber-100 disabled:opacity-60"
+                            >
+                              Suspender IA
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setTenantAiAddonStatus('cancelled')}
+                              disabled={!canManageAdminSaas || !selectedAiAddonContracted || savingKey === 'tenant-ai-addon-cancelled'}
+                              className="rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-sm font-bold text-red-700 hover:bg-red-100 disabled:opacity-60"
+                            >
+                              Cancelar IA
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="mb-5 rounded-2xl border border-slate-200 bg-white p-4">
+                        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+                          <div>
+                            <h3 className="text-sm font-bold text-slate-900">
+                              Configuración runtime IA
+                            </h3>
+                            <p className="mt-1 text-sm text-slate-600">
+                              Editable sólo con add-on IA contratado. Si el add-on queda suspendido o cancelado, estos valores no habilitan acceso.
                             </p>
                           </div>
 
@@ -2659,7 +2771,7 @@ async function uploadSelectedTenantLogo(file: File) {
                               <input
                                 type="checkbox"
                                 checked={selectedAiDraft.ai_enabled}
-                                disabled={!canManageAdminSaas}
+                                disabled={!canManageAdminSaas || !selectedAiAddonContracted}
                                 onChange={(e) =>
                                   setAiSettingsDraftByTenant((prev) => ({
                                     ...prev,
@@ -2674,7 +2786,7 @@ async function uploadSelectedTenantLogo(file: File) {
                             </label>
                             <select
                               value={selectedAiDraft.ai_plan}
-                              disabled={!canManageAdminSaas || !selectedAiDraft.ai_enabled}
+                              disabled={!canManageAdminSaas || !selectedAiAddonContracted || !selectedAiDraft.ai_enabled}
                               onChange={(e) =>
                                 setAiSettingsDraftByTenant((prev) => ({
                                   ...prev,
@@ -2698,7 +2810,7 @@ async function uploadSelectedTenantLogo(file: File) {
                                 <input
                                   type="checkbox"
                                   checked={selectedAiDraft[key]}
-                                  disabled={!canManageAdminSaas || !selectedAiDraft.ai_enabled}
+                                  disabled={!canManageAdminSaas || !selectedAiAddonContracted || !selectedAiDraft.ai_enabled}
                                   onChange={(e) =>
                                     setAiSettingsDraftByTenant((prev) => ({
                                       ...prev,
@@ -2715,7 +2827,7 @@ async function uploadSelectedTenantLogo(file: File) {
                             <button
                               type="button"
                               onClick={saveTenantAiSettings}
-                              disabled={!canManageAdminSaas || savingKey === 'tenant-ai-settings'}
+                              disabled={!canManageAdminSaas || !selectedAiAddonContracted || savingKey === 'tenant-ai-settings'}
                               className="rounded-xl bg-[#1b2733] px-4 py-2 text-sm font-bold text-white hover:bg-slate-800 disabled:opacity-60"
                             >
                               {savingKey === 'tenant-ai-settings' ? 'Guardando...' : 'Guardar IA'}
@@ -2798,7 +2910,7 @@ async function uploadSelectedTenantLogo(file: File) {
                           <button
                             type="button"
                             onClick={saveExternalQuota}
-                            disabled={!canManageAdminSaas || savingKey === 'external-quota'}
+                            disabled={!canManageAdminSaas || !selectedAiAddonContracted || savingKey === 'external-quota'}
                             className="w-full rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-60"
                           >
                             {savingKey === 'external-quota' ? 'Guardando...' : 'Guardar cuota'}

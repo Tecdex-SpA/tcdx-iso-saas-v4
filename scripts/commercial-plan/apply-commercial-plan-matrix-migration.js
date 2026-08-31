@@ -118,6 +118,9 @@ function validateMigrationSqlScope(sql) {
 
 function validateMigrationSqlMatchesCanonicalMatrix(sql) {
   const missing = [];
+  const historicalClassifications = COMMERCIAL_PLAN_CAPABILITIES.map((capability) =>
+    capability.classification === CLASSIFICATIONS.AI_ADDON ? CLASSIFICATIONS.GRC_ADVANCED : capability.classification
+  );
   const expectedTokens = [
     'ISO = ONLY_ISO',
     'ISO_RISK = ISO + OPERATIONAL_RISK_ONLY',
@@ -125,7 +128,7 @@ function validateMigrationSqlMatchesCanonicalMatrix(sql) {
     ...PLAN_KEYS,
     ...COMMERCIAL_PLAN_CAPABILITIES.map((capability) => capability.capability_key),
     ...COMMERCIAL_PLAN_CAPABILITIES.map((capability) => capability.module_key),
-    ...Object.values(EXPECTED_CLASSIFICATIONS),
+    ...historicalClassifications,
   ];
 
   for (const token of sortUnique(expectedTokens)) {

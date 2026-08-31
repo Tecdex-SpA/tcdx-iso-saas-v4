@@ -10,9 +10,18 @@ const CLASSIFICATIONS = Object.freeze({
   ISO_ONLY: 'ISO_ONLY',
   OPERATIONAL_RISK_EXTENSION: 'OPERATIONAL_RISK_EXTENSION',
   GRC_ADVANCED: 'GRC_ADVANCED',
+  AI_ADDON: 'AI_ADDON',
   PLATFORM_INTERNAL: 'PLATFORM_INTERNAL',
   DEALER_INTERNAL: 'DEALER_INTERNAL',
   HISTORIC_DEPRECATED: 'HISTORIC/DEPRECATED',
+});
+
+const ADDONS = Object.freeze({
+  AI: 'ai',
+});
+
+const ADDON_CAPABILITIES = Object.freeze({
+  [ADDONS.AI]: Object.freeze(['ai.compliance', 'ai.auditor']),
 });
 
 const ACTIVE_SUBSCRIPTION_STATUSES = new Set(['active', 'trialing', 'past_due']);
@@ -54,8 +63,8 @@ const CAPABILITIES = Object.freeze([
   capability('reporting.scheduled', 'Reportes programados avanzados', 'report_studio', 'report_studio_core', CLASSIFICATIONS.GRC_ADVANCED, 'reports.schedule', ['/reportes/studio'], ['/api/report-schedules']),
   capability('reports.premium', 'Premium reports y ZIP/PDF ejecutivo', 'premium_reports', 'premium_reports_core', CLASSIFICATIONS.GRC_ADVANCED, 'grc.export.generate', ['/reportes/studio'], ['/api/reports']),
   capability('workpapers.audit', 'Papeles de trabajo avanzados de auditoria', 'audit_workpapers', 'audit_workpapers_core', CLASSIFICATIONS.GRC_ADVANCED, 'commercial.workpaper.read', ['/auditorias/ia'], ['/api/audit-preparation']),
-  capability('ai.compliance', 'IA Compliance avanzada', 'ai_compliance', 'ai_compliance_core', CLASSIFICATIONS.GRC_ADVANCED, 'ai_compliance.read', ['/ia', '/ia-compliance', '/ia-compliance/sugerencias'], ['/api/ai-compliance']),
-  capability('ai.auditor', 'IA Auditor avanzada', 'ai_compliance', 'ai_auditor_core', CLASSIFICATIONS.GRC_ADVANCED, 'audit.review', ['/ia-auditor', '/auditorias/ia'], ['/api/ai-auditor']),
+  capability('ai.compliance', 'IA Compliance transversal', 'ai_compliance', 'ai_compliance_core', CLASSIFICATIONS.AI_ADDON, 'ai_compliance.read', ['/ia', '/ia-compliance', '/ia-compliance/sugerencias'], ['/api/ai-compliance']),
+  capability('ai.auditor', 'IA Auditor transversal', 'ai_compliance', 'ai_auditor_core', CLASSIFICATIONS.AI_ADDON, 'audit.review', ['/ia-auditor', '/auditorias/ia'], ['/api/ai-auditor']),
   capability('metrics.indicators.read', 'Indicadores oficiales avanzados', 'metrics_bi', 'metrics_bi_core', CLASSIFICATIONS.GRC_ADVANCED, 'metrics.read', ['/metricas'], ['/api/metrics']),
   capability('metrics.indicators.technical', 'Detalle tecnico de indicadores', 'metrics_bi', 'metrics_bi_core', CLASSIFICATIONS.GRC_ADVANCED, 'data.lineage.read', ['/metricas/[id]'], ['/api/metrics']),
   capability('metrics.methodology.manage', 'Administrar metodologia de indicadores', 'metrics_bi', 'metrics_bi_core', CLASSIFICATIONS.GRC_ADVANCED, 'metrics.manage', ['/metricas/constructor'], ['/api/metrics']),
@@ -88,6 +97,7 @@ function capability(key, functional, moduleKey, featureKey, classification, perm
     iso: classification === CLASSIFICATIONS.ISO_ONLY,
     iso_operational_risk: [CLASSIFICATIONS.ISO_ONLY, CLASSIFICATIONS.OPERATIONAL_RISK_EXTENSION].includes(classification),
     grc: [CLASSIFICATIONS.ISO_ONLY, CLASSIFICATIONS.OPERATIONAL_RISK_EXTENSION, CLASSIFICATIONS.GRC_ADVANCED].includes(classification),
+    addon_key: classification === CLASSIFICATIONS.AI_ADDON ? ADDONS.AI : null,
   });
 }
 
@@ -134,6 +144,17 @@ function capabilitiesForPlan(planKey) {
   return CAPABILITIES.filter((row) => planAllowsCapability(plan, row.capability_key));
 }
 
+function capabilitiesForAddon(addonKey) {
+  const key = normalizeKey(addonKey);
+  const capabilityKeys = new Set(ADDON_CAPABILITIES[key] || []);
+  return CAPABILITIES.filter((row) => capabilityKeys.has(row.capability_key));
+}
+
+function addonForCapability(capabilityKey) {
+  const key = normalizeKey(capabilityKey);
+  return Object.entries(ADDON_CAPABILITIES).find(([, capabilities]) => capabilities.includes(key))?.[0] || null;
+}
+
 function classifyCapability(capabilityKey) {
   const key = normalizeKey(capabilityKey);
   return (
@@ -155,7 +176,7 @@ function evaluatePlanCapabilityAccess({
   const key = normalizeKey(capabilityKey);
   const row = classifyCapability(key);
 
-  if (!row || !row.grc) {
+  if (!row || (!row.grc && !row.addon_key)) {
     return deny(key, 'CAPABILITY_NOT_COMMERCIAL');
   }
   if (!ACTIVE_TENANT_STATUSES.has(normalizeKey(tenantStatus))) {
@@ -163,6 +184,9 @@ function evaluatePlanCapabilityAccess({
   }
   if (!ACTIVE_SUBSCRIPTION_STATUSES.has(normalizeKey(subscriptionStatus))) {
     return deny(key, 'SUBSCRIPTION_INACTIVE');
+  }
+  if (row.addon_key) {
+    return deny(key, 'ADDON_REQUIRED');
   }
   if (!planAllowsCapability(planKey, key)) {
     return deny(key, 'CAPABILITY_NOT_INCLUDED_IN_PLAN');
@@ -206,11 +230,15 @@ function classificationSummary() {
 module.exports = {
   PLAN_KEYS,
   CLASSIFICATIONS,
+  ADDONS,
+  ADDON_CAPABILITIES,
   COMMERCIAL_PLAN_CAPABILITIES: CAPABILITIES,
   INTERNAL_ROUTE_CAPABILITIES,
   normalizePlanKey,
   planAllowsCapability,
   capabilitiesForPlan,
+  capabilitiesForAddon,
+  addonForCapability,
   classifyCapability,
   evaluatePlanCapabilityAccess,
   classificationSummary,

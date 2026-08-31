@@ -1,6 +1,6 @@
 # CURRENT_STATE — TCDX ISO SaaS V4
 
-Actualizado: 2026-08-28
+Actualizado: 2026-08-31
 Repositorio: `Tecdex-SpA/tcdx-iso-saas-v4`
 Remote/base `main` verificado para F6.14-A: `e6b431df521300119efaf9194d3ff4d8e56d7004`
 Fuente: repositorio `main` + handoffs runtime cerrados + evidencia runtime validada por el responsable del proyecto + cierre runtime F6.11-A + cierre runtime F6.11-B + cierre runtime F6.12-A + cierre runtime F6.13-A + cierre local UI-04 + cierre local UI-07.
@@ -128,13 +128,14 @@ El usuario realiza CI/merge/deploy y decide si un fallo requiere un work package
 
 ## Próxima acción
 
-1. UI-09 queda listo para revision humana sobre `artifacts/ui09-responsive-accessibility/`.
+1. AI-ADDON-01 + COMMERCIAL-UI-01 queda listo para revision humana local: push/PR/CI/merge/deploy/migracion/runtime validation son responsabilidad del usuario.
 2. Usuario mantiene push/PR/CI/merge/deploy/manual runtime validation si corresponde.
 3. No continuar al siguiente bloque desde este cierre.
 4. Mantener cerrados PUI-01..PUI-09, F6.8-01/F6.8-02/F6.8-03, 6.9-01..6.9-03, 6.10-01..6.10-05, F6.11-A/B, F6.12-A, F6.13-A, F6.14-A, UI-02, UI-04, UI-05 material, UI-06, UI-07 y UI-09 salvo evidencia objetiva nueva.
 5. RBAC-01 + BRAND-01 está en `main@31ce8ffa95eede2d9986692dcc1c7eed18acac88`; RBAC-01 ya fue desplegado y su migración productiva ya fue aplicada por el responsable del proyecto.
 6. RBAC-02 ya fue desplegado y la migración productiva `20260827_rbac02_commercial_gating_normalization` fue aplicada por el responsable del proyecto según baseline RBAC-03 del 2026-08-28.
 7. RBAC-03 fue reevaluado con nuevo hecho confirmado: Admin Credex recuperó Dashboard tras refrescar contrato desde superadmin. `RBAC03_NOT_REQUIRED` para reconciliación de roles/permisos; el fix local queda acotado a sincronización automática contrato comercial legacy -> `tenant_subscriptions` y cache/context invalidation. Producción no fue modificada por Codex.
+8. AI-ADDON-01 + COMMERCIAL-UI-01 quedó `READY_FOR_HUMAN_REVIEW` local sobre `main@6dc752b` con working tree dirty esperado y sin commit/push/deploy/migracion productiva por Codex. La migración histórica `20260828_commercial_standard_plan_matrix.sql` quedó sin diff y su checksum histórico PASS; la evolución forward-only vive en `20260831_ai_addon_commercial_visibility.sql` con runner `scripts/ai-addon/apply-ai-addon-migration.js`. IA pasa a add-on transversal: ISO, ISO+Riesgo y GRC pueden existir con o sin IA; GRC base ya no concede IA efectiva sin add-on activo. Validación local PASS: backend focal completo, frontend lint/typecheck/contratos comerciales, route matrix 97/97/0, build y `bash -n scripts/deploy-vms.sh`. Producción no fue modificada.
 
 ## RBAC-03 Effective Authorization
 
@@ -220,5 +221,6 @@ Cambios RBAC-03:
 - `docs/codex/handoffs/UI-09.md`
 - `docs/codex/handoffs/RBAC-01-BRAND-01.md`
 - `docs/codex/handoffs/RBAC-02-COMMERCIAL-GATING.md`
+- `docs/codex/handoffs/AI-ADDON-01-COMMERCIAL-UI-01.md`
 - `docs/codex/PHASE6_EXPANDED_CLOSURE.md`
 - `docs/architecture/grc_relationship_inventory.md`

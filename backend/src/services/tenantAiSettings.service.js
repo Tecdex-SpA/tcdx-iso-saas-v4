@@ -1,6 +1,7 @@
 'use strict';
 
 const pool = require('../config/db');
+const { resolveTenantEntitlements } = require('./commercial/entitlementResolver.service');
 
 const DEFAULT_FEATURES = Object.freeze({
   company_profile_analysis: true,
@@ -109,8 +110,40 @@ function featureKey(feature) {
   return aliases[key] || key || 'suggestions';
 }
 
+function capabilityForFeature(feature) {
+  const key = featureKey(feature);
+  if (key === 'auditor') return 'ai.auditor';
+  return 'ai.compliance';
+}
+
+async function getTenantAiCommercialEntitlement(tenantId, feature) {
+  if (!tenantId) {
+    return {
+      enabled: false,
+      capability_key: capabilityForFeature(feature),
+      reason_code: 'TENANT_REQUIRED',
+    };
+  }
+
+  const capabilityKey = capabilityForFeature(feature);
+  const entitlements = await resolveTenantEntitlements({ tenantId });
+  const decision = entitlements.capabilities?.[capabilityKey] || null;
+  const enabled = decision?.enabled === true && decision.module_active !== false;
+
+  return {
+    ...(decision || {}),
+    enabled,
+    capability_key: capabilityKey,
+    reason_code: enabled ? (decision?.reason_code || 'ADDON_ENTITLED') : (decision?.reason_code || 'AI_ADDON_NOT_CONTRACTED'),
+    addons: entitlements.addons || [],
+  };
+}
+
 async function isTenantAiFeatureEnabled(tenantId, feature) {
-  const settings = await getTenantAiSettings(tenantId);
+  const [settings, commercial] = await Promise.all([
+    getTenantAiSettings(tenantId),
+    getTenantAiCommercialEntitlement(tenantId, feature),
+  ]);
   const key = featureKey(feature);
   const quotaExceeded =
     settings.ai_monthly_quota !== null &&
@@ -123,14 +156,19 @@ async function isTenantAiFeatureEnabled(tenantId, feature) {
     key === 'report_enrichment' ? settings.ai_report_enabled !== false :
     key === 'auditor' ? settings.ai_auditor_enabled !== false :
     featureEnabled;
-  const enabled = planEnabled && specificEnabled && !quotaExceeded;
+  const commercialEnabled = commercial.enabled === true;
+  const enabled = commercialEnabled && planEnabled && specificEnabled && !quotaExceeded;
   return {
     enabled,
     feature: key,
+    capability_key: commercial.capability_key,
+    commercial,
     settings,
     reason: enabled
       ? 'ai_enabled'
-      : (quotaExceeded ? 'ai_quota_exceeded' : (planEnabled ? 'ai_feature_disabled' : 'ai_disabled_by_plan')),
+      : (!commercialEnabled
+        ? (commercial.reason_code || 'ai_addon_not_contracted')
+        : (quotaExceeded ? 'ai_quota_exceeded' : (planEnabled ? 'ai_feature_disabled' : 'ai_disabled_by_plan'))),
   };
 }
 
@@ -201,6 +239,7 @@ module.exports = {
   DEFAULT_FEATURES,
   DISABLED_FEATURES,
   getTenantAiSettings,
+  getTenantAiCommercialEntitlement,
   isTenantAiFeatureEnabled,
   buildAiDisabledTrace,
   normalizeAiSettingsPayload,

@@ -18,6 +18,16 @@ const state = {
   coreModuleVisible: false,
   events: [],
   insertedSubscriptions: 0,
+  sourceSubscriptionAddons: [
+    {
+      addon_key: 'ai',
+      status: 'active',
+      started_at: '2026-08-31T00:00:00.000Z',
+      ended_at: null,
+      created_by: userId,
+    },
+  ],
+  copiedAddonInserts: [],
 };
 
 function rows(rows) {
@@ -90,6 +100,7 @@ async function query(sql, params = []) {
   if (/SELECT \* FROM v_commercial_tenant_capabilities WHERE tenant_id = \$1::uuid/i.test(text)) return rows([
     { tenant_id: tenantId, capability_key: 'tprm.suppliers', enabled: true, source: 'plan', module_key: 'tprm', required_permission: null, read_only: false, dependencies: [] },
   ]);
+  if (/FROM v_commercial_tenant_subscription vts JOIN tenant_subscription_addons tsa ON tsa\.tenant_subscription_id = vts\.id/i.test(text)) return rows([]);
   if (/SELECT \* FROM tenant_usage_limits WHERE tenant_id = \$1::uuid AND status = 'active'/i.test(text)) return rows([
     { tenant_id: tenantId, resource_key: 'active_users', limit_value: 25, warning_threshold: 0.8, enforcement: 'block' },
   ]);
@@ -126,6 +137,20 @@ async function query(sql, params = []) {
     state.insertedSubscriptions += 1;
     state.subscription = { id: nextSubscriptionId, tenant_id: params[0], plan_version_id: params[1], plan_key: params[2], status: 'active', metadata: JSON.parse(params[5] || '{}') };
     return rows([state.subscription]);
+  }
+  if (/FROM tenant_subscription_addons/i.test(text) && /FOR UPDATE/i.test(text)) {
+    return rows(state.sourceSubscriptionAddons);
+  }
+  if (/INSERT INTO tenant_subscription_addons/i.test(text)) {
+    const copied = {
+      tenant_subscription_id: params[0],
+      addon_key: params[1],
+      status: params[2],
+      started_at: params[3],
+      ended_at: params[4],
+    };
+    state.copiedAddonInserts.push(copied);
+    return rows([copied]);
   }
   if (/INSERT INTO commercial_events/i.test(text)) {
     const afterState = JSON.parse(params[6] || 'null');
@@ -282,7 +307,9 @@ async function run() {
   });
   assert.strictEqual(firstChange.replayed, false);
   assert.strictEqual(firstChange.subscription.plan_key, 'enterprise');
+  assert.deepStrictEqual(firstChange.copied_addons.map((addon) => addon.addon_key), ['ai']);
   assert.strictEqual(state.insertedSubscriptions, 1);
+  assert.strictEqual(state.copiedAddonInserts.length, 1);
   assert.strictEqual(state.events.length, 1);
 
   const secondChange = await changePlan({

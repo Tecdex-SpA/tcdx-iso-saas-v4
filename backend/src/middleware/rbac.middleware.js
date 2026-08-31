@@ -143,6 +143,12 @@ const API_RULES = [
     roles: COMMERCIAL_ADMIN_MANAGE_ROLES,
   },
   {
+    method: 'PUT',
+    pattern: /^\/api\/admin-saas\/tenants\/[^/]+\/addons\/[^/]+$/,
+    permission: 'commercial.subscription.manage',
+    roles: COMMERCIAL_ADMIN_MANAGE_ROLES,
+  },
+  {
     method: 'POST',
     pattern: /^\/api\/admin-saas\/tenants\/[^/]+\/(change-preview|change-plan|trials|overrides)$/,
     permission: 'commercial.subscription.manage',

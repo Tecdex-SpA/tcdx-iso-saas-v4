@@ -1,6 +1,6 @@
 # Standard Commercial Plan Model
 
-Status: `COMMERCIAL_PLAN_MODEL_ADJUSTED` local; human review and production migration pending.
+Status: `COMMERCIAL_PLAN_MODEL_ADJUSTED` local; AI add-on forward correction ready for human review; human review and production migration pending.
 
 ## Root Cause
 
@@ -52,7 +52,8 @@ They are not shown as standard options for new Admin SaaS contracts.
 ```text
 ISO = ONLY_ISO
 ISO_RISK = ISO + OPERATIONAL_RISK_ONLY
-GRC = ALL_TENANT_COMMERCIAL_CAPABILITIES
+GRC = ALL_NON_AI_TENANT_COMMERCIAL_CAPABILITIES
+AI = TRANSVERSAL_ADDON
 ```
 
 The plan matrix is capability-based. Modules are derived from the capabilities included in each plan; a module is not a sufficient commercial proxy when it mixes domains.
@@ -63,14 +64,15 @@ The plan matrix is capability-based. Modules are derived from the capabilities i
 |---|---|---|
 | ISO | `ISO_ONLY` | `OPERATIONAL_RISK_EXTENSION`, `GRC_ADVANCED`, internal |
 | ISO + Riesgo Operativo | `ISO_ONLY`, `OPERATIONAL_RISK_EXTENSION` | `GRC_ADVANCED`, internal |
-| GRC | `ISO_ONLY`, `OPERATIONAL_RISK_EXTENSION`, `GRC_ADVANCED` | internal |
+| GRC | `ISO_ONLY`, `OPERATIONAL_RISK_EXTENSION`, `GRC_ADVANCED` except AI | AI add-on, internal |
 
 Current local counts:
 
 - `ISO_ONLY`: 7 capabilities.
 - `OPERATIONAL_RISK_EXTENSION`: 5 capabilities.
 - `GRC_ADVANCED`: 33 capabilities.
-- Tenant commercial total for GRC: 45 capabilities.
+- Tenant commercial total for historical GRC matrix: 45 capabilities.
+- Effective GRC base after AI add-on correction: all non-AI GRC capabilities; `ai.compliance` and `ai.auditor` require active add-on `ai`.
 - Route matrix: `routes=97`, `mapped=97`, `missing=0`.
 
 ## Capability Authority
@@ -79,7 +81,9 @@ Primary code authority:
 
 - `backend/src/services/commercial/commercialPlanMatrix.service.js`
 - `database/migrations/20260828_commercial_standard_plan_matrix.sql`
+- `database/migrations/20260831_ai_addon_commercial_visibility.sql`
 - `backend/src/services/commercial/commercialPlanMatrix.contract.test.js`
+- `backend/src/services/commercial/aiAddonCommercial.contract.test.js`
 - `artifacts/rbac02-route-audit/route_access_matrix.csv`
 
 The migration materializes missing ISO semantic capabilities when absent:
@@ -96,4 +100,4 @@ It does not touch users, roles, role permissions, tenant contracts, tenant rows,
 
 Admin SaaS contract save, service suspension and service reactivation synchronize the latest `tenant_contracts` row into `tenant_subscriptions` in the same transaction. The superadmin refresh button remains a manual reconciliation path, but it is not required for normal contract changes.
 
-Plan changes through Phase 4 commercial administration already replace the active subscription idempotently and preserve historical data by marking previous subscriptions `replaced`.
+Plan changes through Phase 4 commercial administration replace the active subscription idempotently, preserve historical data by marking previous subscriptions `replaced`, and preserve open add-ons (`active` or `suspended`, not expired/cancelled) on the replacement subscription.

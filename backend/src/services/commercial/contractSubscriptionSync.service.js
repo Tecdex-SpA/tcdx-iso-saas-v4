@@ -50,6 +50,67 @@ async function getPublishedPlanVersion(client, planKey) {
   return result.rows[0] || null;
 }
 
+async function copyOpenSubscriptionAddons(client, { fromSubscriptionId, toSubscriptionId, actorUserId = null } = {}) {
+  if (!fromSubscriptionId || !toSubscriptionId || String(fromSubscriptionId) === String(toSubscriptionId)) {
+    return [];
+  }
+
+  const currentAddons = await client.query(
+    `
+    SELECT addon_key, status, started_at, ended_at, created_by
+    FROM tenant_subscription_addons
+    WHERE tenant_subscription_id = $1::uuid
+      AND status IN ('active', 'suspended')
+      AND (ended_at IS NULL OR ended_at > now())
+    ORDER BY addon_key
+    FOR UPDATE
+    `,
+    [fromSubscriptionId]
+  );
+
+  const copied = [];
+  for (const addon of currentAddons.rows) {
+    const result = await client.query(
+      `
+      INSERT INTO tenant_subscription_addons (
+        tenant_subscription_id,
+        addon_key,
+        status,
+        started_at,
+        ended_at,
+        created_by
+      )
+      VALUES (
+        $1::uuid,
+        $2::text,
+        $3::text,
+        COALESCE($4::timestamptz, now()),
+        $5::timestamptz,
+        $6::uuid
+      )
+      ON CONFLICT (tenant_subscription_id, addon_key)
+      DO UPDATE SET
+        status = EXCLUDED.status,
+        started_at = LEAST(tenant_subscription_addons.started_at, EXCLUDED.started_at),
+        ended_at = EXCLUDED.ended_at,
+        updated_at = now()
+      RETURNING *
+      `,
+      [
+        toSubscriptionId,
+        addon.addon_key,
+        addon.status,
+        addon.started_at || null,
+        addon.ended_at || null,
+        actorUserId || addon.created_by || null,
+      ]
+    );
+    copied.push(result.rows[0]);
+  }
+
+  return copied;
+}
+
 async function syncTenantContractSubscription(client, { tenantId, contract, actorUserId = null, requestId = null } = {}) {
   if (!tenantId || !contract) {
     return { synced: false, reason: 'missing_contract_context' };
@@ -200,14 +261,24 @@ async function syncTenantContractSubscription(client, { tenantId, contract, acto
     ]
   );
 
+  const copiedAddons = current
+    ? await copyOpenSubscriptionAddons(client, {
+        fromSubscriptionId: current.id,
+        toSubscriptionId: inserted.rows[0]?.id,
+        actorUserId,
+      })
+    : [];
+
   return {
     synced: true,
     action: current ? 'replaced_and_inserted_subscription' : 'inserted_subscription',
     subscription: inserted.rows[0] || null,
+    copied_addons: copiedAddons,
   };
 }
 
 module.exports = {
+  copyOpenSubscriptionAddons,
   normalizeSubscriptionStatus,
   syncTenantContractSubscription,
 };

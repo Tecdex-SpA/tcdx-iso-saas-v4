@@ -6,6 +6,13 @@ const {
   decorateCommercialPlan,
   buildStandardCommercialPlans,
 } = require('./commercialPlanModel.service');
+const {
+  ADDONS,
+  capabilitiesForAddon,
+} = require('./commercialPlanMatrix.service');
+const {
+  copyOpenSubscriptionAddons,
+} = require('./contractSubscriptionSync.service');
 
 class CommercialError extends Error {
   constructor(code, message, status = 400, details = {}) {
@@ -188,9 +195,103 @@ async function changePlan({ tenantId, body, user, requestId }) {
     const before = await client.query("SELECT * FROM tenant_subscriptions WHERE tenant_id = $1::uuid AND status IN ('active', 'trialing', 'past_due') FOR UPDATE", [tenantId]);
     await client.query("UPDATE tenant_subscriptions SET status = 'replaced', ended_at = COALESCE($2::timestamptz, now()), updated_at = now() WHERE tenant_id = $1::uuid AND status IN ('active', 'trialing', 'past_due')", [tenantId, body?.effective_at || null]);
     const inserted = await client.query(`INSERT INTO tenant_subscriptions (tenant_id, plan_version_id, plan_key, status, started_at, created_by, metadata) VALUES ($1::uuid,$2::uuid,$3,'active',COALESCE($4::timestamptz, now()),$5::uuid,$6::jsonb) RETURNING *`, [tenantId, version.rows[0].id, preview.target_plan_key, body?.effective_at || null, actor, asJson({ change_preview: preview })]);
+    const copiedAddons = before.rows.length === 1
+      ? await copyOpenSubscriptionAddons(client, {
+          fromSubscriptionId: before.rows[0].id,
+          toSubscriptionId: inserted.rows[0].id,
+          actorUserId: actor,
+        })
+      : [];
     await recordCommercialEvent(client, { tenantId, actorUserId: actor, eventType: 'subscription.change_plan', entityType: 'tenant_subscription', entityId: inserted.rows[0].id, beforeState: before.rows, afterState: inserted.rows[0], reason: body?.reason || 'commercial plan change', requestId: idempotencyKey });
     await client.query('COMMIT');
-    return { replayed: false, subscription: inserted.rows[0], preview };
+    return { replayed: false, subscription: inserted.rows[0], copied_addons: copiedAddons, preview };
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => null);
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+async function setTenantAddonStatus({ tenantId, addonKey = ADDONS.AI, status = 'active', user, requestId }) {
+  const key = normalizeKey(addonKey);
+  const nextStatus = normalizeKey(status || 'active');
+  const allowedStatuses = new Set(['active', 'suspended', 'cancelled']);
+  if (!key) throw new CommercialError('ADDON_KEY_REQUIRED', 'addon_key es obligatorio.', 422);
+  if (!allowedStatuses.has(nextStatus)) {
+    throw new CommercialError('ADDON_STATUS_INVALID', 'Estado de add-on inválido.', 422, {
+      allowed_statuses: [...allowedStatuses],
+    });
+  }
+  if (capabilitiesForAddon(key).length === 0) {
+    throw new CommercialError('ADDON_NOT_SUPPORTED', 'Add-on comercial no soportado.', 422);
+  }
+
+  const actor = getUserId(user);
+  const idempotencyKey = String(requestId || `${tenantId}-${key}-${nextStatus}`).trim();
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await assertTenantExists(client, tenantId);
+    const addon = await client.query(
+      `SELECT * FROM commercial_addons WHERE addon_key = $1 AND status = 'active' LIMIT 1`,
+      [key]
+    );
+    if (addon.rowCount !== 1) {
+      throw new CommercialError('ADDON_NOT_PUBLISHED', 'Add-on comercial no publicado.', 409);
+    }
+
+    const subscription = await client.query(
+      `SELECT * FROM v_commercial_tenant_subscription WHERE tenant_id = $1::uuid LIMIT 1`,
+      [tenantId]
+    );
+    if (subscription.rowCount !== 1 || !['active', 'trialing', 'past_due'].includes(normalizeKey(subscription.rows[0].status))) {
+      throw new CommercialError('SUBSCRIPTION_ACTIVE_REQUIRED', 'El tenant requiere una suscripción activa para contratar add-ons.', 409);
+    }
+
+    const before = await client.query(
+      `SELECT * FROM tenant_subscription_addons WHERE tenant_subscription_id = $1::uuid AND addon_key = $2 LIMIT 1 FOR UPDATE`,
+      [subscription.rows[0].id, key]
+    );
+
+    const endedAt = nextStatus === 'cancelled' ? new Date().toISOString() : null;
+    const result = await client.query(
+      `
+      INSERT INTO tenant_subscription_addons (
+        tenant_subscription_id,
+        addon_key,
+        status,
+        started_at,
+        ended_at,
+        created_by
+      )
+      VALUES ($1::uuid, $2, $3, now(), $4::timestamptz, $5::uuid)
+      ON CONFLICT (tenant_subscription_id, addon_key)
+      DO UPDATE SET
+        status = EXCLUDED.status,
+        ended_at = EXCLUDED.ended_at,
+        updated_at = now()
+      RETURNING *
+      `,
+      [subscription.rows[0].id, key, nextStatus, endedAt, actor]
+    );
+
+    await recordCommercialEvent(client, {
+      tenantId,
+      actorUserId: actor,
+      eventType: `subscription.addon.${nextStatus}`,
+      entityType: 'tenant_subscription_addon',
+      entityId: result.rows[0].id,
+      beforeState: before.rows[0] || null,
+      afterState: result.rows[0],
+      reason: `commercial addon ${key} ${nextStatus}`,
+      requestId: idempotencyKey,
+    });
+    await client.query('COMMIT');
+    return {
+      addon: result.rows[0],
+      capabilities: capabilitiesForAddon(key).map((capability) => capability.capability_key),
+    };
   } catch (error) {
     await client.query('ROLLBACK').catch(() => null);
     throw error;
@@ -308,6 +409,7 @@ module.exports = {
   getTenantCommercialState,
   previewPlanChange,
   changePlan,
+  setTenantAddonStatus,
   listTenantUsage,
   upsertTenantLimit,
   startTrial,

@@ -115,7 +115,7 @@ assert(
 
 assert(
   /getMvpRouteCapability/.test(appLayout) &&
-    /hasCapability\(requiredCapability\)/.test(appLayout),
+    /canShowCapability\(requiredCapability\)/.test(appLayout),
   'AppLayout must enforce shared commercial capabilities for direct URL access.'
 );
 

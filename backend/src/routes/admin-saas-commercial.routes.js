@@ -105,6 +105,13 @@ router.get('/tenants/:tenantId/usage', route((req) => tenantRoute(req, () => ser
 router.get('/tenants/:tenantId/health', route((req) => tenantRoute(req, () => service.calculateTenantHealth(req.params.tenantId))));
 router.post('/tenants/:tenantId/change-preview', route((req) => tenantRoute(req, () => service.previewPlanChange({ tenantId: req.params.tenantId, body: req.body }))));
 router.post('/tenants/:tenantId/change-plan', route((req) => tenantRoute(req, () => service.changePlan({ tenantId: req.params.tenantId, body: req.body, user: req.user, requestId: req.headers['idempotency-key'] || req.requestId }))));
+router.put('/tenants/:tenantId/addons/:addonKey', route((req) => tenantRoute(req, () => service.setTenantAddonStatus({
+  tenantId: req.params.tenantId,
+  addonKey: req.params.addonKey,
+  status: req.body?.status || (req.body?.contracted === false ? 'cancelled' : 'active'),
+  user: req.user,
+  requestId: req.headers['idempotency-key'] || req.requestId,
+}))));
 router.post('/tenants/:tenantId/trials', route((req) => tenantRoute(req, () => service.startTrial({ tenantId: req.params.tenantId, body: req.body, user: req.user, requestId: req.requestId }))));
 router.post('/tenants/:tenantId/overrides', route((req) => tenantRoute(req, () => service.applyOverride({ tenantId: req.params.tenantId, body: req.body, user: req.user, requestId: req.requestId }))));
 router.post('/tenants/:tenantId/packs/:packKey/preview', route((req) => tenantRoute(req, () => service.previewPackInstall({ tenantId: req.params.tenantId, packKey: req.params.packKey }))));

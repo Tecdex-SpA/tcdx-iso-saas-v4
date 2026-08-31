@@ -80,7 +80,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     loading: entitlementsLoading,
     aiEnabled,
     canUseAiFeature,
-    hasCapability,
+    canShowCapability,
   } = useTenantEntitlements();
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -428,7 +428,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
             return;
           }
 
-          if (!hasCapability(requiredCapability)) {
+          if (!canShowCapability(requiredCapability)) {
             if (!cancelled) {
               setAccessDeniedMessage(
                 t('app.capabilityDisabled')
@@ -524,7 +524,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     getModuleAccess,
     getPermissions,
     getRequiredModuleForPath,
-    hasCapability,
+    canShowCapability,
     isRoute,
     pathname,
     routeRules,

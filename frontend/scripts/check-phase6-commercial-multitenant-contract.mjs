@@ -84,7 +84,7 @@ assert(
 
 assert(
   appLayout.includes('moduleIsEnabled') &&
-    appLayout.includes('hasCapability') &&
+    appLayout.includes('canShowCapability') &&
     appLayout.includes('fetchAccessBootstrap') &&
     appLayout.includes('tenant_id') &&
     appLayout.includes('tenant_name') &&

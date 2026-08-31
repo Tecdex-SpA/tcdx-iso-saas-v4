@@ -1,6 +1,6 @@
 # Commercial Plan Capability Matrix
 
-Status: `COMMERCIAL_PLAN_MATRIX_APPROVED_LOCAL`
+Status: `COMMERCIAL_PLAN_MATRIX_APPROVED_LOCAL`; `AI_ADDON_FORWARD_CORRECTION_READY`
 
 Production modified: `NO`
 
@@ -9,7 +9,8 @@ Production modified: `NO`
 ```text
 ISO = ONLY_ISO
 ISO_RISK = ISO + OPERATIONAL_RISK_ONLY
-GRC = ALL_TENANT_COMMERCIAL_CAPABILITIES
+GRC = ALL_NON_AI_TENANT_COMMERCIAL_CAPABILITIES
+AI = TRANSVERSAL_ADDON
 ```
 
 Effective authorization remains:
@@ -18,6 +19,7 @@ Effective authorization remains:
 tenant active
 AND subscription active
 AND plan enables capability
+AND addon entitled when required
 AND module active
 AND RBAC permission
 AND scope
@@ -60,8 +62,8 @@ AND scope
 | `reporting.scheduled` | GRC_ADVANCED | NO | NO | YES | `report_studio` | `reports.schedule` |
 | `reports.premium` | GRC_ADVANCED | NO | NO | YES | `premium_reports` | `grc.export.generate` |
 | `workpapers.audit` | GRC_ADVANCED | NO | NO | YES | `audit_workpapers` | `commercial.workpaper.read` |
-| `ai.compliance` | GRC_ADVANCED | NO | NO | YES | `ai_compliance` | `ai_compliance.read` |
-| `ai.auditor` | GRC_ADVANCED | NO | NO | YES | `ai_compliance` | `audit.review` |
+| `ai.compliance` | AI_ADDON | ADDON | ADDON | ADDON | `ai_compliance` | `ai_compliance.read` |
+| `ai.auditor` | AI_ADDON | ADDON | ADDON | ADDON | `ai_compliance` | `audit.review` |
 | `metrics.indicators.read` | GRC_ADVANCED | NO | NO | YES | `metrics_bi` | `metrics.read` |
 | `metrics.indicators.technical` | GRC_ADVANCED | NO | NO | YES | `metrics_bi` | `data.lineage.read` |
 | `metrics.methodology.manage` | GRC_ADVANCED | NO | NO | YES | `metrics_bi` | `metrics.manage` |
@@ -147,11 +149,16 @@ missing=0
 
 Administrative platform, dealer and profile routes are mapped for authorization evidence, but they are not assigned as common tenant commercial modules.
 
+## AI Add-on Correction
+
+The historical `20260828_commercial_standard_plan_matrix.sql` migration is unchanged. Forward correction `20260831_ai_addon_commercial_visibility.sql` removes `ai_compliance` from published standard plan modules and grants `ai.compliance`/`ai.auditor` only through active add-on `ai`.
+
 ## Result
 
 ```text
 OVEREXPOSED=0
 UNDEREXPOSED=0
 MISCLASSIFIED=0
-GRC_COVERAGE=45/45 tenant commercial capabilities
+GRC_BASE_AI_ENTITLEMENT=0
+AI_ADDON_AVAILABLE_FOR_STANDARD_PLANS=YES
 ```

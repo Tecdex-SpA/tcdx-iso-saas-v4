@@ -68,7 +68,12 @@ function isPlatformRole(role) {
   );
 }
 
-function buildAiEntitlements(settings, { platform = false } = {}) {
+function capabilityEnabled(commercial, capabilityKey) {
+  const decision = commercial?.capabilities?.[capabilityKey];
+  return decision?.enabled === true && decision.module_active !== false;
+}
+
+function buildAiEntitlements(settings, { platform = false, commercial = null } = {}) {
   if (platform) {
     return {
       enabled: true,
@@ -88,16 +93,22 @@ function buildAiEntitlements(settings, { platform = false } = {}) {
     ...DEFAULT_FEATURES,
     ...(settings?.ai_features_json || {}),
   };
-  const enabled = settings?.ai_enabled === true && settings?.ai_plan !== 'none';
+  const complianceEntitled = capabilityEnabled(commercial, 'ai.compliance');
+  const auditorEntitled = capabilityEnabled(commercial, 'ai.auditor');
+  const baseConfigEnabled = settings?.ai_enabled === true && settings?.ai_plan !== 'none';
+  const enabled = complianceEntitled && baseConfigEnabled;
+  const auditorEnabled = enabled && auditorEntitled && settings?.ai_auditor_enabled !== false && features.auditor !== false;
 
   return {
     enabled,
     plan: enabled ? (settings?.ai_plan || 'standard') : 'none',
     web_enabled: enabled && settings?.ai_web_enabled !== false && features.web_research !== false,
     report_enabled: enabled && settings?.ai_report_enabled !== false && features.report_enrichment !== false,
-    auditor_enabled: enabled && settings?.ai_auditor_enabled !== false && features.auditor !== false,
+    auditor_enabled: auditorEnabled,
+    addon_key: 'ai',
+    addon_contracted: complianceEntitled,
     features: {
-      auditor: enabled && settings?.ai_auditor_enabled !== false && features.auditor !== false,
+      auditor: auditorEnabled,
       suggestions: enabled && features.suggestions !== false,
       web_research: enabled && settings?.ai_web_enabled !== false && features.web_research !== false,
       report_enrichment: enabled && settings?.ai_report_enabled !== false && features.report_enrichment !== false,
@@ -287,7 +298,7 @@ router.get('/entitlements', auth, async (req, res) => {
       limits: commercial.limits || {},
       usage: commercial.usage || {},
       health: commercial.health || {},
-      ai: buildAiEntitlements(settings, { platform }),
+      ai: buildAiEntitlements(settings, { platform, commercial }),
     });
   } catch (error) {
     if (error instanceof TenantResolutionError) {

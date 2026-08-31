@@ -328,6 +328,7 @@ async function getTenantDetail(tenantId) {
     modulesResult,
     usersResult,
     dealersResult,
+    addonsResult,
   ] = await Promise.all([
     pool.query(
       `
@@ -463,6 +464,26 @@ async function getTenantDetail(tenantId) {
       `,
       [tenantId]
     ),
+
+    pool.query(
+      `
+      SELECT
+        tsa.id,
+        tsa.addon_key,
+        tsa.status,
+        tsa.started_at,
+        tsa.ended_at,
+        ca.display_name
+      FROM v_commercial_tenant_subscription vts
+      JOIN tenant_subscription_addons tsa
+        ON tsa.tenant_subscription_id = vts.id
+      JOIN commercial_addons ca
+        ON ca.addon_key = tsa.addon_key
+      WHERE vts.tenant_id = $1::uuid
+      ORDER BY tsa.addon_key
+      `,
+      [tenantId]
+    ).catch(() => ({ rows: [] })),
   ]);
 
   return {
@@ -473,6 +494,7 @@ async function getTenantDetail(tenantId) {
     modules: modulesResult.rows,
     users: usersResult.rows,
     dealers: dealersResult.rows,
+    addons: addonsResult.rows,
   };
 }
 
@@ -761,6 +783,7 @@ router.get('/tenants', auth, async (req, res) => {
         t.ai_monthly_quota,
         COALESCE(t.ai_quota_used, 0)::int AS ai_quota_used,
         COALESCE(t.ai_features_json, '{}'::jsonb) AS ai_features_json,
+        COALESCE(ai_addon.status, 'not_contracted') AS ai_addon_status,
         t.created_at,
 
         COALESCE(std.active_standards, 0)::int AS active_standards,
@@ -830,6 +853,17 @@ router.get('/tenants', auth, async (req, res) => {
         ORDER BY tc.created_at DESC
         LIMIT 1
       ) contract ON TRUE
+
+      LEFT JOIN LATERAL (
+        SELECT tsa.status
+        FROM v_commercial_tenant_subscription vts
+        JOIN tenant_subscription_addons tsa
+          ON tsa.tenant_subscription_id = vts.id
+         AND tsa.addon_key = 'ai'
+        WHERE vts.tenant_id = t.id
+        ORDER BY tsa.updated_at DESC NULLS LAST, tsa.created_at DESC
+        LIMIT 1
+      ) ai_addon ON TRUE
 
       ${whereSql}
       ORDER BY t.created_at DESC NULLS LAST, t.name ASC

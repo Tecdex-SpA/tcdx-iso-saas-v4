@@ -32,6 +32,7 @@ type EntitlementDecision = {
   dependencies: string[];
   read_only: boolean;
   rbac_allowed: boolean;
+  module_active?: boolean;
 };
 
 type LimitState = {
@@ -48,6 +49,7 @@ type Entitlements = {
   tenant_id: string | null;
   subscription: Record<string, unknown>;
   modules: Array<Record<string, unknown>>;
+  addons?: Array<Record<string, unknown>>;
   capabilities: Record<string, EntitlementDecision>;
   limits: Record<string, LimitState>;
   usage: Record<string, number>;
@@ -139,6 +141,7 @@ function normalizeDecision(key: string, value: unknown): EntitlementDecision {
     dependencies: Array.isArray(row.dependencies) ? row.dependencies.map(String) : [],
     read_only: row.read_only === true,
     rbac_allowed: row.rbac_allowed !== false,
+    module_active: row.module_active !== false,
   };
 }
 
@@ -156,6 +159,7 @@ function normalizeEntitlements(payload: unknown): Entitlements {
     tenant_id: stringOrNull(root.tenant_id),
     subscription: isRecord(root.subscription) ? root.subscription : {},
     modules: Array.isArray(root.modules) ? root.modules.filter(isRecord) : [],
+    addons: Array.isArray(root.addons) ? root.addons.filter(isRecord) : [],
     capabilities: Object.fromEntries(
       Object.entries(rawCapabilities).map(([key, value]) => [key, normalizeDecision(key, value)])
     ),
@@ -289,9 +293,27 @@ export function useTenantEntitlements() {
   const hasCapability = useCallback(
     (capabilityKey: string) => {
       const decision = entitlements.capabilities[capabilityKey];
-      return decision?.enabled === true && decision.rbac_allowed !== false;
+      return decision?.enabled === true && decision.module_active !== false && decision.rbac_allowed !== false;
     },
     [entitlements.capabilities]
+  );
+  const canShowCapability = useCallback(
+    (capabilityKey: string) => {
+      const decision = entitlements.capabilities[capabilityKey];
+      const visible =
+        decision?.enabled === true &&
+        decision.module_active !== false &&
+        decision.rbac_allowed !== false;
+      if (!visible) return false;
+      if (capabilityKey === 'ai.compliance') {
+        return entitlements.ai.enabled === true && entitlements.ai.features.suggestions === true;
+      }
+      if (capabilityKey === 'ai.auditor') {
+        return entitlements.ai.enabled === true && entitlements.ai.features.auditor === true;
+      }
+      return true;
+    },
+    [entitlements.ai.enabled, entitlements.ai.features, entitlements.capabilities]
   );
   const hasModule = useCallback(
     (moduleKey: string) => entitlements.modules.some((module) => module.module_key === moduleKey && module.enabled !== false),
@@ -320,10 +342,11 @@ export function useTenantEntitlements() {
       canUseAiFeature,
       hasModule,
       hasCapability,
+      canShowCapability,
       getLimit,
       getUsage,
       isReadOnly,
     }),
-    [loading, entitlements, canUseAiFeature, hasModule, hasCapability, getLimit, getUsage, isReadOnly]
+    [loading, entitlements, canUseAiFeature, hasModule, hasCapability, canShowCapability, getLimit, getUsage, isReadOnly]
   );
 }

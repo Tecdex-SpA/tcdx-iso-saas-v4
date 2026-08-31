@@ -130,6 +130,7 @@ export const CLIENT_ENTERPRISE_NAV_DOMAINS: EnterpriseNavDomain[] = [
       { href: '/grc', label: 'Análisis GRC', labelKey: 'navigation.destinations.grcAnalysis', feature: 'phase5.read', moduleKey: 'data_governance' },
       { href: '/encuestas', label: 'Encuestas', labelKey: 'navigation.destinations.surveys', feature: 'phase5.read', moduleKey: 'surveys_assessments' },
       { href: '/ia-compliance', label: 'IA Compliance', labelKey: 'navigation.destinations.aiCompliance', feature: 'ai_compliance.read', moduleKey: 'ai_compliance' },
+      { href: '/ia-auditor', label: 'Auditor IA', labelKey: 'navigation.destinations.aiAuditor', feature: 'ai_compliance.read', moduleKey: 'ai_compliance' },
     ],
   },
   {

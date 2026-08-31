@@ -1,7 +1,7 @@
 'use strict';
 
 const assert = require('node:assert/strict');
-const { enforceApiAccess } = require('./rbac.middleware');
+const { enforceApiAccess, _private } = require('./rbac.middleware');
 const {
   listImportDefinitions,
 } = require('../services/imports/importDefinitions');
@@ -92,6 +92,34 @@ const unregistered = authorize({
 assert.equal(unregistered.nextCalled, false);
 assert.equal(unregistered.res.statusCode, 403);
 assert.equal(unregistered.res.payload.error, 'Ruta API sin regla RBAC explícita');
+
+const aiAddonAdminRule = _private.findRule(
+  'PUT',
+  '/api/admin-saas/tenants/bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb/addons/ai'
+);
+assert.equal(aiAddonAdminRule.permission, 'commercial.subscription.manage');
+
+const aiAddonPlatformAdmin = authorize({
+  method: 'PUT',
+  path: '/api/admin-saas/tenants/bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb/addons/ai',
+  role: 'platform_admin',
+});
+assert.equal(aiAddonPlatformAdmin.nextCalled, true, 'platform admin can manage tenant AI addon');
+
+const aiAddonTenantAdminDenied = authorize({
+  method: 'PUT',
+  path: '/api/admin-saas/tenants/bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb/addons/ai',
+  role: 'tenant_admin',
+  requestId: 'req-ai-addon-rbac-deny',
+});
+assert.equal(aiAddonTenantAdminDenied.nextCalled, false, 'tenant admin cannot manage tenant AI addon');
+assert.equal(aiAddonTenantAdminDenied.res.statusCode, 403);
+assert.equal(aiAddonTenantAdminDenied.res.payload.code, 'RBAC_DENIED');
+assert.equal(
+  aiAddonTenantAdminDenied.res.payload.error,
+  'Permiso commercial.subscription.manage requerido'
+);
+assert.equal(aiAddonTenantAdminDenied.res.payload.request_id, 'req-ai-addon-rbac-deny');
 
 const phase5ReadRoutes = [
   '/api/data/domains',

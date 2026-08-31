@@ -5,6 +5,8 @@ const assert = require('node:assert/strict');
 const {
   CLASSIFICATIONS,
   COMMERCIAL_PLAN_CAPABILITIES,
+  ADDON_CAPABILITIES,
+  capabilitiesForAddon,
   INTERNAL_ROUTE_CAPABILITIES,
   capabilitiesForPlan,
   classificationSummary,
@@ -51,13 +53,15 @@ function assertAccessDeniedFor(reasonCode, overrides) {
 const isoOnly = capabilityKeysByClassification(CLASSIFICATIONS.ISO_ONLY);
 const operationalRisk = capabilityKeysByClassification(CLASSIFICATIONS.OPERATIONAL_RISK_EXTENSION);
 const grcAdvanced = capabilityKeysByClassification(CLASSIFICATIONS.GRC_ADVANCED);
-const allCommercial = keys(COMMERCIAL_PLAN_CAPABILITIES);
+const aiAddon = capabilityKeysByClassification(CLASSIFICATIONS.AI_ADDON);
+const allNonAiCommercial = keys(COMMERCIAL_PLAN_CAPABILITIES.filter((row) => row.classification !== CLASSIFICATIONS.AI_ADDON));
 
 assertExactSet(keys(capabilitiesForPlan('pyme')), isoOnly, 'ISO_ACTUAL must equal ISO_EXPECTED');
 assertExactSet(keys(capabilitiesForPlan('iso')), isoOnly, 'ISO alias must equal ISO_EXPECTED');
 assertAllAllowed('pyme', isoOnly, 'ISO');
 assertAllDenied('pyme', operationalRisk, 'ISO');
 assertAllDenied('pyme', grcAdvanced, 'ISO');
+assertAllDenied('pyme', aiAddon, 'ISO');
 
 assertExactSet(
   keys(capabilitiesForPlan('empresa')),
@@ -72,10 +76,14 @@ assertExactSet(
 assertAllAllowed('empresa', isoOnly, 'ISO + Riesgo Operativo');
 assertAllAllowed('empresa', operationalRisk, 'ISO + Riesgo Operativo');
 assertAllDenied('empresa', grcAdvanced, 'ISO + Riesgo Operativo');
+assertAllDenied('empresa', aiAddon, 'ISO + Riesgo Operativo');
 
-assertExactSet(keys(capabilitiesForPlan('enterprise')), allCommercial, 'GRC_ACTUAL must equal all tenant commercial functionality');
-assertExactSet(keys(capabilitiesForPlan('grc')), allCommercial, 'GRC alias must equal all tenant commercial functionality');
-assertAllAllowed('enterprise', allCommercial, 'GRC');
+assertExactSet(keys(capabilitiesForPlan('enterprise')), allNonAiCommercial, 'GRC_ACTUAL must equal all tenant commercial non-AI functionality');
+assertExactSet(keys(capabilitiesForPlan('grc')), allNonAiCommercial, 'GRC alias must equal all tenant commercial non-AI functionality');
+assertAllAllowed('enterprise', allNonAiCommercial, 'GRC');
+assertAllDenied('enterprise', aiAddon, 'GRC without AI add-on');
+
+assertExactSet(keys(capabilitiesForAddon('ai')), ADDON_CAPABILITIES.ai, 'AI add-on must expose canonical AI capabilities');
 
 for (const capability of COMMERCIAL_PLAN_CAPABILITIES) {
   assert.ok(capability.functional_capability, `${capability.capability_key} must describe real functionality`);
@@ -98,6 +106,7 @@ for (const internal of INTERNAL_ROUTE_CAPABILITIES) {
 assert.deepStrictEqual(classificationSummary()[CLASSIFICATIONS.ISO_ONLY].sort(), isoOnly);
 assert.deepStrictEqual(classificationSummary()[CLASSIFICATIONS.OPERATIONAL_RISK_EXTENSION].sort(), operationalRisk);
 assert.deepStrictEqual(classificationSummary()[CLASSIFICATIONS.GRC_ADVANCED].sort(), grcAdvanced);
+assert.deepStrictEqual(classificationSummary()[CLASSIFICATIONS.AI_ADDON].sort(), aiAddon);
 assert.deepStrictEqual(
   classificationSummary()[CLASSIFICATIONS.PLATFORM_INTERNAL].sort(),
   ['core.profile', 'platform.admin', 'tenant.admin'].sort()
@@ -109,13 +118,14 @@ assert.equal(planAllowsCapability('pyme', 'loss.events'), false);
 assert.equal(planAllowsCapability('empresa', 'loss.events'), true);
 assert.equal(planAllowsCapability('empresa', 'assurance.testing'), false);
 assert.equal(planAllowsCapability('empresa', 'reports.premium'), false);
-assert.equal(planAllowsCapability('enterprise', 'ai.auditor'), true);
+assert.equal(planAllowsCapability('enterprise', 'ai.auditor'), false);
 assert.equal(planAllowsCapability('enterprise', 'data.semantic_layer'), true);
 
 assert.equal(evaluatePlanCapabilityAccess({ planKey: 'pyme', capabilityKey: 'iso.compliance' }).enabled, true);
 assert.equal(evaluatePlanCapabilityAccess({ planKey: 'pyme', capabilityKey: 'risk.quantitative' }).reason_code, 'CAPABILITY_NOT_INCLUDED_IN_PLAN');
 assert.equal(evaluatePlanCapabilityAccess({ planKey: 'empresa', capabilityKey: 'reporting.studio' }).reason_code, 'CAPABILITY_NOT_INCLUDED_IN_PLAN');
 assert.equal(evaluatePlanCapabilityAccess({ planKey: 'enterprise', capabilityKey: 'core.profile' }).reason_code, 'CAPABILITY_NOT_COMMERCIAL');
+assert.equal(evaluatePlanCapabilityAccess({ planKey: 'enterprise', capabilityKey: 'ai.compliance' }).reason_code, 'ADDON_REQUIRED');
 
 assertAccessDeniedFor('RBAC_PERMISSION_REQUIRED', { hasPermission: false });
 assertAccessDeniedFor('SCOPE_FORBIDDEN', { scopeAllowed: false });
