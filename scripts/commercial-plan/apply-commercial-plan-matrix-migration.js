@@ -63,12 +63,130 @@ const EXPECTED = Object.freeze({
   }),
 });
 
+const HISTORICAL_AI_ADDON_CLASSIFICATION_EVOLUTION = Object.freeze({
+  'ai.auditor': Object.freeze({
+    historical: CLASSIFICATIONS.GRC_ADVANCED,
+    evolved: CLASSIFICATIONS.AI_ADDON,
+  }),
+  'ai.compliance': Object.freeze({
+    historical: CLASSIFICATIONS.GRC_ADVANCED,
+    evolved: CLASSIFICATIONS.AI_ADDON,
+  }),
+});
+
 const EXPECTED_CLASSIFICATIONS = Object.freeze(
   COMMERCIAL_PLAN_CAPABILITIES.reduce((acc, capability) => {
     acc[capability.capability_key] = capability.classification;
     return acc;
   }, {}),
 );
+
+const HISTORICAL_EXPECTED_CLASSIFICATIONS = Object.freeze(
+  COMMERCIAL_PLAN_CAPABILITIES.reduce((acc, capability) => {
+    acc[capability.capability_key] =
+      HISTORICAL_AI_ADDON_CLASSIFICATION_EVOLUTION[capability.capability_key]?.historical ||
+      capability.classification;
+    return acc;
+  }, {}),
+);
+
+function historicalCapabilitiesForPlan(planKey) {
+  const normalizedPlanKey = String(planKey || '').trim().toLowerCase();
+  const plan = normalizedPlanKey === 'iso'
+    ? 'pyme'
+    : normalizedPlanKey === 'iso_operational_risk'
+      ? 'empresa'
+      : normalizedPlanKey === 'grc'
+        ? 'enterprise'
+        : normalizedPlanKey;
+
+  return COMMERCIAL_PLAN_CAPABILITIES.filter((capability) => {
+    const classification = HISTORICAL_EXPECTED_CLASSIFICATIONS[capability.capability_key];
+    if (plan === 'pyme') return classification === CLASSIFICATIONS.ISO_ONLY;
+    if (plan === 'empresa') {
+      return [
+        CLASSIFICATIONS.ISO_ONLY,
+        CLASSIFICATIONS.OPERATIONAL_RISK_EXTENSION,
+      ].includes(classification);
+    }
+    if (plan === 'enterprise') {
+      return [
+        CLASSIFICATIONS.ISO_ONLY,
+        CLASSIFICATIONS.OPERATIONAL_RISK_EXTENSION,
+        CLASSIFICATIONS.GRC_ADVANCED,
+      ].includes(classification);
+    }
+    return false;
+  });
+}
+
+function historicalCapabilityKeys(planKey) {
+  return sortUnique(historicalCapabilitiesForPlan(planKey).map((capability) => capability.capability_key));
+}
+
+function historicalModuleKeys(planKey) {
+  return sortUnique(historicalCapabilitiesForPlan(planKey).map((capability) => capability.module_key));
+}
+
+const HISTORICAL_EXPECTED = Object.freeze({
+  pyme: Object.freeze({
+    capabilities: historicalCapabilityKeys('pyme'),
+    modules: historicalModuleKeys('pyme'),
+  }),
+  empresa: Object.freeze({
+    capabilities: historicalCapabilityKeys('empresa'),
+    modules: historicalModuleKeys('empresa'),
+  }),
+  enterprise: Object.freeze({
+    capabilities: historicalCapabilityKeys('enterprise'),
+    modules: historicalModuleKeys('enterprise'),
+  }),
+});
+
+function normalizeClassification(value) {
+  return String(value || '').trim().toUpperCase();
+}
+
+function isAllowedCatalogClassification({ capability_key: capabilityKey, actual_classification: actualClassification }) {
+  const key = String(capabilityKey || '').trim();
+  const historicalClassification = HISTORICAL_EXPECTED_CLASSIFICATIONS[key];
+  const expectedClassification = EXPECTED_CLASSIFICATIONS[key];
+  const actual = normalizeClassification(actualClassification || historicalClassification);
+
+  if (!historicalClassification || !expectedClassification) return false;
+  if (actual === normalizeClassification(historicalClassification)) return true;
+
+  const allowedEvolution = HISTORICAL_AI_ADDON_CLASSIFICATION_EVOLUTION[key];
+  return Boolean(
+    allowedEvolution &&
+      normalizeClassification(allowedEvolution.historical) === normalizeClassification(historicalClassification) &&
+      normalizeClassification(allowedEvolution.evolved) === normalizeClassification(expectedClassification) &&
+      actual === normalizeClassification(allowedEvolution.evolved)
+  );
+}
+
+function findCatalogClassificationDrift(rows) {
+  return sortUnique(
+    rows
+      .filter((row) => !isAllowedCatalogClassification(row))
+      .map((row) => row.capability_key)
+  );
+}
+
+function findAcceptedCatalogClassificationEvolution(rows) {
+  return sortUnique(
+    rows
+      .filter((row) => {
+        const key = String(row.capability_key || '').trim();
+        const actual = normalizeClassification(row.actual_classification || HISTORICAL_EXPECTED_CLASSIFICATIONS[key]);
+        return (
+          isAllowedCatalogClassification(row) &&
+          actual !== normalizeClassification(HISTORICAL_EXPECTED_CLASSIFICATIONS[key])
+        );
+      })
+      .map((row) => row.capability_key)
+  );
+}
 
 function readMigration() {
   if (!fs.existsSync(MIGRATION.file)) {
@@ -256,25 +374,43 @@ async function inspectCurrentCatalog(client) {
   const expectedModules = sortUnique(COMMERCIAL_PLAN_CAPABILITIES.map((capability) => capability.module_key));
 
   const capabilityResult = await client.query(
-    `WITH expected(capability_key, classification) AS (
-       SELECT * FROM unnest($1::text[], $2::text[])
+    `WITH expected(capability_key, historical_classification, expected_classification) AS (
+       SELECT * FROM unnest($1::text[], $2::text[], $3::text[])
      )
      SELECT
        count(*)::int AS expected_capabilities,
        count(ctc.capability_key)::int AS existing_capabilities,
        count(ctc.capability_key) FILTER (WHERE ctc.status = 'active')::int AS active_capabilities,
        COALESCE(array_agg(e.capability_key ORDER BY e.capability_key) FILTER (WHERE ctc.capability_key IS NULL), ARRAY[]::text[]) AS missing_capabilities,
-       COALESCE(array_agg(e.capability_key ORDER BY e.capability_key) FILTER (WHERE ctc.capability_key IS NOT NULL AND ctc.status IS DISTINCT FROM 'active'), ARRAY[]::text[]) AS inactive_capabilities,
-       COALESCE(array_agg(e.capability_key ORDER BY e.capability_key) FILTER (
-         WHERE ctc.capability_key IS NOT NULL
-           AND ctc.status = 'active'
-           AND COALESCE(ctc.metadata->>'commercial_classification', e.classification) IS DISTINCT FROM e.classification
-       ), ARRAY[]::text[]) AS classification_drift
+       COALESCE(array_agg(e.capability_key ORDER BY e.capability_key) FILTER (WHERE ctc.capability_key IS NOT NULL AND ctc.status IS DISTINCT FROM 'active'), ARRAY[]::text[]) AS inactive_capabilities
      FROM expected e
      LEFT JOIN public.commercial_technical_capabilities ctc
        ON ctc.capability_key = e.capability_key`,
     [
       expectedCapabilities,
+      expectedCapabilities.map((key) => HISTORICAL_EXPECTED_CLASSIFICATIONS[key]),
+      expectedCapabilities.map((key) => EXPECTED_CLASSIFICATIONS[key]),
+    ],
+  );
+
+  const classificationResult = await client.query(
+    `WITH expected(capability_key, historical_classification, expected_classification) AS (
+       SELECT * FROM unnest($1::text[], $2::text[], $3::text[])
+     )
+     SELECT
+       e.capability_key,
+       e.historical_classification,
+       e.expected_classification,
+       COALESCE(ctc.metadata->>'commercial_classification', e.historical_classification) AS actual_classification
+     FROM expected e
+     LEFT JOIN public.commercial_technical_capabilities ctc
+       ON ctc.capability_key = e.capability_key
+     WHERE ctc.capability_key IS NOT NULL
+       AND ctc.status = 'active'
+     ORDER BY e.capability_key`,
+    [
+      expectedCapabilities,
+      expectedCapabilities.map((key) => HISTORICAL_EXPECTED_CLASSIFICATIONS[key]),
       expectedCapabilities.map((key) => EXPECTED_CLASSIFICATIONS[key]),
     ],
   );
@@ -297,23 +433,26 @@ async function inspectCurrentCatalog(client) {
 
   const capabilityRow = capabilityResult.rows[0] || {};
   const moduleRow = moduleResult.rows[0] || {};
+  const classificationDrift = findCatalogClassificationDrift(classificationResult.rows);
+  const acceptedClassificationEvolution = findAcceptedCatalogClassificationEvolution(classificationResult.rows);
   process.stdout.write(`expected_capabilities=${capabilityRow.expected_capabilities}\n`);
   process.stdout.write(`existing_capabilities=${capabilityRow.existing_capabilities}\n`);
   process.stdout.write(`active_capabilities=${capabilityRow.active_capabilities}\n`);
   process.stdout.write(`missing_capabilities=${capabilityRow.missing_capabilities?.length ? capabilityRow.missing_capabilities.join(',') : 'none'}\n`);
   process.stdout.write(`inactive_capabilities=${capabilityRow.inactive_capabilities?.length ? capabilityRow.inactive_capabilities.join(',') : 'none'}\n`);
-  process.stdout.write(`classification_drift=${capabilityRow.classification_drift?.length ? capabilityRow.classification_drift.join(',') : 'none'}\n`);
+  process.stdout.write(`classification_drift=${classificationDrift.length ? classificationDrift.join(',') : 'none'}\n`);
+  process.stdout.write(`accepted_classification_evolution=${acceptedClassificationEvolution.length ? acceptedClassificationEvolution.join(',') : 'none'}\n`);
   process.stdout.write(`expected_modules=${moduleRow.expected_modules}\n`);
   process.stdout.write(`existing_modules=${moduleRow.existing_modules}\n`);
   process.stdout.write(`active_modules=${moduleRow.active_modules}\n`);
   process.stdout.write(`missing_modules=${moduleRow.missing_modules?.length ? moduleRow.missing_modules.join(',') : 'none'}\n`);
   process.stdout.write(`inactive_modules=${moduleRow.inactive_modules?.length ? moduleRow.inactive_modules.join(',') : 'none'}\n`);
 
-  if (capabilityRow.classification_drift?.length) {
-    throw new Error(`Commercial Plan Matrix preflight failed: capability classification drift ${capabilityRow.classification_drift.join(', ')}`);
+  if (classificationDrift.length) {
+    throw new Error(`Commercial Plan Matrix preflight failed: capability classification drift ${classificationDrift.join(', ')}`);
   }
 
-  return { capabilityRow, moduleRow };
+  return { capabilityRow, moduleRow, classificationDrift, acceptedClassificationEvolution };
 }
 
 async function migrationState(client, migration) {
@@ -379,6 +518,26 @@ function assertExact(name, expected, actual) {
   return { missing, extra };
 }
 
+function compareExact(expected, actual) {
+  return {
+    missing: diff(expected, actual),
+    extra: extras(expected, actual),
+  };
+}
+
+function assertExactVariant(name, variants, actual) {
+  const comparisons = variants.map((variant) => ({
+    name: variant.name,
+    ...compareExact(variant.expected, actual),
+  }));
+  const match = comparisons.find((comparison) => comparison.missing.length === 0 && comparison.extra.length === 0);
+  if (match) return match;
+
+  throw new Error(`${name} mismatch: ${comparisons.map((comparison) =>
+    `${comparison.name}{missing=${comparison.missing.join(',') || 'none'} extra=${comparison.extra.join(',') || 'none'}}`
+  ).join(' ')}`);
+}
+
 async function fetchPlanState(client) {
   const result = await client.query(
     `SELECT plan_key, module_key, capability_key
@@ -405,27 +564,38 @@ async function fetchPlanState(client) {
 async function fetchCapabilityCatalogState(client) {
   const expectedCapabilities = sortUnique(COMMERCIAL_PLAN_CAPABILITIES.map((capability) => capability.capability_key));
   const result = await client.query(
-    `WITH expected(capability_key, classification, required_permission) AS (
-       SELECT * FROM unnest($1::text[], $2::text[], $3::text[])
+    `WITH expected(capability_key, historical_classification, expected_classification, required_permission) AS (
+       SELECT * FROM unnest($1::text[], $2::text[], $3::text[], $4::text[])
      )
      SELECT
-       count(*)::int AS expected_count,
-       count(ctc.capability_key) FILTER (WHERE ctc.status = 'active')::int AS active_count,
-       COALESCE(array_agg(e.capability_key ORDER BY e.capability_key) FILTER (WHERE ctc.capability_key IS NULL), ARRAY[]::text[]) AS missing,
-       COALESCE(array_agg(e.capability_key ORDER BY e.capability_key) FILTER (WHERE ctc.status IS DISTINCT FROM 'active'), ARRAY[]::text[]) AS inactive,
-       COALESCE(array_agg(e.capability_key ORDER BY e.capability_key) FILTER (WHERE ctc.required_permission IS DISTINCT FROM e.required_permission), ARRAY[]::text[]) AS permission_drift,
-       COALESCE(array_agg(e.capability_key ORDER BY e.capability_key) FILTER (WHERE ctc.metadata->>'commercial_classification' IS DISTINCT FROM e.classification), ARRAY[]::text[]) AS classification_drift
+       e.capability_key,
+       e.historical_classification,
+       e.expected_classification,
+       e.required_permission,
+       ctc.status,
+       ctc.required_permission AS actual_required_permission,
+       COALESCE(ctc.metadata->>'commercial_classification', e.historical_classification) AS actual_classification
      FROM expected e
      LEFT JOIN public.commercial_technical_capabilities ctc
        ON ctc.capability_key = e.capability_key`,
     [
       expectedCapabilities,
+      expectedCapabilities.map((key) => HISTORICAL_EXPECTED_CLASSIFICATIONS[key]),
       expectedCapabilities.map((key) => EXPECTED_CLASSIFICATIONS[key]),
       expectedCapabilities.map((key) => COMMERCIAL_PLAN_CAPABILITIES.find((capability) => capability.capability_key === key).required_permission),
     ],
   );
 
-  return result.rows[0] || {};
+  const rows = result.rows;
+  return {
+    expected_count: rows.length,
+    active_count: rows.filter((row) => row.status === 'active').length,
+    missing: sortUnique(rows.filter((row) => !row.status).map((row) => row.capability_key)),
+    inactive: sortUnique(rows.filter((row) => row.status && row.status !== 'active').map((row) => row.capability_key)),
+    permission_drift: sortUnique(rows.filter((row) => row.actual_required_permission !== row.required_permission).map((row) => row.capability_key)),
+    classification_drift: findCatalogClassificationDrift(rows),
+    accepted_classification_evolution: findAcceptedCatalogClassificationEvolution(rows),
+  };
 }
 
 async function postconditions(client) {
@@ -442,8 +612,14 @@ async function postconditions(client) {
   const isoModules = assertExact('ISO module matrix', EXPECTED.pyme.modules, planState.pyme.modules);
   const isoRisk = assertExact('ISO + Riesgo capability matrix', EXPECTED.empresa.capabilities, planState.empresa.capabilities);
   const isoRiskModules = assertExact('ISO + Riesgo module matrix', EXPECTED.empresa.modules, planState.empresa.modules);
-  const grc = assertExact('GRC capability matrix', EXPECTED.enterprise.capabilities, planState.enterprise.capabilities);
-  const grcModules = assertExact('GRC module matrix', EXPECTED.enterprise.modules, planState.enterprise.modules);
+  const grc = assertExactVariant('GRC capability matrix', [
+    { name: 'historical_grc_with_ai', expected: HISTORICAL_EXPECTED.enterprise.capabilities },
+    { name: 'evolved_grc_without_ai', expected: EXPECTED.enterprise.capabilities },
+  ], planState.enterprise.capabilities);
+  const grcModules = assertExactVariant('GRC module matrix', [
+    { name: 'historical_grc_with_ai', expected: HISTORICAL_EXPECTED.enterprise.modules },
+    { name: 'evolved_grc_without_ai', expected: EXPECTED.enterprise.modules },
+  ], planState.enterprise.modules);
   const isoOverexposure = planState.pyme.capabilities.filter((capabilityKey) => isoAdvanced.includes(capabilityKey));
   const isoRiskOverexposure = planState.empresa.capabilities.filter((capabilityKey) => isoRiskGrcAdvanced.includes(capabilityKey));
 
@@ -476,11 +652,14 @@ async function postconditions(client) {
     ISO_RISK_UNDEREXPOSURE: isoRisk.missing.length,
     GRC_MATRIX_OK: true,
     GRC_MODULES_OK: grcModules.missing.length === 0 && grcModules.extra.length === 0,
+    GRC_MATRIX_VARIANT: grc.name,
+    GRC_MODULES_VARIANT: grcModules.name,
     GRC_CAPABILITIES_EXPECTED: Number(catalogState.expected_count),
     GRC_CAPABILITIES_ACTIVE: Number(catalogState.active_count),
     GRC_MISSING: grc.missing.length,
     GRC_COVERAGE: coveragePct,
     GRC_COVERAGE_RATIO: coverage,
+    ACCEPTED_CLASSIFICATION_EVOLUTION: catalogState.accepted_classification_evolution?.join(',') || 'none',
   };
 
   for (const [key, value] of Object.entries(details)) process.stdout.write(`${key}=${value}\n`);
@@ -543,8 +722,22 @@ async function run(mode) {
   }
 }
 
-const arg = process.argv[2] || '--preflight';
-run(arg.replace(/^--/, '')).catch((error) => {
-  console.error(`ERROR: ${sanitize(error)}`);
-  process.exit(1);
-});
+if (require.main === module) {
+  const arg = process.argv[2] || '--preflight';
+  run(arg.replace(/^--/, '')).catch((error) => {
+    console.error(`ERROR: ${sanitize(error)}`);
+    process.exit(1);
+  });
+}
+
+module.exports = {
+  run,
+  _private: {
+    HISTORICAL_AI_ADDON_CLASSIFICATION_EVOLUTION,
+    EXPECTED_CLASSIFICATIONS,
+    HISTORICAL_EXPECTED_CLASSIFICATIONS,
+    findAcceptedCatalogClassificationEvolution,
+    findCatalogClassificationDrift,
+    isAllowedCatalogClassification,
+  },
+};
