@@ -92,6 +92,9 @@ async function requireBaseSchema(client) {
         ('commercial_technical_capabilities','capability_key'),
         ('schema_migrations','migration_id'),
         ('schema_migrations','checksum'),
+        ('schema_migrations','applied_at'),
+        ('schema_migrations','applied_by'),
+        ('schema_migrations','duration_ms'),
         ('schema_migrations','status'),
         ('schema_migrations','details')
     ),
@@ -171,17 +174,20 @@ async function postconditions(client) {
 }
 
 async function ensureSchemaMigrations(client) {
-  await client.query(`CREATE TABLE IF NOT EXISTS schema_migrations (
+  await client.query(`CREATE TABLE IF NOT EXISTS public.schema_migrations (
     migration_id text PRIMARY KEY,
-    checksum text NOT NULL,
-    applied_at timestamptz NOT NULL DEFAULT now(),
-    status text NOT NULL DEFAULT 'applied',
+    checksum char(64) NOT NULL,
+    applied_at timestamptz,
+    applied_by text NOT NULL,
+    duration_ms bigint NOT NULL DEFAULT 0 CHECK (duration_ms >= 0),
+    status text NOT NULL CHECK (status IN ('running','applied','failed')),
     details jsonb NOT NULL DEFAULT '{}'::jsonb
   )`);
 }
 
 async function run() {
   const args = new Set(process.argv.slice(2));
+  const started = Date.now();
   const migration = readMigration();
 
   if (args.has('--checksum')) {
@@ -209,7 +215,7 @@ async function run() {
     const lock = await client.query('SELECT pg_try_advisory_xact_lock($1, $2) AS locked', [LOCK_NAMESPACE, LOCK_KEY]);
     if (lock.rows[0]?.locked !== true) throw new Error('AI Add-on migration lock not acquired');
 
-    const existing = await client.query('SELECT checksum, status FROM schema_migrations WHERE migration_id = $1 FOR UPDATE', [migration.id]);
+    const existing = await client.query('SELECT checksum, status FROM public.schema_migrations WHERE migration_id = $1 FOR UPDATE', [migration.id]);
     if (existing.rowCount > 0) {
       if (existing.rows[0].checksum !== migration.checksum) throw new Error('AI Add-on migration checksum mismatch');
       await client.query('COMMIT');
@@ -221,9 +227,9 @@ async function run() {
     await client.query(unwrapTransaction(migration.sql));
     const details = await postconditions(client);
     await client.query(
-      `INSERT INTO schema_migrations (migration_id, checksum, status, details)
-       VALUES ($1, $2, 'applied', $3::jsonb)`,
-      [migration.id, migration.checksum, JSON.stringify(details)],
+      `INSERT INTO public.schema_migrations (migration_id, checksum, applied_at, applied_by, duration_ms, status, details)
+       VALUES ($1, $2, now(), current_user, $3, 'applied', $4::jsonb)`,
+      [migration.id, migration.checksum, Date.now() - started, JSON.stringify(details)],
     );
     await client.query('COMMIT');
     process.stdout.write('AI_ADDON_MIGRATION_APPLIED\n');
