@@ -2,6 +2,16 @@ const express = require('express');
 const router = express.Router();
 const { errorDetail } = require('../utils/errorResponse');
 const isoOperationalExecution = require('../services/isoOperationalExecution.service');
+const { requireCommercialCapability } = require('../middleware/commercialEntitlement.middleware');
+
+const requireActionsRead = requireCommercialCapability('iso.actions', {
+  requiredPermission: 'actions.view',
+  mode: 'read',
+});
+const requireActionsManage = requireCommercialCapability('iso.actions', {
+  requiredPermission: 'actions.manage',
+  mode: 'write',
+});
 
 function sendData(res, data, extra = {}) {
   return res.json({
@@ -26,7 +36,7 @@ function handleError(res, error) {
   });
 }
 
-router.get('/summary', async (req, res) => {
+router.get('/summary', requireActionsRead, async (req, res) => {
   try {
     const data = await isoOperationalExecution.getSummary(req.user, {
       tenant_id: req.query.tenant_id,
@@ -37,7 +47,7 @@ router.get('/summary', async (req, res) => {
   }
 });
 
-router.get('/suggestions', async (req, res) => {
+router.get('/suggestions', requireActionsRead, async (req, res) => {
   try {
     const rows = await isoOperationalExecution.listSuggestions(req.user, {
       tenant_id: req.query.tenant_id,
@@ -55,7 +65,7 @@ router.get('/suggestions', async (req, res) => {
   }
 });
 
-router.post('/generate', async (req, res) => {
+router.post('/generate', requireActionsManage, async (req, res) => {
   try {
     const data = await isoOperationalExecution.generateSuggestions({
       user: req.user,
@@ -76,7 +86,7 @@ router.post('/generate', async (req, res) => {
   }
 });
 
-router.get('/:id', async (req, res) => {
+router.get('/:id', requireActionsRead, async (req, res) => {
   try {
     const data = await isoOperationalExecution.getSuggestion(
       req.user,
@@ -89,7 +99,7 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-router.post('/:id/approve', async (req, res) => {
+router.post('/:id/approve', requireActionsManage, async (req, res) => {
   try {
     const data = await isoOperationalExecution.approveSuggestion(
       req.user,
@@ -105,7 +115,7 @@ router.post('/:id/approve', async (req, res) => {
   }
 });
 
-router.post('/:id/reject', async (req, res) => {
+router.post('/:id/reject', requireActionsManage, async (req, res) => {
   try {
     const data = await isoOperationalExecution.rejectSuggestion(
       req.user,

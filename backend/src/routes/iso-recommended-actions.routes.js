@@ -2,6 +2,16 @@ const express = require('express');
 const router = express.Router();
 const { errorDetail } = require('../utils/errorResponse');
 const isoRecommendedActions = require('../services/isoRecommendedActions.service');
+const { requireCommercialCapability } = require('../middleware/commercialEntitlement.middleware');
+
+const requireActionsRead = requireCommercialCapability('iso.actions', {
+  requiredPermission: 'actions.view',
+  mode: 'read',
+});
+const requireActionsManage = requireCommercialCapability('iso.actions', {
+  requiredPermission: 'actions.manage',
+  mode: 'write',
+});
 
 function sendData(res, data, extra = {}) {
   return res.json({
@@ -27,7 +37,7 @@ function handleError(res, error) {
   });
 }
 
-router.get('/workflow-summary', async (req, res) => {
+router.get('/workflow-summary', requireActionsRead, async (req, res) => {
   try {
     const data = await isoRecommendedActions.getWorkflowSummary(req.user, req.query || {});
     return sendData(res, data);
@@ -36,7 +46,7 @@ router.get('/workflow-summary', async (req, res) => {
   }
 });
 
-router.get('/:id/workflow', async (req, res) => {
+router.get('/:id/workflow', requireActionsRead, async (req, res) => {
   try {
     const data = await isoRecommendedActions.getWorkflow(req.user, req.params.id, {
       tenant_id: req.query.tenant_id,
@@ -47,7 +57,7 @@ router.get('/:id/workflow', async (req, res) => {
   }
 });
 
-router.post('/:id/workflow/transition', async (req, res) => {
+router.post('/:id/workflow/transition', requireActionsManage, async (req, res) => {
   try {
     const data = await isoRecommendedActions.transitionWorkflow(
       req.user,
@@ -60,7 +70,7 @@ router.post('/:id/workflow/transition', async (req, res) => {
   }
 });
 
-router.post('/:id/workflow/comment', async (req, res) => {
+router.post('/:id/workflow/comment', requireActionsManage, async (req, res) => {
   try {
     const data = await isoRecommendedActions.commentWorkflow(
       req.user,
@@ -73,7 +83,7 @@ router.post('/:id/workflow/comment', async (req, res) => {
   }
 });
 
-router.get('/:id/conversion-options', async (req, res) => {
+router.get('/:id/conversion-options', requireActionsRead, async (req, res) => {
   try {
     const data = await isoRecommendedActions.getConversionOptions(req.user, req.params.id, {
       tenant_id: req.query.tenant_id,
@@ -84,7 +94,7 @@ router.get('/:id/conversion-options', async (req, res) => {
   }
 });
 
-router.post('/:id/dry-run-convert', async (req, res) => {
+router.post('/:id/dry-run-convert', requireActionsRead, async (req, res) => {
   try {
     const data = await isoRecommendedActions.dryRunConvertRecommendation(
       req.user,
@@ -100,7 +110,7 @@ router.post('/:id/dry-run-convert', async (req, res) => {
   }
 });
 
-router.post('/:id/convert', async (req, res) => {
+router.post('/:id/convert', requireActionsManage, async (req, res) => {
   try {
     const data = await isoRecommendedActions.convertRecommendation(
       req.user,

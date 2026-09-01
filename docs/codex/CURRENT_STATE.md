@@ -1,6 +1,6 @@
 # CURRENT_STATE — TCDX ISO SaaS V4
 
-Actualizado: 2026-08-31
+Actualizado: 2026-09-01
 Repositorio: `Tecdex-SpA/tcdx-iso-saas-v4`
 Remote/base `main` verificado para F6.14-A: `e6b431df521300119efaf9194d3ff4d8e56d7004`
 Fuente: repositorio `main` + handoffs runtime cerrados + evidencia runtime validada por el responsable del proyecto + cierre runtime F6.11-A + cierre runtime F6.11-B + cierre runtime F6.12-A + cierre runtime F6.13-A + cierre local UI-04 + cierre local UI-07.
@@ -137,6 +137,8 @@ El usuario realiza CI/merge/deploy y decide si un fallo requiere un work package
 7. RBAC-02 ya fue desplegado y la migración productiva `20260827_rbac02_commercial_gating_normalization` fue aplicada por el responsable del proyecto según baseline RBAC-03 del 2026-08-28.
 8. RBAC-03 fue reevaluado con nuevo hecho confirmado: Admin Credex recuperó Dashboard tras refrescar contrato desde superadmin. `RBAC03_NOT_REQUIRED` para reconciliación de roles/permisos; el fix local queda acotado a sincronización automática contrato comercial legacy -> `tenant_subscriptions` y cache/context invalidation. Producción no fue modificada por Codex.
 9. AI-ADDON-01 + COMMERCIAL-UI-01 quedó `READY_FOR_HUMAN_REVIEW` local sobre `main@6dc752b` con working tree dirty esperado y sin commit/push/deploy/migracion productiva por Codex. La migración histórica `20260828_commercial_standard_plan_matrix.sql` quedó sin diff y su checksum histórico PASS; la evolución forward-only vive en `20260831_ai_addon_commercial_visibility.sql` con runner `scripts/ai-addon/apply-ai-addon-migration.js`. IA pasa a add-on transversal: ISO, ISO+Riesgo y GRC pueden existir con o sin IA; GRC base ya no concede IA efectiva sin add-on activo. Validación local PASS: backend focal completo, frontend lint/typecheck/contratos comerciales, route matrix 97/97/0, build y `bash -n scripts/deploy-vms.sh`. Producción no fue modificada.
+10. POSTDEPLOY-02-LEGACY-CANONICAL-DATA-AUDIT quedó `POSTDEPLOY_LEGACY_CANONICAL_DB_AUDIT_COMPLETE` sobre `main@84fc1799e497e0af2abe6089eb6e3c2b800905e9`: auditoría productiva read-only cerrada con `DB_AUDIT_CONNECTION=OK`, `DB_AUDIT_READ_ONLY=YES`, `DB_NAME=tecdex_saas`, `DB_USER=postgres`, PostgreSQL `16.15` y `production_writes=NO`. Evidencia DB confirmó views comerciales addon-aware, migraciones focales aplicadas con checksum local coincidente, Credex activo con subscription `enterprise` y add-on `ai` efectivo, pero `ai.compliance` falla por `required_permission=ai_compliance.read` ausente en `permissions`; `iso.actions` falla igual por `required_permission=actions.read` ausente. También confirmó Health/KPI divergence: official `GRC-HEALTH`/`DATA-TRUST` unmeasured vs legacy `KPI-HLT-*` numérico, `EVIDENCE-COVERAGE` ausente y `F5_C3_DATA_TRUST` bloqueado por `accuracy/Exactitud`. Handoff: `docs/codex/handoffs/POSTDEPLOY-02-LEGACY-CANONICAL-DATA-AUDIT.md`; artefactos: `artifacts/postdeploy-legacy-audit/*.csv`; next gate: `HUMAN_REVIEW_BEFORE_NORMALIZATION_OR_FIX`.
+11. NORMALIZATION-01 quedó `READY_FOR_HUMAN_REVIEW` local sobre `main@84fc1799e497e0af2abe6089eb6e3c2b800905e9` sin commit/push/deploy ni `--apply` productivo. Autoridades: IA comercial binaria por `tenant_subscription_addons.addon_key='ai'`; `ai.compliance.required_permission=ai.view`; `iso.actions.required_permission=actions.view`; planes base sin IA efectiva; add-ons duplicados IA se cierran por migración forward-only sin DELETE; `/api/grc/overview` queda read-only sobre últimos cálculos oficiales persistidos. Migración `20260901_normalization01_db_backend_authority.sql`, runner `scripts/normalization/apply-normalization-01-migration.js`, checksum `9dd53235b8f2b54afd9f09e047b5a3be44293b23b0969e66f442ed01a3761a78`. Validación local focal PASS; productive preflight no ejecutado porque `MIGRATION_DATABASE_URL` no estaba definido.
 
 ## RBAC-03 Effective Authorization
 
@@ -224,5 +226,7 @@ Cambios RBAC-03:
 - `docs/codex/handoffs/RBAC-02-COMMERCIAL-GATING.md`
 - `docs/codex/handoffs/AI-ADDON-01-COMMERCIAL-UI-01.md`
 - `docs/codex/handoffs/AI-ADDON-02-BINARY-COMMERCIAL-MODEL.md`
+- `docs/codex/handoffs/POSTDEPLOY-02-LEGACY-CANONICAL-DATA-AUDIT.md`
+- `docs/codex/handoffs/NORMALIZATION-01-DB-BACKEND-AUTHORITY.md`
 - `docs/codex/PHASE6_EXPANDED_CLOSURE.md`
 - `docs/architecture/grc_relationship_inventory.md`

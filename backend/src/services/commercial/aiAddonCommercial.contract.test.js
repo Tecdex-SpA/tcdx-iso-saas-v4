@@ -105,7 +105,7 @@ async function query(sql) {
   if (/SELECT p\.permission_key, user_has_permission/i.test(text)) {
     return rows([
       { permission_key: 'audit.review', allowed: state.auditReviewAllowed },
-      { permission_key: 'ai_compliance.read', allowed: true },
+      { permission_key: 'ai.view', allowed: true },
     ]);
   }
 
@@ -166,11 +166,11 @@ async function run() {
 
   state.addonActive = false;
   assert.equal((await isTenantAiFeatureEnabled(tenantId, 'suggestions')).enabled, false, 'AI cancelled after active must deny IA Compliance');
-  assert.equal((await resolveCapability({ tenantId, user: { id: userId, tenant_id: tenantId }, capabilityKey: 'ai.compliance', requiredPermission: 'ai_compliance.read', mode: 'read' })).enabled, false, 'AI cancelled after active must deny direct IA Compliance capability');
+  assert.equal((await resolveCapability({ tenantId, user: { id: userId, tenant_id: tenantId }, capabilityKey: 'ai.compliance', requiredPermission: 'ai.view', mode: 'read' })).enabled, false, 'AI cancelled after active must deny direct IA Compliance capability');
 
   state.addonActive = true;
   assert.equal((await isTenantAiFeatureEnabled(tenantId, 'suggestions')).enabled, true, 'AI reactivated without plan change must restore IA Compliance');
-  assert.equal((await resolveCapability({ tenantId, user: { id: userId, tenant_id: tenantId }, capabilityKey: 'ai.compliance', requiredPermission: 'ai_compliance.read', mode: 'read' })).enabled, true, 'AI reactivated without plan change must restore direct IA Compliance capability');
+  assert.equal((await resolveCapability({ tenantId, user: { id: userId, tenant_id: tenantId }, capabilityKey: 'ai.compliance', requiredPermission: 'ai.view', mode: 'read' })).enabled, true, 'AI reactivated without plan change must restore direct IA Compliance capability');
 
   for (const planKey of ['pyme', 'empresa', 'enterprise']) {
     state.planKey = planKey;

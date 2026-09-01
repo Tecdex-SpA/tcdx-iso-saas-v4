@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../config/db');
 const auth = require('../middleware/auth');
+const { requireCommercialCapability } = require('../middleware/commercialEntitlement.middleware');
 const aiContextBuilder = require('../services/aiContextBuilder.service');
 const { runOperationalAiReview } = require('../services/aiOperationalReview.service');
 const { resolveSoAControlReference } = require('../utils/soaControlResolver');
@@ -64,6 +65,27 @@ const allowedApprovalStatuses = [
   'aprobada',
   'devuelta',
 ];
+
+const requireActionsRead = requireCommercialCapability('iso.actions', {
+  requiredPermission: 'actions.view',
+  mode: 'read',
+});
+const requireActionsManage = requireCommercialCapability('iso.actions', {
+  requiredPermission: 'actions.manage',
+  mode: 'write',
+});
+const requireActionsApprove = requireCommercialCapability('iso.actions', {
+  requiredPermission: 'actions.approve',
+  mode: 'write',
+});
+const requireActionsDelete = requireCommercialCapability('iso.actions', {
+  requiredPermission: 'actions.delete',
+  mode: 'write',
+});
+const requireAiComplianceRead = requireCommercialCapability('ai.compliance', {
+  requiredPermission: 'ai.view',
+  mode: 'read',
+});
 
 const operationalStandardExistsSql = `
   EXISTS (
@@ -494,7 +516,7 @@ const getEnrichedActionPlanById = async (client, id) => {
 // =============================
 // 📋 OBTENER SEGUIMIENTOS DE UN PLAN
 // =============================
-router.get('/:id/updates', auth, async (req, res) => {
+router.get('/:id/updates', auth, requireActionsRead, async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -543,7 +565,7 @@ router.get('/:id/updates', auth, async (req, res) => {
 // =============================
 // ➕ REGISTRAR SEGUIMIENTO DE PLAN
 // =============================
-router.post('/:id/updates', auth, async (req, res) => {
+router.post('/:id/updates', auth, requireActionsManage, async (req, res) => {
   const client = await pool.connect();
 
   try {
@@ -708,7 +730,7 @@ router.post('/:id/updates', auth, async (req, res) => {
 // =============================
 // ✅ SOLICITAR APROBACIÓN DE CIERRE
 // =============================
-router.post('/:id/request-approval', auth, async (req, res) => {
+router.post('/:id/request-approval', auth, requireActionsManage, async (req, res) => {
   const client = await pool.connect();
 
   try {
@@ -828,7 +850,7 @@ router.post('/:id/request-approval', auth, async (req, res) => {
 // 👨‍⚖️ REVISAR APROBACIÓN DE CIERRE
 // decision: approved | rework
 // =============================
-router.post('/:id/review-approval', auth, async (req, res) => {
+router.post('/:id/review-approval', auth, requireActionsApprove, async (req, res) => {
   const client = await pool.connect();
 
   try {
@@ -982,7 +1004,7 @@ router.post('/:id/review-approval', auth, async (req, res) => {
   }
 });
 
-router.post('/:id/ai-review', auth, async (req, res) => {
+router.post('/:id/ai-review', auth, requireActionsRead, requireAiComplianceRead, async (req, res) => {
   try {
     const actionPlanId = req.params.id;
     const requestedTenantId = req.body?.tenant_id || req.query?.tenant_id || getUserTenantId(req.user);
@@ -1050,7 +1072,7 @@ router.post('/:id/ai-review', auth, async (req, res) => {
 // 📋 LISTAR PLANES
 // solo alcance operativo real
 // =============================
-router.get('/:tenant_id', auth, async (req, res) => {
+router.get('/:tenant_id', auth, requireActionsRead, async (req, res) => {
   try {
     const { tenant_id } = req.params;
     const { iso, status } = req.query;
@@ -1133,7 +1155,7 @@ router.get('/:tenant_id', auth, async (req, res) => {
 // =============================
 // ➕ CREAR PLAN
 // =============================
-router.post('/', auth, async (req, res) => {
+router.post('/', auth, requireActionsManage, async (req, res) => {
   const client = await pool.connect();
 
   try {
@@ -1427,7 +1449,7 @@ router.post('/', auth, async (req, res) => {
 // =============================
 // ✏️ ACTUALIZAR PLAN
 // =============================
-router.put('/:id', auth, async (req, res) => {
+router.put('/:id', auth, requireActionsManage, async (req, res) => {
   const client = await pool.connect();
 
   try {
@@ -1619,7 +1641,7 @@ router.put('/:id', auth, async (req, res) => {
 // =============================
 // 🗑️ ELIMINAR PLAN
 // =============================
-router.delete('/:id', auth, async (req, res) => {
+router.delete('/:id', auth, requireActionsDelete, async (req, res) => {
   try {
     const { id } = req.params;
 

@@ -1769,6 +1769,97 @@ function package3OverviewFromCanonicalResults(results = []) {
   }, {});
 }
 
+async function readPackage3OverviewOfficialCalculations(scope, period = {}) {
+  const tenantId = tenantIdFrom(scope);
+  const overview = phase5Package3.buildOverviewOfficialCalculations({}, { period });
+
+  if (!(await tableExists(pool, 'calculation_runs')) || !(await tableExists(pool, 'calculation_outputs'))) {
+    return overview;
+  }
+
+  const hasSnapshots = await tableExists(pool, 'calculation_snapshots');
+  const snapshotSelect = hasSnapshots
+    ? `LEFT JOIN LATERAL (
+         SELECT id
+         FROM calculation_snapshots
+         WHERE tenant_id = cr.tenant_id
+           AND run_id = cr.id
+         ORDER BY created_at DESC
+         LIMIT 1
+       ) cs ON TRUE`
+    : 'LEFT JOIN LATERAL (SELECT NULL::uuid AS id) cs ON TRUE';
+
+  const rows = (await pool.query(
+    `SELECT DISTINCT ON (cr.formula_code)
+        cr.id AS run_id,
+        cr.formula_code,
+        cr.run_status,
+        cr.period_start,
+        cr.period_end,
+        cr.timezone,
+        cr.completed_at,
+        cr.metadata AS run_metadata,
+        co.output_value,
+        co.unit,
+        co.metadata AS output_metadata,
+        cs.id AS snapshot_id
+       FROM calculation_runs cr
+       LEFT JOIN calculation_outputs co
+         ON co.run_id = cr.id
+        AND co.tenant_id = cr.tenant_id
+        AND co.output_name = 'value'
+       ${snapshotSelect}
+      WHERE cr.tenant_id = $1::uuid
+        AND cr.formula_code = ANY($2::text[])
+      ORDER BY cr.formula_code, cr.completed_at DESC NULLS LAST, cr.started_at DESC NULLS LAST`,
+    [tenantId, phase5Package3.PACKAGE3_FORMULA_CODES],
+  )).rows;
+
+  for (const row of rows) {
+    const key = phase5Package3.overviewKeyForFormula(row.formula_code);
+    if (!key) continue;
+    const output = row.output_value && typeof row.output_value === 'object' ? row.output_value : {};
+    const runMetadata = row.run_metadata && typeof row.run_metadata === 'object' ? row.run_metadata : {};
+    const outputMetadata = row.output_metadata && typeof row.output_metadata === 'object' ? row.output_metadata : {};
+    const value = Object.prototype.hasOwnProperty.call(output, 'value') ? output.value : null;
+    const status = output.status || (row.run_status === 'calculated' ? 'calculated' : 'unmeasured');
+    const dataTrust = runMetadata.data_trust || outputMetadata.data_trust || null;
+    const machineReason = runMetadata.machine_reason || outputMetadata.machine_reason || null;
+    const warnings = Array.isArray(runMetadata.warnings) ? runMetadata.warnings : [];
+
+    overview[key] = {
+      ...overview[key],
+      formula_code: row.formula_code,
+      value,
+      status,
+      unit: row.unit || overview[key]?.unit || null,
+      source_status: runMetadata.source_status || outputMetadata.source_status || status,
+      data_trust: dataTrust,
+      machine_reason: machineReason,
+      period: {
+        start: row.period_start || null,
+        end: row.period_end || null,
+        timezone: row.timezone || null,
+      },
+      warnings,
+      calculation_run_id: row.run_id,
+      latest_calculation_run: row.run_id,
+      snapshot_id: row.snapshot_id || null,
+      latest_snapshot: row.snapshot_id || null,
+      completed_at: row.completed_at || null,
+      canonical_pipeline: 'officialCalculationOrchestrator',
+      metadata: {
+        ...(overview[key]?.metadata || {}),
+        package: runMetadata.package || overview[key]?.metadata?.package || 'official_calculation_orchestrator',
+        canonical_pipeline_required: false,
+        read_path: true,
+      },
+    };
+  }
+
+  return overview;
+}
+
 
 
 async function persistOfficialCalculation(scope, result, requestId = null) {
@@ -2089,9 +2180,7 @@ async function getGrcOverview(scope, requestId = null) {
   const alerts = Object.entries(overview)
     .flatMap(([block, value]) => (value.warnings || []).map((message) => ({ block, severity: value.status === 'error' ? 'high' : 'medium', message })))
     .slice(0, 50);
-  const orchestrator = require('../math-governance/officialCalculationOrchestrator.service');
-  const canonical = await orchestrator.recalculateOfficialAnalytics(scope, { formula_codes: phase5Package3.PACKAGE3_FORMULA_CODES, period: { as_of: now } }, requestId);
-  const officialCalculations = package3OverviewFromCanonicalResults(canonical.results);
+  const officialCalculations = await readPackage3OverviewOfficialCalculations(scope, { as_of: now });
   return {
     ...overview,
     official_calculations: officialCalculations,
@@ -2107,6 +2196,7 @@ module.exports = {
   sanitizeError,
   recordLineageEdge,
   getGrcOverview,
+  readPackage3OverviewOfficialCalculations,
   calculateOfficialGrcMetric,
   persistOfficialCalculation,
   runOfficialPackage4Job,

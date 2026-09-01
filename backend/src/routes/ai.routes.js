@@ -2,7 +2,17 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../config/db');
 const auth = require('../middleware/auth');
+const { requireCommercialCapability } = require('../middleware/commercialEntitlement.middleware');
 const { resolveLocale } = require('../utils/locale');
+
+const requireAiComplianceRead = requireCommercialCapability('ai.compliance', {
+  requiredPermission: 'ai.view',
+  mode: 'read',
+});
+const requireActionsManage = requireCommercialCapability('iso.actions', {
+  requiredPermission: 'actions.manage',
+  mode: 'write',
+});
 
 // =============================
 // 🔐 VALIDADOR UUID
@@ -58,7 +68,7 @@ const auditorExplanationForStatus = (status) => {
 // ✅ IA RECOMMENDATIONS
 // Solo normas activas + tenant_controls
 // =============================
-router.get('/recommendations/:tenant_id', auth, async (req, res) => {
+router.get('/recommendations/:tenant_id', auth, requireAiComplianceRead, async (req, res) => {
   try {
     const locale = resolveLocale(req);
     res.set('x-tcdx-locale', locale);
@@ -133,7 +143,7 @@ router.get('/recommendations/:tenant_id', auth, async (req, res) => {
 // 🔥 APPLY IA LEGACY
 // Compatibilidad: ya no aplica cambios directos; crea un borrador revisable.
 // =============================
-router.put('/apply/:tenant_control_id', auth, async (req, res) => {
+router.put('/apply/:tenant_control_id', auth, requireAiComplianceRead, requireActionsManage, async (req, res) => {
   const client = await pool.connect();
 
   try {
