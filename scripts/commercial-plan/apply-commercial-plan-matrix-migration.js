@@ -74,9 +74,27 @@ const HISTORICAL_AI_ADDON_CLASSIFICATION_EVOLUTION = Object.freeze({
   }),
 });
 
+const HISTORICAL_REQUIRED_PERMISSION_EVOLUTION = Object.freeze({
+  'ai.compliance': Object.freeze({
+    historical: 'ai_compliance.read',
+    evolved: 'ai.view',
+  }),
+  'iso.actions': Object.freeze({
+    historical: 'actions.read',
+    evolved: 'actions.view',
+  }),
+});
+
 const EXPECTED_CLASSIFICATIONS = Object.freeze(
   COMMERCIAL_PLAN_CAPABILITIES.reduce((acc, capability) => {
     acc[capability.capability_key] = capability.classification;
+    return acc;
+  }, {}),
+);
+
+const EXPECTED_REQUIRED_PERMISSIONS = Object.freeze(
+  COMMERCIAL_PLAN_CAPABILITIES.reduce((acc, capability) => {
+    acc[capability.capability_key] = capability.required_permission;
     return acc;
   }, {}),
 );
@@ -147,6 +165,12 @@ function normalizeClassification(value) {
   return String(value || '').trim().toUpperCase();
 }
 
+function normalizeRequiredPermission(value) {
+  if (value === null || value === undefined) return null;
+  const normalized = String(value).trim();
+  return normalized || null;
+}
+
 function isAllowedCatalogClassification({ capability_key: capabilityKey, actual_classification: actualClassification }) {
   const key = String(capabilityKey || '').trim();
   const historicalClassification = HISTORICAL_EXPECTED_CLASSIFICATIONS[key];
@@ -182,6 +206,50 @@ function findAcceptedCatalogClassificationEvolution(rows) {
         return (
           isAllowedCatalogClassification(row) &&
           actual !== normalizeClassification(HISTORICAL_EXPECTED_CLASSIFICATIONS[key])
+        );
+      })
+      .map((row) => row.capability_key)
+  );
+}
+
+function isAllowedCatalogPermission({ capability_key: capabilityKey, required_permission: rowExpectedPermission, actual_required_permission: actualRequiredPermission }) {
+  const key = String(capabilityKey || '').trim();
+  const expectedPermission = normalizeRequiredPermission(
+    Object.prototype.hasOwnProperty.call(EXPECTED_REQUIRED_PERMISSIONS, key)
+      ? EXPECTED_REQUIRED_PERMISSIONS[key]
+      : rowExpectedPermission
+  );
+  const actualPermission = normalizeRequiredPermission(actualRequiredPermission);
+
+  if (!Object.prototype.hasOwnProperty.call(EXPECTED_REQUIRED_PERMISSIONS, key)) return false;
+  if (actualPermission === expectedPermission) return true;
+
+  const allowedEvolution = HISTORICAL_REQUIRED_PERMISSION_EVOLUTION[key];
+  return Boolean(
+    allowedEvolution &&
+      normalizeRequiredPermission(allowedEvolution.evolved) === expectedPermission &&
+      actualPermission === normalizeRequiredPermission(allowedEvolution.historical)
+  );
+}
+
+function findCatalogPermissionDrift(rows) {
+  return sortUnique(
+    rows
+      .filter((row) => !isAllowedCatalogPermission(row))
+      .map((row) => row.capability_key)
+  );
+}
+
+function findAcceptedCatalogPermissionEvolution(rows) {
+  return sortUnique(
+    rows
+      .filter((row) => {
+        const key = String(row.capability_key || '').trim();
+        const expectedPermission = normalizeRequiredPermission(EXPECTED_REQUIRED_PERMISSIONS[key]);
+        const actualPermission = normalizeRequiredPermission(row.actual_required_permission);
+        return (
+          isAllowedCatalogPermission(row) &&
+          actualPermission !== expectedPermission
         );
       })
       .map((row) => row.capability_key)
@@ -393,14 +461,16 @@ async function inspectCurrentCatalog(client) {
     ],
   );
 
-  const classificationResult = await client.query(
-    `WITH expected(capability_key, historical_classification, expected_classification) AS (
-       SELECT * FROM unnest($1::text[], $2::text[], $3::text[])
+  const catalogResult = await client.query(
+    `WITH expected(capability_key, historical_classification, expected_classification, required_permission) AS (
+       SELECT * FROM unnest($1::text[], $2::text[], $3::text[], $4::text[])
      )
      SELECT
        e.capability_key,
        e.historical_classification,
        e.expected_classification,
+       e.required_permission,
+       ctc.required_permission AS actual_required_permission,
        COALESCE(ctc.metadata->>'commercial_classification', e.historical_classification) AS actual_classification
      FROM expected e
      LEFT JOIN public.commercial_technical_capabilities ctc
@@ -412,6 +482,7 @@ async function inspectCurrentCatalog(client) {
       expectedCapabilities,
       expectedCapabilities.map((key) => HISTORICAL_EXPECTED_CLASSIFICATIONS[key]),
       expectedCapabilities.map((key) => EXPECTED_CLASSIFICATIONS[key]),
+      expectedCapabilities.map((key) => EXPECTED_REQUIRED_PERMISSIONS[key]),
     ],
   );
 
@@ -433,13 +504,17 @@ async function inspectCurrentCatalog(client) {
 
   const capabilityRow = capabilityResult.rows[0] || {};
   const moduleRow = moduleResult.rows[0] || {};
-  const classificationDrift = findCatalogClassificationDrift(classificationResult.rows);
-  const acceptedClassificationEvolution = findAcceptedCatalogClassificationEvolution(classificationResult.rows);
+  const classificationDrift = findCatalogClassificationDrift(catalogResult.rows);
+  const acceptedClassificationEvolution = findAcceptedCatalogClassificationEvolution(catalogResult.rows);
+  const permissionDrift = findCatalogPermissionDrift(catalogResult.rows);
+  const acceptedPermissionEvolution = findAcceptedCatalogPermissionEvolution(catalogResult.rows);
   process.stdout.write(`expected_capabilities=${capabilityRow.expected_capabilities}\n`);
   process.stdout.write(`existing_capabilities=${capabilityRow.existing_capabilities}\n`);
   process.stdout.write(`active_capabilities=${capabilityRow.active_capabilities}\n`);
   process.stdout.write(`missing_capabilities=${capabilityRow.missing_capabilities?.length ? capabilityRow.missing_capabilities.join(',') : 'none'}\n`);
   process.stdout.write(`inactive_capabilities=${capabilityRow.inactive_capabilities?.length ? capabilityRow.inactive_capabilities.join(',') : 'none'}\n`);
+  process.stdout.write(`permission_drift=${permissionDrift.length ? permissionDrift.join(',') : 'none'}\n`);
+  process.stdout.write(`accepted_permission_evolution=${acceptedPermissionEvolution.length ? acceptedPermissionEvolution.join(',') : 'none'}\n`);
   process.stdout.write(`classification_drift=${classificationDrift.length ? classificationDrift.join(',') : 'none'}\n`);
   process.stdout.write(`accepted_classification_evolution=${acceptedClassificationEvolution.length ? acceptedClassificationEvolution.join(',') : 'none'}\n`);
   process.stdout.write(`expected_modules=${moduleRow.expected_modules}\n`);
@@ -451,8 +526,11 @@ async function inspectCurrentCatalog(client) {
   if (classificationDrift.length) {
     throw new Error(`Commercial Plan Matrix preflight failed: capability classification drift ${classificationDrift.join(', ')}`);
   }
+  if (permissionDrift.length) {
+    throw new Error(`Commercial Plan Matrix preflight failed: capability permission drift ${permissionDrift.join(', ')}`);
+  }
 
-  return { capabilityRow, moduleRow, classificationDrift, acceptedClassificationEvolution };
+  return { capabilityRow, moduleRow, classificationDrift, acceptedClassificationEvolution, permissionDrift, acceptedPermissionEvolution };
 }
 
 async function migrationState(client, migration) {
@@ -592,7 +670,8 @@ async function fetchCapabilityCatalogState(client) {
     active_count: rows.filter((row) => row.status === 'active').length,
     missing: sortUnique(rows.filter((row) => !row.status).map((row) => row.capability_key)),
     inactive: sortUnique(rows.filter((row) => row.status && row.status !== 'active').map((row) => row.capability_key)),
-    permission_drift: sortUnique(rows.filter((row) => row.actual_required_permission !== row.required_permission).map((row) => row.capability_key)),
+    permission_drift: findCatalogPermissionDrift(rows),
+    accepted_permission_evolution: findAcceptedCatalogPermissionEvolution(rows),
     classification_drift: findCatalogClassificationDrift(rows),
     accepted_classification_evolution: findAcceptedCatalogClassificationEvolution(rows),
   };
@@ -630,9 +709,16 @@ async function postconditions(client) {
     missing: catalogState.missing || [],
     inactive: catalogState.inactive || [],
     permission_drift: catalogState.permission_drift || [],
+    accepted_permission_evolution: catalogState.accepted_permission_evolution || [],
     classification_drift: catalogState.classification_drift || [],
+    accepted_classification_evolution: catalogState.accepted_classification_evolution || [],
   };
-  if (Object.values(catalogFailures).some((values) => values.length)) {
+  if ([
+    catalogFailures.missing,
+    catalogFailures.inactive,
+    catalogFailures.permission_drift,
+    catalogFailures.classification_drift,
+  ].some((values) => values.length)) {
     throw new Error(`Commercial capability catalog postcondition failed: ${JSON.stringify(catalogFailures)}`);
   }
 
@@ -659,6 +745,9 @@ async function postconditions(client) {
     GRC_MISSING: grc.missing.length,
     GRC_COVERAGE: coveragePct,
     GRC_COVERAGE_RATIO: coverage,
+    PERMISSION_DRIFT: catalogState.permission_drift?.join(',') || 'none',
+    ACCEPTED_PERMISSION_EVOLUTION: catalogState.accepted_permission_evolution?.join(',') || 'none',
+    CLASSIFICATION_DRIFT: catalogState.classification_drift?.join(',') || 'none',
     ACCEPTED_CLASSIFICATION_EVOLUTION: catalogState.accepted_classification_evolution?.join(',') || 'none',
   };
 
@@ -734,10 +823,15 @@ module.exports = {
   run,
   _private: {
     HISTORICAL_AI_ADDON_CLASSIFICATION_EVOLUTION,
+    HISTORICAL_REQUIRED_PERMISSION_EVOLUTION,
     EXPECTED_CLASSIFICATIONS,
+    EXPECTED_REQUIRED_PERMISSIONS,
     HISTORICAL_EXPECTED_CLASSIFICATIONS,
+    findAcceptedCatalogPermissionEvolution,
     findAcceptedCatalogClassificationEvolution,
+    findCatalogPermissionDrift,
     findCatalogClassificationDrift,
+    isAllowedCatalogPermission,
     isAllowedCatalogClassification,
   },
 };
