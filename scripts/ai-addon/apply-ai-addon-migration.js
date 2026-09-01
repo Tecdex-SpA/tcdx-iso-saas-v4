@@ -13,6 +13,12 @@ const MIGRATION = Object.freeze({
   file: path.join(root, 'database/migrations/20260831_ai_addon_commercial_visibility.sql'),
 });
 
+const RECONCILIATION_MIGRATION = Object.freeze({
+  id: '20260901_reconcile_ai_addon_after_historical_reapply',
+  file: path.join(root, 'database/migrations/20260901_reconcile_ai_addon_after_historical_reapply.sql'),
+});
+const DEPLOY_SCRIPT = path.join(root, 'scripts/deploy-vms.sh');
+
 const LOCK_NAMESPACE = 844332;
 const LOCK_KEY = 2026083101;
 const STANDARD_PLAN_KEYS = Object.freeze(['pyme', 'empresa', 'enterprise']);
@@ -77,6 +83,61 @@ function unwrapTransaction(sql) {
   return [...lines.slice(0, begin), ...lines.slice(begin + 1, commit), ...lines.slice(commit + 1)].join('\n');
 }
 
+function migrationStateFromRows(rows, migration) {
+  if (!rows.length) return 'pending';
+  const row = rows[0];
+  if (row.status === 'applied' && row.checksum === migration.checksum) return 'already_applied';
+  if (row.status === 'applied') return 'checksum_mismatch';
+  if (row.status === 'running') return 'running';
+  if (row.status === 'failed') return 'pending';
+  return row.status || 'pending';
+}
+
+function assertMigrationStateIsSafe(state, migration) {
+  if (state === 'checksum_mismatch') throw new Error(`AI Add-on migration checksum mismatch: ${migration.id}`);
+  if (state === 'running') throw new Error(`AI Add-on migration ledger is already running: ${migration.id}`);
+}
+
+function normalizeAddonState(row) {
+  return {
+    ai_addon_ready: row.ai_addon_ready === true || row.ai_addon_ready === 'true',
+    ai_capabilities_ready: Number(row.ai_capabilities_ready || 0),
+    ai_capabilities_historical_classification: Number(row.ai_capabilities_historical_classification || 0),
+    base_plans_do_not_include_ai: row.base_plans_do_not_include_ai === true || row.base_plans_do_not_include_ai === 'true',
+    enterprise_ai_compliance_included: row.enterprise_ai_compliance_included === true || row.enterprise_ai_compliance_included === 'true',
+    compatible_plan_versions: Number(row.compatible_plan_versions || 0),
+    standard_plan_versions: Number(row.standard_plan_versions || 0),
+  };
+}
+
+function isKnownHistoricalReapplyReconciliationState(row) {
+  const state = normalizeAddonState(row);
+  return (
+    state.ai_addon_ready === true &&
+    state.ai_capabilities_ready === 0 &&
+    state.ai_capabilities_historical_classification === AI_CAPABILITIES.length &&
+    state.base_plans_do_not_include_ai === false &&
+    state.enterprise_ai_compliance_included === true &&
+    state.compatible_plan_versions === STANDARD_PLAN_KEYS.length &&
+    state.standard_plan_versions === STANDARD_PLAN_KEYS.length
+  );
+}
+
+function assertReconciliationRegisteredImmediatelyAfterAiAddon() {
+  const deployScript = fs.readFileSync(DEPLOY_SCRIPT, 'utf8');
+  const aiEntry = '"AI Add-on|scripts/ai-addon/apply-ai-addon-migration.js"';
+  const reconciliationEntry = '"AI Add-on Reconciliation|scripts/normalization/apply-ai-addon-reconciliation-migration.js"';
+  const aiIndex = deployScript.indexOf(aiEntry);
+  const reconciliationIndex = deployScript.indexOf(reconciliationEntry);
+  if (aiIndex < 0 || reconciliationIndex < 0 || reconciliationIndex < aiIndex) {
+    throw new Error('AI Add-on reconciliation runner is not registered after AI Add-on in deploy-vms.sh');
+  }
+  const between = deployScript.slice(aiIndex + aiEntry.length, reconciliationIndex).trim();
+  if (between) {
+    throw new Error('AI Add-on reconciliation runner must be registered immediately after AI Add-on in deploy-vms.sh');
+  }
+}
+
 async function requireBaseSchema(client) {
   const result = await client.query(`WITH required_columns(table_name, column_name) AS (
       VALUES
@@ -121,7 +182,7 @@ async function requireBaseSchema(client) {
   if (failed.length) throw new Error(`AI Add-on schema preflight failed: ${failed.map(([key]) => key).join(', ')}`);
 }
 
-async function postconditions(client) {
+async function fetchPostconditionState(client) {
   const result = await client.query(
     `WITH standard_versions AS (
        SELECT id
@@ -129,7 +190,7 @@ async function postconditions(client) {
        WHERE status = 'published'
          AND plan_key = ANY($1::text[])
      ), ai_plan_capabilities AS (
-       SELECT capability_key
+       SELECT plan_key, capability_key
        FROM v_commercial_plan_capabilities
        WHERE plan_key = ANY($1::text[])
          AND capability_key = ANY($2::text[])
@@ -150,7 +211,21 @@ async function postconditions(client) {
            AND metadata->>'commercial_classification' = 'AI_ADDON'
            AND metadata->>'addon_key' = 'ai'
        ) AS ai_capabilities_ready,
+       (
+         SELECT COUNT(*)::int
+         FROM commercial_technical_capabilities
+         WHERE capability_key = ANY($2::text[])
+           AND status = 'active'
+           AND metadata->>'commercial_classification' = 'GRC_ADVANCED'
+           AND metadata->>'addon_key' = 'ai'
+       ) AS ai_capabilities_historical_classification,
        NOT EXISTS (SELECT 1 FROM ai_plan_capabilities) AS base_plans_do_not_include_ai,
+       EXISTS (
+         SELECT 1
+         FROM ai_plan_capabilities
+         WHERE plan_key = 'enterprise'
+           AND capability_key = 'ai.compliance'
+       ) AS enterprise_ai_compliance_included,
        (
          SELECT COUNT(*)::int
          FROM standard_versions sv
@@ -161,16 +236,67 @@ async function postconditions(client) {
        ) AS compatible_plan_versions,
        (SELECT COUNT(*)::int FROM standard_versions) AS standard_plan_versions
      `,
-    [STANDARD_PLAN_KEYS, AI_CAPABILITIES],
+     [STANDARD_PLAN_KEYS, AI_CAPABILITIES],
   );
 
-  const row = result.rows[0] || {};
-  for (const [key, value] of Object.entries(row)) process.stdout.write(`${key}=${value}\n`);
+  return result.rows[0] || {};
+}
+
+function assertPostconditionState(row) {
   if (row.ai_addon_ready !== true) throw new Error('AI Add-on postcondition failed: ai_addon_ready=false');
   if (Number(row.ai_capabilities_ready) !== AI_CAPABILITIES.length) throw new Error('AI Add-on postcondition failed: ai capabilities not classified as AI_ADDON');
   if (row.base_plans_do_not_include_ai !== true) throw new Error('AI Add-on postcondition failed: base plans still include AI capabilities');
   if (Number(row.compatible_plan_versions) !== Number(row.standard_plan_versions)) throw new Error('AI Add-on postcondition failed: not all standard plan versions can contract AI');
   return row;
+}
+
+function printPostconditionState(row) {
+  for (const [key, value] of Object.entries(row)) process.stdout.write(`${key}=${value}\n`);
+}
+
+async function postconditions(client) {
+  const row = await fetchPostconditionState(client);
+  printPostconditionState(row);
+  assertPostconditionState(row);
+  return row;
+}
+
+async function migrationState(client, migration) {
+  const result = await client.query(
+    'SELECT checksum,status FROM public.schema_migrations WHERE migration_id=$1',
+    [migration.id],
+  );
+  return migrationStateFromRows(result.rows, migration);
+}
+
+async function reconciliationState(client) {
+  if (!fs.existsSync(RECONCILIATION_MIGRATION.file)) {
+    throw new Error(`AI Add-on reconciliation runner is not available after AI Add-on: ${path.relative(root, RECONCILIATION_MIGRATION.file)}`);
+  }
+  assertReconciliationRegisteredImmediatelyAfterAiAddon();
+  const sql = fs.readFileSync(RECONCILIATION_MIGRATION.file, 'utf8');
+  const migration = {
+    ...RECONCILIATION_MIGRATION,
+    checksum: crypto.createHash('sha256').update(sql).digest('hex'),
+  };
+  const result = await client.query(
+    'SELECT checksum,status FROM public.schema_migrations WHERE migration_id=$1',
+    [migration.id],
+  );
+  const state = migrationStateFromRows(result.rows, migration);
+  if (state === 'checksum_mismatch') throw new Error(`AI Add-on reconciliation migration checksum mismatch: ${migration.id}`);
+  if (state === 'running') throw new Error(`AI Add-on reconciliation migration is already running: ${migration.id}`);
+  return state;
+}
+
+async function allowKnownReconciliationRequiredState(client, row) {
+  if (!isKnownHistoricalReapplyReconciliationState(row)) return false;
+  const state = await reconciliationState(client);
+  if (state !== 'pending') return false;
+  process.stdout.write('already_applied_with_reconciliation_required=true\n');
+  process.stdout.write(`reconciliation_migration=${RECONCILIATION_MIGRATION.id}\n`);
+  process.stdout.write('reconciliation_migration_state=pending\n');
+  return true;
 }
 
 async function ensureSchemaMigrations(client) {
@@ -202,9 +328,23 @@ async function run() {
   const client = new Client({ connectionString: databaseUrl() });
   await client.connect();
   try {
-    await ensureSchemaMigrations(client);
+    if (args.has('--apply')) await ensureSchemaMigrations(client);
     await requireBaseSchema(client);
+    const currentMigrationState = await migrationState(client, migration);
+    process.stdout.write(`migration_state=${currentMigrationState}\n`);
+    assertMigrationStateIsSafe(currentMigrationState, migration);
     if (args.has('--preflight')) {
+      if (currentMigrationState === 'already_applied') {
+        const row = await fetchPostconditionState(client);
+        printPostconditionState(row);
+        try {
+          assertPostconditionState(row);
+        } catch (error) {
+          if (await allowKnownReconciliationRequiredState(client, row)) return;
+          throw error;
+        }
+        return;
+      }
       await postconditions(client).catch((error) => {
         process.stdout.write(`postconditions=pending (${sanitize(error)})\n`);
       });
@@ -217,18 +357,35 @@ async function run() {
 
     const existing = await client.query('SELECT checksum, status FROM public.schema_migrations WHERE migration_id = $1 FOR UPDATE', [migration.id]);
     if (existing.rowCount > 0) {
-      if (existing.rows[0].checksum !== migration.checksum) throw new Error('AI Add-on migration checksum mismatch');
-      await client.query('COMMIT');
-      process.stdout.write('already_applied=true\n');
-      await postconditions(client);
-      return;
+      if (existing.rows[0].status === 'applied') {
+        if (existing.rows[0].checksum !== migration.checksum) throw new Error('AI Add-on migration checksum mismatch');
+        await client.query('COMMIT');
+        process.stdout.write('already_applied=true\n');
+        const row = await fetchPostconditionState(client);
+        printPostconditionState(row);
+        try {
+          assertPostconditionState(row);
+        } catch (error) {
+          if (await allowKnownReconciliationRequiredState(client, row)) return;
+          throw error;
+        }
+        return;
+      }
+      if (existing.rows[0].status === 'running') throw new Error('AI Add-on migration ledger is already running');
     }
 
     await client.query(unwrapTransaction(migration.sql));
     const details = await postconditions(client);
     await client.query(
       `INSERT INTO public.schema_migrations (migration_id, checksum, applied_at, applied_by, duration_ms, status, details)
-       VALUES ($1, $2, now(), current_user, $3, 'applied', $4::jsonb)`,
+       VALUES ($1, $2, now(), current_user, $3, 'applied', $4::jsonb)
+       ON CONFLICT (migration_id) DO UPDATE
+       SET checksum = EXCLUDED.checksum,
+           applied_at = now(),
+           applied_by = current_user,
+           duration_ms = EXCLUDED.duration_ms,
+           status = 'applied',
+           details = EXCLUDED.details`,
       [migration.id, migration.checksum, Date.now() - started, JSON.stringify(details)],
     );
     await client.query('COMMIT');
@@ -241,7 +398,22 @@ async function run() {
   }
 }
 
-run().catch((error) => {
-  console.error(sanitize(error));
-  process.exit(1);
-});
+if (require.main === module) {
+  run().catch((error) => {
+    console.error(sanitize(error));
+    process.exit(1);
+  });
+}
+
+module.exports = {
+  _private: {
+    AI_CAPABILITIES,
+    RECONCILIATION_MIGRATION,
+    STANDARD_PLAN_KEYS,
+    assertPostconditionState,
+    assertReconciliationRegisteredImmediatelyAfterAiAddon,
+    isKnownHistoricalReapplyReconciliationState,
+    migrationStateFromRows,
+    normalizeAddonState,
+  },
+};

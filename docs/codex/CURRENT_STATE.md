@@ -208,6 +208,16 @@ Evidencia local PASS:
 
 Pendiente bloqueante exacto: ejecutar preflight oficial de migraciones en contexto autorizado, luego commit/deploy/postdeploy si preflight PASS. Handoff: `docs/codex/handoffs/RELEASE-CLOSEOUT-NORMALIZATION.md`.
 
+## AI-ADDON MIGRATION ORDER RECONCILIATION
+
+Status: `READY_FOR_HUMAN_REVIEW` local sobre `main@279ec9a68a87bb1da8751d2df426b498a4c1286e`.
+
+Root cause confirmado: `20260828_commercial_standard_plan_matrix` pudo reejecutarse porque el lookup exacto de `schema_migrations` no encontraba una fila aplicada para `migration_id=20260828_commercial_standard_plan_matrix` en el momento del deploy; no fue causado por checksum/status/details drift ni por la evolucion aceptada de permisos/clasificacion. Esa reejecucion historica revirtio invariantes efectivas de `20260831_ai_addon_commercial_visibility` aunque su ledger seguia `applied`.
+
+Cambios locales: el runner comercial clasifica ledger antes de catalog drift y bloquea reapply con `applied+checksum`; el runner AI Add-on reconoce solo el estado revertido conocido como `already_applied_with_reconciliation_required`; se agrega migracion forward-only `20260901_reconcile_ai_addon_after_historical_reapply` y runner `scripts/normalization/apply-ai-addon-reconciliation-migration.js`; `scripts/deploy-vms.sh` queda ordenado Commercial Plan Matrix -> AI Add-on -> AI Add-on Reconciliation -> NORMALIZATION-01 -> NORMALIZATION-02.
+
+Validacion focal y preflight productivo read-only PASS; no hubo `--apply`, commit, push ni deploy. Handoff: `docs/codex/handoffs/AI-ADDON-MIGRATION-ORDER-RECONCILIATION.md`.
+
 ## Handoff relevante
 
 - `docs/codex/handoffs/CONT-00.md`
@@ -270,5 +280,6 @@ Pendiente bloqueante exacto: ejecutar preflight oficial de migraciones en contex
 - `docs/codex/handoffs/NORMALIZATION-01-DB-BACKEND-AUTHORITY.md`
 - `docs/codex/handoffs/NORMALIZATION-02-KPI-HEALTH-UI.md`
 - `docs/codex/handoffs/RELEASE-CLOSEOUT-NORMALIZATION.md`
+- `docs/codex/handoffs/AI-ADDON-MIGRATION-ORDER-RECONCILIATION.md`
 - `docs/codex/PHASE6_EXPANDED_CLOSURE.md`
 - `docs/architecture/grc_relationship_inventory.md`

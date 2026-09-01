@@ -533,19 +533,23 @@ async function inspectCurrentCatalog(client) {
   return { capabilityRow, moduleRow, classificationDrift, acceptedClassificationEvolution, permissionDrift, acceptedPermissionEvolution };
 }
 
-async function migrationState(client, migration) {
-  const result = await client.query(
-    'SELECT checksum,status FROM public.schema_migrations WHERE migration_id=$1',
-    [migration.id],
-  );
-  if (!result.rowCount) return 'pending';
+function migrationStateFromRows(rows, migration) {
+  if (!rows.length) return 'pending';
 
-  const row = result.rows[0];
+  const row = rows[0];
   if (row.status === 'applied' && row.checksum === migration.checksum) return 'already_applied';
   if (row.status === 'applied') return 'checksum_mismatch';
   if (row.status === 'running') return 'running';
   if (row.status === 'failed') return 'pending';
   return row.status || 'pending';
+}
+
+async function migrationState(client, migration) {
+  const result = await client.query(
+    'SELECT checksum,status FROM public.schema_migrations WHERE migration_id=$1',
+    [migration.id],
+  );
+  return migrationStateFromRows(result.rows, migration);
 }
 
 function assertMigrationStateIsSafe(state, migration) {
@@ -569,11 +573,11 @@ function assertMigrationStateIsSafe(state, migration) {
 async function preflight(client, migration) {
   await requireBaseSchema(client);
   await requirePlans(client);
-  await inspectCurrentCatalog(client);
   const state = await migrationState(client, migration);
   process.stdout.write(`migration_state=${state}\n`);
-  process.stdout.write(`Commercial Plan Matrix migration preflight OK: pending=${state === 'pending' ? migration.id : 'none'}\n`);
   assertMigrationStateIsSafe(state, migration);
+  await inspectCurrentCatalog(client);
+  process.stdout.write(`Commercial Plan Matrix migration preflight OK: pending=${state === 'pending' ? migration.id : 'none'}\n`);
   return state === 'already_applied';
 }
 
@@ -833,5 +837,6 @@ module.exports = {
     findCatalogClassificationDrift,
     isAllowedCatalogPermission,
     isAllowedCatalogClassification,
+    migrationStateFromRows,
   },
 };

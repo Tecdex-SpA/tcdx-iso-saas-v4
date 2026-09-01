@@ -3,6 +3,10 @@
 const assert = require('node:assert/strict');
 const { _private } = require('./apply-commercial-plan-matrix-migration');
 
+const COMMERCIAL_MIGRATION = Object.freeze({
+  checksum: 'd968b7aad261d3dc259ff0e86d34ca7d991fdc96b1a1e6add0daad668435e020',
+});
+
 function row(capabilityKey, actualClassification) {
   return {
     capability_key: capabilityKey,
@@ -192,5 +196,51 @@ assert.deepEqual(
   'only historical rows in a mixed state are reported as accepted compatibility',
 );
 
+assert.equal(
+  _private.migrationStateFromRows([{ checksum: COMMERCIAL_MIGRATION.checksum, status: 'applied' }], COMMERCIAL_MIGRATION),
+  'already_applied',
+  'applied ledger with matching checksum is always already_applied',
+);
+
+assert.deepEqual(
+  _private.findCatalogClassificationDrift([
+    row('ai.auditor', 'GRC_ADVANCED'),
+    row('ai.compliance', 'GRC_ADVANCED'),
+  ]),
+  [],
+  'applied ledger plus historical AI catalog state remains valid without reapply',
+);
+
+assert.deepEqual(
+  _private.findCatalogClassificationDrift([
+    row('ai.auditor', 'AI_ADDON'),
+    row('ai.compliance', 'AI_ADDON'),
+  ]),
+  [],
+  'applied ledger plus evolved AI catalog state remains valid without reapply',
+);
+
+assert.deepEqual(
+  _private.findCatalogClassificationDrift([
+    row('ai.auditor', 'AI_ADDON'),
+    row('ai.compliance', 'GRC_ADVANCED'),
+  ]),
+  [],
+  'applied ledger plus approved mixed AI catalog evolution remains valid without reapply',
+);
+
+assert.equal(
+  _private.migrationStateFromRows([{ checksum: 'bad-checksum', status: 'applied' }], COMMERCIAL_MIGRATION),
+  'checksum_mismatch',
+  'applied ledger with checksum mismatch must fail fast',
+);
+
+assert.equal(
+  _private.migrationStateFromRows([], COMMERCIAL_MIGRATION),
+  'pending',
+  'missing ledger remains pending',
+);
+
 process.stdout.write('COMMERCIAL_PLAN_RUNNER_CLASSIFICATION_EVOLUTION_TEST_PASS\n');
 process.stdout.write('COMMERCIAL_PLAN_RUNNER_PERMISSION_EVOLUTION_TEST_PASS\n');
+process.stdout.write('COMMERCIAL_PLAN_RUNNER_LEDGER_REAPPLY_GUARD_TEST_PASS\n');

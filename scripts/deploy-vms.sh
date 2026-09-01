@@ -236,6 +236,7 @@ MIGRATION_RUNNERS=(
   "RBAC-02|scripts/rbac02/apply-rbac02-migration.js"
   "Commercial Plan Matrix|scripts/commercial-plan/apply-commercial-plan-matrix-migration.js"
   "AI Add-on|scripts/ai-addon/apply-ai-addon-migration.js"
+  "AI Add-on Reconciliation|scripts/normalization/apply-ai-addon-reconciliation-migration.js"
   "NORMALIZATION-01|scripts/normalization/apply-normalization-01-migration.js"
   "NORMALIZATION-02|scripts/normalization/apply-normalization-02-migration.js"
 )
