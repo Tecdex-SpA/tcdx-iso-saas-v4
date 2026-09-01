@@ -168,6 +168,46 @@ Cambios RBAC-03:
 - `artifacts/rbac02-route-audit/route_access_matrix.csv` fue regenerado con `routes=97`, `mapped=97`, `missing=0`.
 - Estado operacional: `COMMERCIAL_PLAN_MATRIX_APPROVED`, `COMMERCIAL_PLAN_MIGRATION_RUNNER_READY`, `PRODUCTION_MIGRATION_NOT_EXECUTED`.
 
+## NORMALIZATION-02 — KPI / Health / UI
+
+Status: `READY_FOR_HUMAN_REVIEW` local sobre `main@4642ff103735c79581441e61b65591112283d1b8`.
+
+Autoridad canónica:
+
+- `GLOBAL_HEALTH_AUTHORITY=official_formula_versions+calculation_runs+calculation_outputs+metric_snapshots+metric_source_bindings`.
+- `GLOBAL_SCORE_FORMULA=F5_5_GRC_HEALTH`.
+- `GLOBAL_SCORE_VERSION=2`.
+- `GLOBAL_SCORE_COVERAGE_POLICY=available_weight/applicable_weight; publish only when coverage >= minimum_coverage`.
+- `DATA_TRUST_ACCURACY_POLICY=accuracy remains NOT_CONFIGURED until a real measurable source or canonical binding exists`.
+- `EVIDENCE_COVERAGE_MAPPING=EVIDENCE-FRESH=freshness; COVERAGE=compliance_coverage; EVIDENCE-COVERAGE=compatibility_alias_only`.
+- `LEGACY_KPI_HLT_ROLE=COMPATIBILITY_SOURCE_COMPONENT`.
+
+Cambios locales:
+
+- `F5_5_GRC_HEALTH` v2 soporta disponibilidad parcial sin convertir faltantes a `NOT_APPLICABLE`, reporta cobertura/confianza/faltantes y sólo publica score ejecutivo con cobertura suficiente.
+- `canonicalHealthProjection.service.js` es la proyección única para `/dashboard`, `/health`, `/iso-health` y `/api/grc/overview`.
+- `/api/health/summary`, `/api/health/dashboard`, `/api/health/kpis` y `/api/grc/overview` leen Health canónico; norma/proceso/KPI-HLT quedan como detalle de compatibilidad.
+- `/encuestas` conserva un solo `AppLayout` desde su layout de ruta.
+- `EVIDENCE-COVERAGE` no se crea como métrica oficial; la expectativa queda cerrada por mapping de compatibilidad.
+- Migración forward-only `database/migrations/20260901_normalization02_kpi_health_ui.sql` y runner `scripts/normalization/apply-normalization-02-migration.js` agregados. Checksum: `b1daafdac3eda56dafd3cc47b655512bb34a88435a3954a5fd8de94c89f87da6`.
+
+Validación local focal: `git diff --check`, checks sintácticos de servicios/runner, tests `NORMALIZATION02_GLOBAL_SCORE_SEMANTICS_PASS`, `NORMALIZATION02_CANONICAL_HEALTH_PROJECTION_PASS`, `NESTED_ENCUESTAS_LAYOUT=0`, `NORMALIZATION02_RUNNER_CONTRACT_PASS`, checksum runner y `bash -n scripts/deploy-vms.sh`. No se ejecutó build, lint/typecheck global, Playwright/E2E, regresión integral, deploy ni validación runtime.
+
+## RELEASE-CLOSEOUT — NORMALIZATION-01 + NORMALIZATION-02
+
+Status: `RELEASE_CLOSEOUT_NO_GO` local sobre `main@4642ff103735c79581441e61b65591112283d1b8`.
+
+Resultado: Gates locales A/B/C PASS, pero release GO bloqueado porque `MIGRATION_DATABASE_URL` no esta definido en el entorno local y no pudo ejecutarse preflight PostgreSQL read-only de NORMALIZATION-01/02. Por regla de cierre no hubo commit, deploy oficial ni postdeploy.
+
+Evidencia local PASS:
+
+- Historico protegido: `database/migrations/20260828_commercial_standard_plan_matrix.sql` y `database/migrations/20260831_ai_addon_commercial_visibility.sql` sin diff.
+- Gate A: contratos NORMALIZATION-01/02, AI add-on, matriz comercial, RBAC-02, visibilidad comercial, subscription sync, commercial multi-tenant y RBAC middleware PASS.
+- Gate B: frontend lint/typecheck/build PASS, backend `npm run check` PASS, checksums de migraciones y `bash -n scripts/deploy-vms.sh` PASS.
+- Gate C: `WEB_BASE_URL=http://localhost:3001 npx playwright test --config=playwright.release-closeout.config.ts` PASS con 11/11 sobre rutas criticas `/dashboard`, `/dashboard?view=kpi`, `/ia-compliance`, `/ia-auditor`, `/acciones-recomendadas`, `/planes-accion`, `/encuestas`, `/grc`, `/health`, `/iso-health`.
+
+Pendiente bloqueante exacto: ejecutar preflight oficial de migraciones en contexto autorizado, luego commit/deploy/postdeploy si preflight PASS. Handoff: `docs/codex/handoffs/RELEASE-CLOSEOUT-NORMALIZATION.md`.
+
 ## Handoff relevante
 
 - `docs/codex/handoffs/CONT-00.md`
@@ -228,5 +268,7 @@ Cambios RBAC-03:
 - `docs/codex/handoffs/AI-ADDON-02-BINARY-COMMERCIAL-MODEL.md`
 - `docs/codex/handoffs/POSTDEPLOY-02-LEGACY-CANONICAL-DATA-AUDIT.md`
 - `docs/codex/handoffs/NORMALIZATION-01-DB-BACKEND-AUTHORITY.md`
+- `docs/codex/handoffs/NORMALIZATION-02-KPI-HEALTH-UI.md`
+- `docs/codex/handoffs/RELEASE-CLOSEOUT-NORMALIZATION.md`
 - `docs/codex/PHASE6_EXPANDED_CLOSURE.md`
 - `docs/architecture/grc_relationship_inventory.md`

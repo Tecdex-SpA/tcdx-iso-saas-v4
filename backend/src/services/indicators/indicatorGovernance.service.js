@@ -3,6 +3,7 @@
 const pool = require('../../config/db');
 const asyncJobs = require('../asyncJob.service');
 const orchestrator = require('../math-governance/officialCalculationOrchestrator.service');
+const canonicalHealthProjection = require('../math-governance/canonicalHealthProjection.service');
 const { getSourceCodeForIndicator, getSourceContract } = require('../math-governance/sourceContracts.service');
 const {
   IndicatorContractError, checksum, calculateDataTrust, evaluateFreshness, evaluateSufficiency,
@@ -189,7 +190,7 @@ async function dashboard(scope){
     id:definition.id,code:definition.code,name:definition.name,description:definition.definition,
     category:definition.domain,kpi_type:'official_indicator',unit:definition.unit,frequency:definition.frequency,
     direction:definition.direction,target_value:latest_snapshot?.target??null,applicable_standards:[],is_enabled:true,
-    is_health_kpi:['GRC-HEALTH','EVIDENCE-COVERAGE','DATA-TRUST'].includes(definition.code),
+    is_health_kpi:['GRC-HEALTH','EVIDENCE-FRESH','COVERAGE','DATA-TRUST'].includes(definition.code),
     latest_snapshot:latest_snapshot?{id:latest_snapshot.snapshot_id,value:latest_snapshot.value,status_color:dashboardColor(latest_snapshot),
       period_type:definition.frequency,period_start:latest_snapshot.period?.start||null,period_end:latest_snapshot.period?.end||null,
       calculated_at:latest_snapshot.updated_at,breakdown_json:{state:latest_snapshot.state,coverage:latest_snapshot.coverage,
@@ -201,10 +202,17 @@ async function dashboard(scope){
   const measured=counts.green+counts.yellow+counts.red;
   const coverageValues=catalog.map((item)=>item.latest_snapshot?.coverage).filter((value)=>Number.isFinite(value));
   const averageCoverage=coverageValues.length?coverageValues.reduce((sum,value)=>sum+Number(value),0)/coverageValues.length:null;
+  let canonicalHealth=null;
+  try{ canonicalHealth=await canonicalHealthProjection.getCanonicalHealthProjection({user:scope}); }catch(_error){ canonicalHealth=null; }
   const health=catalog.find((item)=>item.definition.code==='GRC-HEALTH')?.latest_snapshot;
   return {summary:{total_kpis:items.length,...counts,measured_kpis:measured,
     data_coverage_pct:averageCoverage===null?null:Math.round(averageCoverage*(averageCoverage<=1?100:1)*100)/100,
-    official_score:health?.state==='calculated'?health.value:null,health_kpis:items.filter((item)=>item.is_health_kpi).length},items};
+    official_score:canonicalHealth?.published_score??(health?.state==='calculated'?health.value:null),
+    global_health_status:canonicalHealth?.global_status||health?.state||'unmeasured',
+    global_health_coverage:canonicalHealth?.coverage??null,
+    global_health_confidence:canonicalHealth?.confidence??null,
+    canonical_health:canonicalHealth,
+    health_kpis:items.filter((item)=>item.is_health_kpi).length},items};
 }
 async function recalculateCatalog(scope,body={},requestId=null){
   const catalog=await listCatalog(scope,{limit:250}); const results=[];

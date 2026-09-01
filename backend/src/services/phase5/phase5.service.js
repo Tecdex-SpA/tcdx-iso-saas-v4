@@ -13,6 +13,7 @@ const { validateExpression } = require('./formulaEngine');
 const { calculateTrustScore, assessFreshness, TrustScoreError } = require('./dataTrustScore');
 const phase5Package3 = require('../math-governance/phase5Package3.service');
 const analyticsCatalog = require('../math-governance/analyticsCatalog.service');
+const canonicalHealthProjection = require('../math-governance/canonicalHealthProjection.service');
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -2180,10 +2181,15 @@ async function getGrcOverview(scope, requestId = null) {
   const alerts = Object.entries(overview)
     .flatMap(([block, value]) => (value.warnings || []).map((message) => ({ block, severity: value.status === 'error' ? 'high' : 'medium', message })))
     .slice(0, 50);
-  const officialCalculations = await readPackage3OverviewOfficialCalculations(scope, { as_of: now });
+  const [officialCalculations, canonicalHealth] = await Promise.all([
+    readPackage3OverviewOfficialCalculations(scope, { as_of: now }),
+    canonicalHealthProjection.getCanonicalHealthProjection({ user: scope }),
+  ]);
   return {
     ...overview,
     official_calculations: officialCalculations,
+    canonical_health: canonicalHealth,
+    health: canonicalHealth.health,
     alerts,
     request_id: requestId || null,
     generated_at: now,

@@ -237,6 +237,7 @@ MIGRATION_RUNNERS=(
   "Commercial Plan Matrix|scripts/commercial-plan/apply-commercial-plan-matrix-migration.js"
   "AI Add-on|scripts/ai-addon/apply-ai-addon-migration.js"
   "NORMALIZATION-01|scripts/normalization/apply-normalization-01-migration.js"
+  "NORMALIZATION-02|scripts/normalization/apply-normalization-02-migration.js"
 )
 
 run_registered_migrations() {

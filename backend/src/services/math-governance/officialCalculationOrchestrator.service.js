@@ -283,17 +283,29 @@ function enrichDependencies(formulaCode, input, calculatedByCode) {
       dataTrust: 'F5_C3_DATA_TRUST',
       risk: 'F5_5_RESIDUAL_RISK',
     };
+    const componentStates = { ...(enriched.component_states || enriched._component_states || {}) };
     for (const [key, dependencyCode] of Object.entries(dependencyMap)) {
       if (enriched[key] === null || enriched[key] === undefined) {
         const raw = calculatedByCode.get(dependencyCode);
         if (raw !== undefined) {
           const value = Number(raw);
           enriched[key] = key === 'risk' ? Math.max(0, 1 - (value > 1 ? value / 100 : value)) : (value > 1 ? value / 100 : value);
+          componentStates[key] = { classification: 'AVAILABLE', formula_code: dependencyCode };
+        } else {
+          componentStates[key] = {
+            classification: key === 'dataTrust' ? 'NOT_CONFIGURED' : 'MISSING',
+            formula_code: dependencyCode,
+            reason: key === 'dataTrust'
+              ? 'accuracy_source_not_configured'
+              : 'formula_dependency_not_available',
+          };
         }
+      } else {
+        componentStates[key] = { ...(componentStates[key] || {}), classification: 'AVAILABLE', formula_code: dependencyCode };
       }
     }
-    const missing = ['compliance', 'actions', 'evidence', 'dataTrust', 'risk'].filter((key) => enriched[key] === null || enriched[key] === undefined);
-    if (missing.length) return { input: enriched, missing };
+    enriched.component_states = componentStates;
+    enriched.minimum_coverage = enriched.minimum_coverage ?? 0.8;
   }
   return { input: enriched, missing: [] };
 }

@@ -2,6 +2,7 @@
 
 const pool = require('../config/db');
 const diagnosticService = require('./diagnostic.service');
+const canonicalHealthProjection = require('./math-governance/canonicalHealthProjection.service');
 
 const WEIGHTS = {
   control_coverage: 35,
@@ -418,13 +419,14 @@ async function getProcessesHealth({ user, standardId = null, standardCode = null
 }
 
 async function getSummary({ user, standardId = null, standardCode = null } = {}) {
+  const canonical = await canonicalHealthProjection.getCanonicalHealthProjection({ user });
   const { standards, data_quality_warnings: standardWarnings } = await getStandardsHealth({ user, standardId, standardCode });
   const documentStats = await loadDocumentStats(
     standards[0]?.tenant_id || user?.tenant_id || user?.tenantId || user?.tenant || user?.company_id || user?.companyId
   );
 
-  const globalScore = combineStandardHealth(standards);
-  const status = statusForScore(globalScore);
+  const operationalGlobalScore = combineStandardHealth(standards);
+  const status = statusForScore(canonical.global_score ?? operationalGlobalScore);
   const totals = standards.reduce((acc, item) => {
     acc.controls_evaluated += item.controls_evaluated || 0;
     acc.controls_without_evidence += item.controls_without_evidence || 0;
@@ -455,17 +457,33 @@ async function getSummary({ user, standardId = null, standardCode = null } = {})
   if (drivers.length === 0 && standards.length > 0) drivers.push('sin factores críticos destacados en el alcance evaluado');
 
   return {
-    global_score: globalScore,
-    status: status.status,
-    label: status.label,
+    global_score: canonical.global_score,
+    published_score: canonical.published_score,
+    score_publicable: canonical.score_publicable,
+    global_status: canonical.global_status,
+    status: canonical.status,
+    label: canonical.label,
     color: status.color,
     updated_at: new Date().toISOString(),
+    coverage: canonical.coverage,
+    confidence: canonical.confidence,
+    minimum_coverage: canonical.minimum_coverage,
+    missing_components: canonical.missing_components,
+    components: canonical.components,
+    compatibility_components: canonical.compatibility_components,
+    source: canonical.source,
     drivers: drivers.slice(0, 6),
-    explanation: drivers[0]?.startsWith('sin factores')
-      ? 'La salud se mantiene estable porque no se observan deterioros principales en el alcance evaluado.'
-      : `La salud bajó principalmente por ${drivers.slice(0, 3).join(', ')}.`,
+    explanation: canonical.global_status === 'measured'
+      ? 'Health GRC calculado desde la proyección oficial canónica.'
+      : `Health GRC ${canonical.label.toLowerCase()} con ${Math.round((canonical.coverage || 0) * 100)}% de cobertura oficial disponible.`,
     dimensions: combinedDimensions,
     totals,
+    operational_detail: {
+      global_score: operationalGlobalScore,
+      status: status.status,
+      label: status.label,
+      role: canonicalHealthProjection.LEGACY_KPI_HLT_ROLE,
+    },
     document_maturity: {
       total_documents: documentStats.total,
       useful_documents: documentStats.useful,
@@ -474,6 +492,7 @@ async function getSummary({ user, standardId = null, standardCode = null } = {})
       score: documentStats.total ? pct(documentStats.useful, documentStats.total) : 0,
     },
     data_quality_warnings: [
+      ...canonical.data_quality_warnings,
       ...standardWarnings,
       ...(documentStats.warning ? [documentStats.warning] : []),
     ],
@@ -489,6 +508,16 @@ async function getDashboard({ user } = {}) {
 
   return {
     global_score: summary.global_score,
+    published_score: summary.published_score,
+    score_publicable: summary.score_publicable,
+    global_status: summary.global_status,
+    coverage: summary.coverage,
+    confidence: summary.confidence,
+    minimum_coverage: summary.minimum_coverage,
+    missing_components: summary.missing_components,
+    components: summary.components,
+    compatibility_components: summary.compatibility_components,
+    source: summary.source,
     label: summary.label,
     status: summary.status,
     color: summary.color,
@@ -511,6 +540,8 @@ async function getDashboard({ user } = {}) {
       main_issue: item.main_issue,
     })),
     alerts: {
+      missing_components: summary.missing_components?.length || 0,
+      insufficient_coverage: summary.global_status === 'insufficient_coverage' ? 1 : 0,
       critical_gaps: summary.totals.gaps_open,
       overdue_actions: summary.totals.actions_overdue,
       missing_evidence: summary.totals.controls_without_evidence,
@@ -532,8 +563,14 @@ async function getKpis({ user } = {}) {
   const weakestProcess = processesResult.processes[0];
   const doc = summary.document_maturity;
 
-  const items = [
-    { code: 'HLT-01', name: 'Salud global ISO', value: summary.global_score, unit: '%', status: summary.status, description: 'Puntaje global reproducible del sistema de gestión.' },
+  const canonicalKpis = [
+    { code: 'GRC-HEALTH', name: 'Salud GRC oficial', value: summary.global_score, unit: 'score', status: summary.global_status, description: `F5_5_GRC_HEALTH v2; cobertura ${Math.round((summary.coverage || 0) * 100)}%.` },
+    { code: 'EVIDENCE-FRESH', name: 'Evidencia vigente', value: summary.components.find((item) => item.key === 'evidence')?.value ?? null, unit: '%', status: summary.components.find((item) => item.key === 'evidence')?.classification || 'MISSING', description: 'Componente canónico de vigencia de evidencia.' },
+    { code: 'COVERAGE', name: 'Cobertura oficial', value: summary.coverage === null || summary.coverage === undefined ? null : summary.coverage * 100, unit: '%', status: summary.global_status, description: 'Cobertura de componentes oficiales disponibles para Health.' },
+    { code: 'DATA-TRUST', name: 'Data Trust', value: summary.components.find((item) => item.key === 'dataTrust')?.value ?? null, unit: 'score', status: summary.components.find((item) => item.key === 'dataTrust')?.classification || 'MISSING', description: 'Componente Data Trust; accuracy sin fuente real queda no configurado.' },
+  ];
+
+  const operationalItems = [
     { code: 'HLT-02', name: 'Salud por norma', value: weakestStandard?.score || 0, unit: '%', status: weakestStandard?.status || 'critical', description: `Norma más débil: ${weakestStandard?.name || 'sin datos'}.` },
     { code: 'HLT-03', name: 'Salud por proceso', value: weakestProcess?.score || 0, unit: '%', status: weakestProcess?.status || 'critical', description: `Proceso más crítico: ${weakestProcess?.name || 'sin datos'}.` },
     { code: 'KPI-01', name: 'Cobertura de controles', value: summary.dimensions.control_coverage.score, unit: '%', status: statusForScore(summary.dimensions.control_coverage.score).status, description: 'Porcentaje ponderado de controles con evidencia suficiente o parcial.' },
@@ -548,7 +585,7 @@ async function getKpis({ user } = {}) {
     { code: 'KPI-10', name: 'Avance ciclo ISO', value: summary.dimensions.lifecycle_audit.score, unit: '%', status: statusForScore(summary.dimensions.lifecycle_audit.score).status, description: 'Señal base del estado de ciclo/auditoría disponible por norma.' },
   ];
 
-  return items;
+  return [...canonicalKpis, ...operationalItems];
 }
 
 async function getProcessDetail({ user, standardId, standardCode, processId, operationId } = {}) {

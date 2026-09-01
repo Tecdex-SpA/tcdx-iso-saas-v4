@@ -83,11 +83,37 @@ type EffectiveIsoHealthRow = {
 };
 
 type SystemHealthDashboard = {
-  global_score?: number;
+  global_score?: number | null;
+  published_score?: number | null;
+  score_publicable?: boolean;
+  global_status?: string;
+  coverage?: number | null;
+  confidence?: number | null;
+  minimum_coverage?: number | null;
   label?: string;
   status?: string;
   color?: string;
   explanation?: string;
+  missing_components?: Array<{
+    key?: string;
+    label?: string;
+    classification?: string;
+    reason?: string | null;
+    route_to_fix?: string | null;
+  }>;
+  components?: Array<{
+    key?: string;
+    label?: string;
+    classification?: string;
+    value?: number | null;
+    weight?: number;
+  }>;
+  source?: {
+    authority?: string;
+    formula_code?: string;
+    formula_version?: number;
+    coverage_policy?: string;
+  };
   standards?: Array<{
     id?: string;
     name?: string;
@@ -217,6 +243,9 @@ function getEffectiveHealthTone(value?: string | null): string {
 function getSystemHealthTone(value?: string | null): string {
   const normalized = String(value || '').toLowerCase();
 
+  if (normalized === 'measured') return 'border-emerald-200 bg-emerald-50 text-emerald-700';
+  if (normalized === 'insufficient_coverage' || normalized === 'low_confidence') return 'border-amber-200 bg-amber-50 text-amber-700';
+  if (normalized === 'not_calculable') return 'border-[var(--tcdx-color-border)] bg-[var(--tcdx-color-surface)] text-[var(--tcdx-color-text-primary)]';
   if (normalized === 'high') return 'border-emerald-200 bg-emerald-50 text-emerald-700';
   if (normalized === 'acceptable') return 'border-blue-200 bg-blue-50 text-blue-700';
   if (normalized === 'medium') return 'border-amber-200 bg-amber-50 text-amber-700';
@@ -1357,7 +1386,11 @@ function DashboardPageContent() {
   }, [healthKpiItems]);
 
   const healthCoverageKpi = useMemo(() => {
-    return healthKpiItems.find((item) => item.code === 'EVIDENCE-COVERAGE') || null;
+    return healthKpiItems.find((item) => item.code === 'EVIDENCE-FRESH') || null;
+  }, [healthKpiItems]);
+
+  const healthComplianceCoverageKpi = useMemo(() => {
+    return healthKpiItems.find((item) => item.code === 'COVERAGE') || null;
   }, [healthKpiItems]);
 
   const healthDeterioratedKpi = useMemo(() => {
@@ -2075,7 +2108,7 @@ function DashboardPageContent() {
                     value={kpiSummary?.health_kpis || healthKpiItems.length}
                     subtitle={t('dashboard.healthKpisSubtitle')}
                     accent="indigo"
-                    change={formatKpiValue(healthMainKpi?.latest_snapshot?.value, '%')}
+                    change={formatKpiValue(healthMainKpi?.latest_snapshot?.value, healthMainKpi?.unit)}
                     changeHint={t('dashboard.generalHealth')}
                     icon={<TcdxIcon name="heart" className="h-6 w-6" />}
                   />
@@ -2158,21 +2191,26 @@ function DashboardPageContent() {
                         generar los snapshots del período.
                       </div>
                     ) : (
-                      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                      <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
                         <HealthKpiMiniCard
                           title={t('dashboard.healthGeneral')}
                           item={healthMainKpi}
-                          fallback="KPI-HLT-001"
+                          fallback="F5_5_GRC_HEALTH v2"
+                        />
+                        <HealthKpiMiniCard
+                          title="Evidencia vigente"
+                          item={healthCoverageKpi}
+                          fallback="EVIDENCE-FRESH"
                         />
                         <HealthKpiMiniCard
                           title={t('dashboard.evidenceCoverage')}
-                          item={healthCoverageKpi}
-                          fallback="KPI-HLT-003"
+                          item={healthComplianceCoverageKpi}
+                          fallback="COVERAGE"
                         />
                         <HealthKpiMiniCard
-                          title={t('dashboard.deterioratedControls')}
+                          title="Data Trust"
                           item={healthDeterioratedKpi}
-                          fallback="KPI-HLT-004"
+                          fallback="DATA-TRUST"
                         />
                       </div>
                     )}
@@ -2814,7 +2852,12 @@ function SystemHealthDashboardSection({
   const alerts = data?.alerts || {};
   const topProcesses = data?.critical_processes || [];
   const standards = data?.standards || [];
-  const score = Number(data?.global_score || 0);
+  const score = data?.global_score === null || data?.global_score === undefined ? null : Number(data.global_score);
+  const scoreWidth = score === null || !Number.isFinite(score) ? 4 : Math.max(4, Math.min(100, score));
+  const coveragePct = data?.coverage === null || data?.coverage === undefined ? null : Math.round(Number(data.coverage) * 100);
+  const confidencePct = data?.confidence === null || data?.confidence === undefined ? null : Math.round(Number(data.confidence) * 100);
+  const healthStatus = data?.global_status || data?.status || null;
+  const missingComponents = data?.missing_components || [];
 
   return (
     <section className="rounded-[var(--tcdx-radius-tecdex-sm)] border border-[var(--tcdx-color-border)] bg-white p-6 shadow-[var(--tcdx-shadow-tecdex-sm)]">
@@ -2824,10 +2867,10 @@ function SystemHealthDashboardSection({
             Salud del sistema
           </p>
           <h2 className="mt-1 text-2xl font-semibold tracking-tight text-[var(--tcdx-color-text-ink)]">
-            Lectura operacional de health ISO
+            Health GRC canónico
           </h2>
           <p className="mt-1 max-w-3xl text-sm leading-6 text-[var(--tcdx-color-text-secondary)]">
-            Health es un indicador calculado de gestión, no certificación ni aprobación automática.
+            Autoridad oficial: {data?.source?.formula_code || 'F5_5_GRC_HEALTH'} v{data?.source?.formula_version || 2}.
           </p>
         </div>
 
@@ -2859,15 +2902,15 @@ function SystemHealthDashboardSection({
                 Health global
               </div>
               <div className="mt-4 flex flex-wrap items-end gap-3">
-                <span className="text-5xl font-bold tracking-tight">{score.toFixed(0)}</span>
-                <span className={`mb-1 rounded-full border px-3 py-1 text-xs font-semibold ${getSystemHealthTone(data.status)}`}>
+                <span className="text-5xl font-bold tracking-tight">{score === null || !Number.isFinite(score) ? 'N/A' : score.toFixed(0)}</span>
+                <span className={`mb-1 rounded-full border px-3 py-1 text-xs font-semibold ${getSystemHealthTone(healthStatus)}`}>
                   {data.label || 'Sin salud'}
                 </span>
               </div>
               <div className="mt-5 h-2 overflow-hidden rounded-full bg-white/12">
                 <div
                   className="h-full rounded-full bg-[var(--tcdx-color-primary)]"
-                  style={{ width: `${Math.max(4, Math.min(100, score))}%` }}
+                  style={{ width: `${scoreWidth}%` }}
                 />
               </div>
               <p className="mt-4 text-sm leading-6 text-white/75">
@@ -2876,11 +2919,27 @@ function SystemHealthDashboardSection({
             </div>
 
             <div className="grid gap-3 md:grid-cols-3">
+              <PriorityMiniMetric label="Cobertura" value={coveragePct === null ? 'N/A' : `${coveragePct}%`} />
+              <PriorityMiniMetric label="Confianza" value={confidencePct === null ? 'N/A' : `${confidencePct}%`} />
+              <PriorityMiniMetric label="Faltantes" value={String(missingComponents.length)} />
               <PriorityMiniMetric label="Brechas críticas" value={String(alerts.critical_gaps || 0)} />
               <PriorityMiniMetric label="Acciones vencidas" value={String(alerts.overdue_actions || 0)} />
               <PriorityMiniMetric label="Evidencia faltante" value={String(alerts.missing_evidence || 0)} />
             </div>
           </div>
+
+          {missingComponents.length > 0 && (
+            <div className="mt-5 rounded-[var(--tcdx-radius-tecdex-sm)] border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+              <p className="font-semibold">Componentes no disponibles</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {missingComponents.slice(0, 5).map((component) => (
+                  <span key={component.key || component.label} className="rounded-full border border-amber-200 bg-white px-3 py-1 text-xs font-semibold text-amber-800">
+                    {component.label || component.key}: {component.classification || 'UNKNOWN'}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
 
           {!compact && (
           <div className="mt-5 grid gap-4 lg:grid-cols-2">

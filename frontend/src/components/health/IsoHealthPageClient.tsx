@@ -69,10 +69,36 @@ type StandardHealth = {
 };
 
 type SprintHealthSummary = {
-  global_score: number;
+  global_score: number | null;
+  published_score?: number | null;
+  score_publicable?: boolean;
+  global_status?: string;
   status: string;
   label: string;
   color?: string;
+  coverage?: number | null;
+  confidence?: number | null;
+  minimum_coverage?: number | null;
+  missing_components?: Array<{
+    key?: string;
+    label?: string;
+    classification?: string;
+    reason?: string | null;
+    route_to_fix?: string | null;
+  }>;
+  components?: Array<{
+    key?: string;
+    label?: string;
+    classification?: string;
+    value?: number | null;
+    weight?: number;
+  }>;
+  source?: {
+    formula_code?: string;
+    formula_version?: number;
+    authority?: string;
+    coverage_policy?: string;
+  };
   updated_at?: string;
   drivers?: string[];
   explanation?: string;
@@ -128,14 +154,19 @@ type SprintProcessHealth = {
 type SprintKpi = {
   code: string;
   name: string;
-  value: number;
+  value: number | null;
   unit: string;
   status: string;
   description: string;
 };
 
 type SprintHealthDashboard = {
-  global_score?: number;
+  global_score?: number | null;
+  published_score?: number | null;
+  global_status?: string;
+  coverage?: number | null;
+  confidence?: number | null;
+  missing_components?: SprintHealthSummary['missing_components'];
   label?: string;
   status?: string;
   explanation?: string;
@@ -500,6 +531,17 @@ function toNumber(value: unknown): number {
   return Number.isFinite(n) ? n : 0;
 }
 
+function optionalNumber(value: unknown): number | null {
+  if (value === null || value === undefined || value === '') return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+function formatOptionalScore(value: unknown, suffix = '') {
+  const n = optionalNumber(value);
+  return n === null ? 'N/A' : `${n.toFixed(0)}${suffix}`;
+}
+
 type TFunction = (key: string, params?: Record<string, string | number>) => string;
 
 function statusLabel(status: string, t: TFunction) {
@@ -586,6 +628,9 @@ function statusColor(status?: string) {
 
 function sprintHealthColor(status?: string) {
   const normalized = String(status || '').toLowerCase();
+  if (normalized === 'measured') return 'bg-emerald-100 text-emerald-700 border-emerald-200';
+  if (normalized === 'insufficient_coverage' || normalized === 'low_confidence') return 'bg-amber-100 text-amber-700 border-amber-200';
+  if (normalized === 'not_calculable') return 'bg-gray-100 text-gray-700 border-gray-200';
   if (normalized === 'high') return 'bg-emerald-100 text-emerald-700 border-emerald-200';
   if (normalized === 'acceptable') return 'bg-blue-100 text-blue-700 border-blue-200';
   if (normalized === 'medium') return 'bg-amber-100 text-amber-700 border-amber-200';
@@ -1661,12 +1706,12 @@ export default function HealthDashboardPage() {
                       Cumplimiento y Auditoría · Salud del sistema
                     </p>
                     <h2 className="mt-2 text-2xl font-bold text-gray-900">
-                      Health por norma y proceso
+                      Health GRC canónico
                     </h2>
                     <p className="mt-2 max-w-4xl text-sm leading-6 text-gray-600">
-                      Health es un indicador calculado de gestión, no certificación ni aprobación automática.
-                      Fórmula: 35% cobertura de controles, 20% evidencias, 15% brechas,
-                      15% acciones, 10% riesgos y 5% ciclo ISO/auditoría.
+                      Fórmula: {sprintHealthSummary.source?.formula_code || 'F5_5_GRC_HEALTH'} v{sprintHealthSummary.source?.formula_version || 2}.
+                      Cobertura oficial: {formatOptionalScore(optionalNumber(sprintHealthSummary.coverage) === null ? null : Number(sprintHealthSummary.coverage) * 100, '%')}.
+                      Confianza: {formatOptionalScore(optionalNumber(sprintHealthSummary.confidence) === null ? null : Number(sprintHealthSummary.confidence) * 100, '%')}.
                     </p>
                     <p className="mt-2 text-xs text-gray-500">
                       Última actualización:{' '}
@@ -1679,17 +1724,35 @@ export default function HealthDashboardPage() {
                       Health global
                     </div>
                     <div className="mt-2 flex items-end gap-3">
-                      <span className="text-5xl font-bold">{toNumber(sprintHealthSummary.global_score).toFixed(0)}</span>
-                      <span className={`mb-1 rounded-full border px-3 py-1 text-xs font-semibold ${sprintHealthColor(sprintHealthSummary.status)}`}>
+                      <span className="text-5xl font-bold">{formatOptionalScore(sprintHealthSummary.global_score)}</span>
+                      <span className={`mb-1 rounded-full border px-3 py-1 text-xs font-semibold ${sprintHealthColor(sprintHealthSummary.global_status || sprintHealthSummary.status)}`}>
                         {sprintHealthSummary.label}
                       </span>
                     </div>
+                    <p className="mt-3 text-xs leading-5 text-white/70">
+                      {sprintHealthSummary.published_score === null || sprintHealthSummary.published_score === undefined
+                        ? 'Score interno no publicable como ejecutivo por cobertura/confianza.'
+                        : 'Score publicable con cobertura suficiente.'}
+                    </p>
                   </div>
                 </div>
 
                 <div className="mt-5 rounded-xl border border-blue-100 bg-blue-50 p-4 text-sm leading-6 text-blue-900">
                   {sprintHealthSummary.explanation || 'Sin explicación de cálculo disponible.'}
                 </div>
+
+                {sprintHealthSummary.missing_components && sprintHealthSummary.missing_components.length > 0 && (
+                  <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                    <p className="font-semibold">Componentes Health faltantes o no configurados</p>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {sprintHealthSummary.missing_components.slice(0, 6).map((component) => (
+                        <span key={component.key || component.label} className="rounded-full border border-amber-200 bg-white px-3 py-1 text-xs font-semibold text-amber-800">
+                          {component.label || component.key}: {component.classification || 'UNKNOWN'}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 {sprintHealthSummary.drivers && sprintHealthSummary.drivers.length > 0 && (
                   <div className="mt-5 rounded-xl border border-gray-200 bg-gray-50 p-4">
@@ -1810,7 +1873,7 @@ export default function HealthDashboardPage() {
 
                 <div className="mt-6 rounded-xl border border-gray-200 bg-white">
                   <div className="border-b border-gray-200 px-4 py-3">
-                    <h3 className="text-sm font-semibold text-gray-900">KPIs mínimos reproducibles</h3>
+                    <h3 className="text-sm font-semibold text-gray-900">Componentes canónicos y compatibilidad Health</h3>
                   </div>
                   <div className="max-h-[420px] overflow-auto tcdx-scrollbar">
                     <table className="min-w-[840px] w-full text-sm">
@@ -1829,7 +1892,7 @@ export default function HealthDashboardPage() {
                             <td className="px-4 py-3 font-semibold text-gray-900">{item.code}</td>
                             <td className="px-4 py-3 text-gray-700">{item.name}</td>
                             <td className="px-4 py-3 text-right font-semibold text-gray-900">
-                              {toNumber(item.value).toFixed(item.unit === '%' ? 0 : 0)} {item.unit}
+                              {formatOptionalScore(item.value)} {item.value === null ? '' : item.unit}
                             </td>
                             <td className="px-4 py-3">
                               <span className={`rounded-full border px-2 py-1 text-xs font-semibold ${sprintHealthColor(item.status)}`}>
@@ -1876,7 +1939,7 @@ export default function HealthDashboardPage() {
                   <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
                     <div>
                       <p className="text-sm font-medium text-gray-500">
-                        {t('health.selectedCompany')}
+                        Componentes operativos de compatibilidad
                       </p>
                       <h2 className="mt-1 text-2xl font-bold text-gray-900">
                         {selectedSummary.tenant_name}
@@ -1901,7 +1964,7 @@ export default function HealthDashboardPage() {
                     <div className="w-full max-w-md">
                       <div className="mb-2 flex items-center justify-between text-sm">
                         <span className="font-medium text-gray-600">
-                          {t('health.generalHealth')}
+                          KPI-HLT operativo
                         </span>
                         <span className="font-bold text-gray-900">
                           {score.toFixed(2)}%
@@ -2829,13 +2892,13 @@ export default function HealthDashboardPage() {
 
                 <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
                   <Card
-                    title={t('health.generalHealth')}
+                    title="KPI-HLT operativo"
                     value={`${score.toFixed(2)}%`}
-                    subtitle={t('health.controlAverage')}
+                    subtitle="Compatibilidad, no Score Global oficial"
                     color={selectedSummary.kpi_health_color}
                   />
                   <Card
-                    title={t('health.evidenceCoverage')}
+                    title="KPI-HLT cobertura evidencia"
                     value={`${evidenceCoverage.toFixed(2)}%`}
                     subtitle={t('health.loadedEvidenceCount', { count: selectedSummary.total_evidences })}
                     color={selectedSummary.kpi_evidence_coverage_color}

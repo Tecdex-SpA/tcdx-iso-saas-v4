@@ -53,6 +53,8 @@
 | Standard commercial plan model | CURRENT/COMMERCIAL-PLAN-MATRIX-LOCAL | A+C | Planes estándar no destructivos: `iso -> pyme -> ISO`, `iso_operational_risk -> empresa -> ISO + Riesgo Operativo`, `grc -> enterprise -> GRC`; regla definitiva `ISO = ONLY_ISO`, `ISO_RISK = ISO + OPERATIONAL_RISK_ONLY`, `GRC = ALL_TENANT_COMMERCIAL_CAPABILITIES`; autoridad DB/backend en `commercialPlanMatrix.service.js`, `commercial_plans`, `commercial_plan_versions`, `plan_version_modules`, `commercial_modules`, `commercial_technical_capabilities` y `v_commercial_plan_capabilities`; matriz documental en `docs/codex/commercial/COMMERCIAL_PLAN_CAPABILITY_MATRIX.md`; migración comercial `20260828_commercial_standard_plan_matrix.sql` requerida, no ejecutada por Codex. |
 | AI binary commercial authority | CURRENT/AI-ADDON-02-LOCAL | A+C | La autoridad contractual de IA es solo `tenant_subscription_addons.addon_key='ai'` sobre suscripción efectiva activa. `tenants.ai_plan` queda como compatibilidad histórica sin autoridad, no visible/seleccionable en Admin SaaS y no usado por `/api/me/entitlements`, `isTenantAiFeatureEnabled`, Sidebar/AppLayout ni acceso directo. Flags runtime/cuotas siguen subordinados a add-on activo, capability, RBAC y scope. |
 | NORMALIZATION-01 DB/backend authority | CURRENT/NORMALIZATION-01-LOCAL | A+C | Permisos canónicos: `ai.compliance -> ai.view`, `iso.actions -> actions.view`; mutaciones de acciones usan `actions.manage/actions.approve/actions.delete`. IA efectiva requiere add-on `tenant_subscription_addons.addon_key='ai'`; ninguna versión publicada de plan debe exponer IA plan-level. `GET /api/grc/overview` consume últimos cálculos/snapshots persistidos y no dispara recálculo persistente. |
+| NORMALIZATION-02 Health/KPI authority | CURRENT/NORMALIZATION-02-LOCAL | A+C | Autoridad Health/KPI única: `official_formula_versions + calculation_runs/results + metric_snapshots + metric_source_bindings`; `F5_5_GRC_HEALTH` v2 gobierna cobertura/confianza/faltantes y publicacion ejecutiva solo con cobertura suficiente; `/dashboard`, `/api/health/*`, `/api/grc/overview`, `/health` e `/iso-health` consumen proyeccion canónica. |
+| RELEASE-CLOSEOUT NORMALIZATION gate | CURRENT/NO_GO_PREDEPLOY | A+C | Gates locales A/B/C PASS para NORMALIZATION-01/02 integradas, pero commit/deploy/postdeploy permanecen bloqueados hasta preflight PostgreSQL PASS de ambas migraciones en contexto autorizado. Handoff: `docs/codex/handoffs/RELEASE-CLOSEOUT-NORMALIZATION.md`. |
 
 Regla: si un work package cambia un contrato, actualizar este archivo en el mismo commit.
 
@@ -600,6 +602,30 @@ SOURCE_CONTRACTS_VERSIONED: `[]`
 FORMULAS_VERSIONED: `[]`
 
 UNNECESSARY_VERSION_BUMPS: `0`
+
+## NORMALIZATION-02 KPI / Health Canonical Authority
+
+Status: `VERIFIED_LOCAL`
+
+| Contract | Authority | Version | Scope | Notes |
+|---|---|---:|---|---|
+| `canonical-health-projection-v1` | `official_formula_versions+calculation_runs+calculation_outputs+metric_snapshots+metric_source_bindings` | 1 | Health/KPI/GRC overview read model | Single read projection for `/api/health/*`, `/api/grc/overview`, `/dashboard`, `/health`, `/iso-health`. |
+| `F5_5_GRC_HEALTH` | official formula registry and DB `official_formula_versions` | 2 | Global Health Score | Dynamic denominator only over `AVAILABLE`; only `NOT_APPLICABLE` leaves denominator; `MISSING/NOT_CONFIGURED/STALE/INVALID/UNKNOWN` reduce coverage/confidence. |
+| `GRC-HEALTH` | `metric_definition_versions` + `metric_source_bindings` + `metric_calculation_policies` | 2 | Executive KPI | `minimum_coverage=0.80`; score can be internally computed below threshold but is not published as executive score. |
+| `EVIDENCE-FRESH` / `COVERAGE` | existing official metric keys | 1 | Evidence freshness and coverage | `EVIDENCE-COVERAGE` is not an official duplicate; compatibility expectation maps to these existing keys. |
+| `KPI-HLT-*` | legacy operational health snapshots/views | legacy | Compatibility/source components | Historical and operational detail only; cannot be displayed as a second Global Score authority. |
+
+Registered policies:
+
+```text
+GLOBAL_HEALTH_AUTHORITY=official_formula_versions+calculation_runs+calculation_outputs+metric_snapshots+metric_source_bindings
+GLOBAL_SCORE_FORMULA=F5_5_GRC_HEALTH
+GLOBAL_SCORE_VERSION=2
+GLOBAL_SCORE_COVERAGE_POLICY=available_weight/applicable_weight; publish only when coverage >= minimum_coverage
+DATA_TRUST_ACCURACY_POLICY=accuracy remains NOT_CONFIGURED until a real measurable source or canonical binding exists
+EVIDENCE_COVERAGE_MAPPING=EVIDENCE-FRESH=freshness; COVERAGE=compliance_coverage; EVIDENCE-COVERAGE=compatibility_alias_only
+LEGACY_KPI_HLT_ROLE=COMPATIBILITY_SOURCE_COMPONENT
+```
 
 ## PUI-08 Official Indicator Matrix
 

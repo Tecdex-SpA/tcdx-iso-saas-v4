@@ -6,7 +6,7 @@ const compliance = require('./complianceCalculation.service');
 const controls = require('./controlCalculation.service');
 const risk = require('./riskCalculation.service');
 const readinessSvc = require('./readinessCalculation.service');
-const { grcHealth } = require('./grcHealthCalculation.service');
+const { dynamicGrcHealth } = require('./grcHealthCalculation.service');
 const { getSourceCodeForFormula } = require('./sourceContracts.service');
 
 const STATES = new Set(['draft', 'reviewed', 'approved', 'published', 'retired']);
@@ -123,7 +123,7 @@ const definitions = [
   ['F5_5_MOVING_AVERAGE','Media móvil','statistics','avg last k','moving average', 'value', 4, [{name:'values'},{name:'windowSize'}], (i,d)=>{ const r=stats.movingAverage(i.values,i.windowSize); return output(d,r[r.length-1],{series:r}); }, {values:[1,2,3,4,5],windowSize:3}, 4],
   ['F5_5_EMA','EMA','statistics','alpha*x+(1-alpha)*prev','exponential moving average', 'value', 4, [{name:'values'},{name:'windowSize'}], (i,d)=>{ const r=stats.ema(i.values,i.windowSize); return output(d,r[r.length-1],{series:r}); }, {values:[1,2,3],windowSize:3}, 2.25],
   ['F5_5_CONFIDENCE_INTERVAL','Intervalo de confianza','statistics','p +- z*sqrt(p(1-p)/n)','confidence interval for proportion', '%', 4, [{name:'successes'},{name:'sampleSize'}], (i,d)=>{ const r=i.method==='wilson'?stats.wilsonInterval(i.successes,i.sampleSize,i.z):stats.confidenceIntervalProportion(i.successes,i.sampleSize,i.z); return output(d,r.p*100,r); }, {successes:50,sampleSize:100,z:1.96}, 50],
-  ['F5_5_GRC_HEALTH','Health GRC','health','100 weighted R,C,A,E,D','GRC health weighted score', 'score', 2, [{name:'risk'},{name:'compliance'},{name:'actions'},{name:'evidence'},{name:'dataTrust'}], (i,d)=>output(d,grcHealth(i)), {risk:.8,compliance:.9,actions:.7,evidence:.6,dataTrust:.85}, 78],
+  ['F5_5_GRC_HEALTH','Health GRC','health','weighted average over AVAILABLE applicable components with coverage threshold','GRC health v2 dynamic denominator with explicit component classification, minimum coverage and confidence reporting', 'score', 2, [{name:'risk',required:false},{name:'compliance',required:false},{name:'actions',required:false},{name:'evidence',required:false},{name:'dataTrust',required:false},{name:'component_states',required:false,type:'object'},{name:'minimum_coverage',required:false}], (i,d)=>{ const r=dynamicGrcHealth(i); return output(d,r.value,{...r,coverage_policy:'available_weight/applicable_weight; publish only when coverage >= minimum_coverage'}); }, {risk:.8,compliance:.9,actions:.7,evidence:.6,dataTrust:.85,minimum_coverage:.8}, 78, {version:2,null_policy:'partial_available_components_with_coverage_threshold',limitations:'GRC Health v2 excludes only NOT_APPLICABLE components from applicable weight; MISSING, NOT_CONFIGURED, INVALID, STALE and UNKNOWN reduce coverage and confidence.'}],
   ['F5_5_MATURITY','Madurez','maturity','sum(w*n)/sum(w)','weighted maturity 0-5', 'level', 2, [{name:'levels'}], (i,d)=>output(d,readinessSvc.maturity(i)), {levels:[{level:2,weight:1},{level:4,weight:3}]}, 3.5],
   ['F5_C3_DATA_TRUST','Data Trust compuesto','data_quality','sum(w_d*dimension_d)','eight-dimension Data Trust without unknown renormalization', 'score', 2, [{name:'completeness'},{name:'accuracy'},{name:'consistency'},{name:'freshness'},{name:'lineage'},{name:'validation'},{name:'stability'},{name:'coverage'}], (i,d)=>{const weights=i.weights||{completeness:.15,accuracy:.15,consistency:.10,freshness:.15,lineage:.15,validation:.10,stability:.05,coverage:.15};return output(d,fixedComposite(i,['completeness','accuracy','consistency','freshness','lineage','validation','stability','coverage'],weights),{weights});}, {completeness:90,accuracy:80,consistency:85,freshness:75,lineage:100,validation:90,stability:70,coverage:80}, 84.75],
   ['F5_C3_OPERATIONAL_PERFORMANCE','Desempeño operacional','operations','sum(w_c*component_c)','fixed operational component score; missing components remain unmeasured', 'score', 2, [{name:'efficacy'},{name:'efficiency'},{name:'stability'},{name:'quality'},{name:'timeliness'},{name:'risk'},{name:'compliance'},{name:'actions'},{name:'dataTrust'}], (i,d)=>{const weights=i.weights||{efficacy:.10,efficiency:.10,stability:.10,quality:.10,timeliness:.10,risk:.15,compliance:.15,actions:.10,dataTrust:.10};return output(d,fixedComposite(i,['efficacy','efficiency','stability','quality','timeliness','risk','compliance','actions','dataTrust'],weights),{weights});}, {efficacy:82,efficiency:78,stability:80,quality:85,timeliness:76,risk:72,compliance:88,actions:79,dataTrust:84}, 80.4],
@@ -135,23 +135,26 @@ function buildDefinition(row) {
   const definition = {
     formula_code, display_name, category, version: options.version || 1, expression, methodology, variables: variables.map((variable) => !variable.unit ? { ...variable, unit: 'declared_input_unit' } : variable),
     units: { output: unit }, source_contract: getSourceCodeForFormula(formula_code), frequency: 'on_demand', minimum_sample_size: 1,
-    null_policy: 'reject_required_nulls', zero_division_policy: 'return_not_calculable_or_error_by_formula',
+    null_policy: options.null_policy || 'reject_required_nulls', zero_division_policy: 'return_not_calculable_or_error_by_formula',
     rounding_policy: 'half_up', precision, thresholds: [], confidence_method: category === 'statistics' ? 'formula_specific' : 'not_applicable',
-    applicability: 'tenant_or_global_dataset', limitations: 'Operational source binding is declared and resolved by Phase 5.5 package 2 contracts.',
+    applicability: 'tenant_or_global_dataset', limitations: options.limitations || 'Operational source binding is declared and resolved by Phase 5.5 package 2 contracts.',
     owner: 'TCDX', reviewer: 'TCDX', approved_by: 'TCDX', effective_from: '2026-07-29', effective_until: null, status: 'published',
-    execute, tests: buildTests(formula_code, normalInputs, normalExpected, unit),
+    execute, tests: buildTests(formula_code, normalInputs, normalExpected, unit, options),
   };
   definition.checksum = checksumFor(definition);
   return Object.freeze(definition);
 }
-function buildTests(formula_code, normalInputs, normalExpected, unit) {
+function buildTests(formula_code, normalInputs, normalExpected, unit, options = {}) {
   const requiredKey = Object.keys(normalInputs).find((key) => !['units','method','weights','threshold','frequency','severity'].includes(key));
   const nullInputs = { ...normalInputs, [requiredKey]: null };
   const zeroInputs = zeroCase(formula_code, normalInputs);
+  const nullCase = options.null_policy === 'partial_available_components_with_coverage_threshold'
+    ? { name: 'null', inputs: nullInputs, expected: 77.5, expectError: false, tolerance: 0.01, unit }
+    : { name: 'null', inputs: nullInputs, expectError: true };
   return [
     { name: 'normal', inputs: normalInputs, expected: normalExpected, tolerance: formula_code === 'F5_5_MONTE_CARLO' ? 0.0001 : 0.01, unit },
     { name: 'boundary', inputs: normalInputs, expected: normalExpected, tolerance: formula_code === 'F5_5_MONTE_CARLO' ? 0.0001 : 0.01, unit },
-    { name: 'null', inputs: nullInputs, expectError: true },
+    nullCase,
     { name: 'zero', inputs: zeroInputs.inputs, expected: zeroInputs.expected, expectError: zeroInputs.expectError, tolerance: 0.01, unit },
     { name: 'invalid_unit', inputs: { ...normalInputs, units: { [requiredKey]: 'invalid_unit' } }, expectError: true },
     { name: 'determinism', inputs: normalInputs, expected: normalExpected, tolerance: formula_code === 'F5_5_MONTE_CARLO' ? 0.0001 : 0.01, unit },
