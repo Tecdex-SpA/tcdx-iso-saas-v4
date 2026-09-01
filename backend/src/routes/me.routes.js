@@ -77,7 +77,7 @@ function buildAiEntitlements(settings, { platform = false, commercial = null } =
   if (platform) {
     return {
       enabled: true,
-      plan: 'enterprise',
+      plan: 'addon',
       web_enabled: true,
       report_enabled: true,
       auditor_enabled: true,
@@ -95,13 +95,13 @@ function buildAiEntitlements(settings, { platform = false, commercial = null } =
   };
   const complianceEntitled = capabilityEnabled(commercial, 'ai.compliance');
   const auditorEntitled = capabilityEnabled(commercial, 'ai.auditor');
-  const baseConfigEnabled = settings?.ai_enabled === true && settings?.ai_plan !== 'none';
+  const baseConfigEnabled = settings?.ai_enabled === true;
   const enabled = complianceEntitled && baseConfigEnabled;
   const auditorEnabled = enabled && auditorEntitled && settings?.ai_auditor_enabled !== false && features.auditor !== false;
 
   return {
     enabled,
-    plan: enabled ? (settings?.ai_plan || 'standard') : 'none',
+    plan: enabled ? 'addon' : 'none',
     web_enabled: enabled && settings?.ai_web_enabled !== false && features.web_research !== false,
     report_enabled: enabled && settings?.ai_report_enabled !== false && features.report_enrichment !== false,
     auditor_enabled: auditorEnabled,

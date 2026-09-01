@@ -28,12 +28,15 @@ AND RBAC allowed
 AND scope allowed
 ```
 
+`ai_plan` is not part of effective visibility.
+
 ## Frontend Rules
 
 - Sidebar visibility uses `canShowCapability()`.
 - Direct access protection in AppLayout uses `canShowCapability()`.
 - Dashboard advanced blocks fetch/render only when the effective commercial capability is visible.
 - Admin SaaS separates AI contract state from AI runtime settings.
+- Admin SaaS does not expose or edit legacy AI plan levels.
 - General tenant fields remain editable independently from AI add-on state when the user has Admin SaaS management permission.
 
 ## Non-Goals

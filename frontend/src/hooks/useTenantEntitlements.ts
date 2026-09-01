@@ -151,7 +151,7 @@ function normalizeEntitlements(payload: unknown): Entitlements {
   const features = isRecord(ai.features) ? ai.features : {};
   const quota = isRecord(ai.quota) ? ai.quota : {};
   const planValue = typeof ai.plan === 'string' && ai.plan.trim() ? ai.plan : 'none';
-  const enabled = ai.enabled === true && planValue.toLowerCase() !== 'none';
+  const enabled = ai.enabled === true;
   const rawCapabilities = isRecord(root.capabilities) ? root.capabilities : {};
   const rawLimits = isRecord(root.limits) ? root.limits : {};
 

@@ -128,14 +128,15 @@ El usuario realiza CI/merge/deploy y decide si un fallo requiere un work package
 
 ## Próxima acción
 
-1. AI-ADDON-01 + COMMERCIAL-UI-01 queda listo para revision humana local: push/PR/CI/merge/deploy/migracion/runtime validation son responsabilidad del usuario.
-2. Usuario mantiene push/PR/CI/merge/deploy/manual runtime validation si corresponde.
-3. No continuar al siguiente bloque desde este cierre.
-4. Mantener cerrados PUI-01..PUI-09, F6.8-01/F6.8-02/F6.8-03, 6.9-01..6.9-03, 6.10-01..6.10-05, F6.11-A/B, F6.12-A, F6.13-A, F6.14-A, UI-02, UI-04, UI-05 material, UI-06, UI-07 y UI-09 salvo evidencia objetiva nueva.
-5. RBAC-01 + BRAND-01 está en `main@31ce8ffa95eede2d9986692dcc1c7eed18acac88`; RBAC-01 ya fue desplegado y su migración productiva ya fue aplicada por el responsable del proyecto.
-6. RBAC-02 ya fue desplegado y la migración productiva `20260827_rbac02_commercial_gating_normalization` fue aplicada por el responsable del proyecto según baseline RBAC-03 del 2026-08-28.
-7. RBAC-03 fue reevaluado con nuevo hecho confirmado: Admin Credex recuperó Dashboard tras refrescar contrato desde superadmin. `RBAC03_NOT_REQUIRED` para reconciliación de roles/permisos; el fix local queda acotado a sincronización automática contrato comercial legacy -> `tenant_subscriptions` y cache/context invalidation. Producción no fue modificada por Codex.
-8. AI-ADDON-01 + COMMERCIAL-UI-01 quedó `READY_FOR_HUMAN_REVIEW` local sobre `main@6dc752b` con working tree dirty esperado y sin commit/push/deploy/migracion productiva por Codex. La migración histórica `20260828_commercial_standard_plan_matrix.sql` quedó sin diff y su checksum histórico PASS; la evolución forward-only vive en `20260831_ai_addon_commercial_visibility.sql` con runner `scripts/ai-addon/apply-ai-addon-migration.js`. IA pasa a add-on transversal: ISO, ISO+Riesgo y GRC pueden existir con o sin IA; GRC base ya no concede IA efectiva sin add-on activo. Validación local PASS: backend focal completo, frontend lint/typecheck/contratos comerciales, route matrix 97/97/0, build y `bash -n scripts/deploy-vms.sh`. Producción no fue modificada.
+1. AI-ADDON-02 queda listo para revision humana local: IA comercial es binaria por `tenant_subscription_addons.addon_key='ai'`; `ai_plan` queda como compatibilidad sin autoridad, no visible/seleccionable en Admin SaaS y no participa en `/api/me/entitlements` ni en gates runtime. Push/PR/CI/merge/deploy/runtime validation son responsabilidad del usuario.
+2. AI-ADDON-01 + COMMERCIAL-UI-01 queda listo para revision humana local: push/PR/CI/merge/deploy/migracion/runtime validation son responsabilidad del usuario.
+3. Usuario mantiene push/PR/CI/merge/deploy/manual runtime validation si corresponde.
+4. No continuar al siguiente bloque desde este cierre.
+5. Mantener cerrados PUI-01..PUI-09, F6.8-01/F6.8-02/F6.8-03, 6.9-01..6.9-03, 6.10-01..6.10-05, F6.11-A/B, F6.12-A, F6.13-A, F6.14-A, UI-02, UI-04, UI-05 material, UI-06, UI-07 y UI-09 salvo evidencia objetiva nueva.
+6. RBAC-01 + BRAND-01 está en `main@31ce8ffa95eede2d9986692dcc1c7eed18acac88`; RBAC-01 ya fue desplegado y su migración productiva ya fue aplicada por el responsable del proyecto.
+7. RBAC-02 ya fue desplegado y la migración productiva `20260827_rbac02_commercial_gating_normalization` fue aplicada por el responsable del proyecto según baseline RBAC-03 del 2026-08-28.
+8. RBAC-03 fue reevaluado con nuevo hecho confirmado: Admin Credex recuperó Dashboard tras refrescar contrato desde superadmin. `RBAC03_NOT_REQUIRED` para reconciliación de roles/permisos; el fix local queda acotado a sincronización automática contrato comercial legacy -> `tenant_subscriptions` y cache/context invalidation. Producción no fue modificada por Codex.
+9. AI-ADDON-01 + COMMERCIAL-UI-01 quedó `READY_FOR_HUMAN_REVIEW` local sobre `main@6dc752b` con working tree dirty esperado y sin commit/push/deploy/migracion productiva por Codex. La migración histórica `20260828_commercial_standard_plan_matrix.sql` quedó sin diff y su checksum histórico PASS; la evolución forward-only vive en `20260831_ai_addon_commercial_visibility.sql` con runner `scripts/ai-addon/apply-ai-addon-migration.js`. IA pasa a add-on transversal: ISO, ISO+Riesgo y GRC pueden existir con o sin IA; GRC base ya no concede IA efectiva sin add-on activo. Validación local PASS: backend focal completo, frontend lint/typecheck/contratos comerciales, route matrix 97/97/0, build y `bash -n scripts/deploy-vms.sh`. Producción no fue modificada.
 
 ## RBAC-03 Effective Authorization
 
@@ -222,5 +223,6 @@ Cambios RBAC-03:
 - `docs/codex/handoffs/RBAC-01-BRAND-01.md`
 - `docs/codex/handoffs/RBAC-02-COMMERCIAL-GATING.md`
 - `docs/codex/handoffs/AI-ADDON-01-COMMERCIAL-UI-01.md`
+- `docs/codex/handoffs/AI-ADDON-02-BINARY-COMMERCIAL-MODEL.md`
 - `docs/codex/PHASE6_EXPANDED_CLOSURE.md`
 - `docs/architecture/grc_relationship_inventory.md`

@@ -19,6 +19,13 @@ AND scope allowed
 
 No base plan, legacy plan row, frontend visibility check or runtime flag can grant AI without the contractual add-on.
 
+`tenants.ai_plan` is legacy compatibility only:
+
+- It is not commercial authority.
+- It does not grant access.
+- It does not deny access.
+- It is not visible/selectable as an AI commercial plan in Admin SaaS.
+
 ## Valid Commercial States
 
 ```text
@@ -45,7 +52,7 @@ Backend/PostgreSQL remains the commercial authority:
 
 - `commercial_addons`
 - `plan_version_addons`
-- `tenant_subscription_addons`
+- `tenant_subscription_addons.addon_key='ai'`
 - `v_commercial_tenant_modules`
 - `v_commercial_tenant_capabilities`
 - `backend/src/services/commercial/entitlementResolver.service.js`

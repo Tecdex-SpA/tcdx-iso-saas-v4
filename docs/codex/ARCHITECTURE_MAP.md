@@ -41,6 +41,7 @@ Backend Node/Express
         |      + `commercial_technical_capabilities`
         |      + `v_commercial_plan_capabilities`
         |      + `tenant_subscriptions`, `v_commercial_tenant_*`
+        |      + AI contractual authority is binary in `tenant_subscription_addons.addon_key='ai'`; legacy `tenants.ai_plan` is not an entitlement gate
         |      + manual module controls remain add-on/pilot/exception surface
         |
         +--> math-governance

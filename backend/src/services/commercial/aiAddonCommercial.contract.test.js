@@ -150,8 +150,27 @@ async function run() {
   assert.equal((await isTenantAiFeatureEnabled(tenantId, 'auditor')).enabled, false, 'Auditor IA must deny without add-on');
 
   state.addonActive = true;
+  state.aiPlan = 'none';
+  assert.equal((await isTenantAiFeatureEnabled(tenantId, 'suggestions')).enabled, true, 'AI add-on active must allow IA Compliance even when legacy ai_plan=none');
+  assert.equal((await isTenantAiFeatureEnabled(tenantId, 'auditor')).enabled, true, 'AI add-on active must allow Auditor IA even when legacy ai_plan=none');
+
+  state.addonActive = false;
+  state.aiPlan = 'enterprise';
+  assert.equal((await isTenantAiFeatureEnabled(tenantId, 'suggestions')).enabled, false, 'legacy ai_plan must not grant IA Compliance without active add-on');
+  assert.equal((await isTenantAiFeatureEnabled(tenantId, 'auditor')).enabled, false, 'legacy ai_plan must not grant Auditor IA without active add-on');
+
+  state.addonActive = true;
+  state.aiPlan = 'none';
   assert.equal((await isTenantAiFeatureEnabled(tenantId, 'suggestions')).enabled, true, 'ISO + AI add-on must allow general AI');
   assert.equal((await isTenantAiFeatureEnabled(tenantId, 'auditor')).enabled, true, 'ISO + AI add-on + auditor flag must allow Auditor IA feature');
+
+  state.addonActive = false;
+  assert.equal((await isTenantAiFeatureEnabled(tenantId, 'suggestions')).enabled, false, 'AI cancelled after active must deny IA Compliance');
+  assert.equal((await resolveCapability({ tenantId, user: { id: userId, tenant_id: tenantId }, capabilityKey: 'ai.compliance', requiredPermission: 'ai_compliance.read', mode: 'read' })).enabled, false, 'AI cancelled after active must deny direct IA Compliance capability');
+
+  state.addonActive = true;
+  assert.equal((await isTenantAiFeatureEnabled(tenantId, 'suggestions')).enabled, true, 'AI reactivated without plan change must restore IA Compliance');
+  assert.equal((await resolveCapability({ tenantId, user: { id: userId, tenant_id: tenantId }, capabilityKey: 'ai.compliance', requiredPermission: 'ai_compliance.read', mode: 'read' })).enabled, true, 'AI reactivated without plan change must restore direct IA Compliance capability');
 
   for (const planKey of ['pyme', 'empresa', 'enterprise']) {
     state.planKey = planKey;

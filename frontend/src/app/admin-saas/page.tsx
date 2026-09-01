@@ -385,7 +385,6 @@ type GovernanceResponse = {
 
 type AiSettingsDraft = {
   ai_enabled: boolean;
-  ai_plan: string;
   ai_web_enabled: boolean;
   ai_report_enabled: boolean;
   ai_auditor_enabled: boolean;
@@ -1863,7 +1862,6 @@ async function uploadSelectedTenantLogo(file: File) {
         method: 'PUT',
         body: JSON.stringify({
           ai_enabled: selectedAiDraft.ai_enabled,
-          ai_plan: selectedAiDraft.ai_enabled ? selectedAiDraft.ai_plan : 'none',
           ai_web_enabled: selectedAiDraft.ai_web_enabled && selectedAiDraft.ai_enabled,
           ai_report_enabled: selectedAiDraft.ai_report_enabled && selectedAiDraft.ai_enabled,
           ai_auditor_enabled: selectedAiDraft.ai_auditor_enabled && selectedAiDraft.ai_enabled,
@@ -2189,7 +2187,6 @@ async function uploadSelectedTenantLogo(file: File) {
   const selectedAiSource = tenantDetail?.tenant || selectedTenant || {};
   const selectedAiDraft = aiSettingsDraftByTenant[selectedTenantId] || {
     ai_enabled: selectedAiSource.ai_enabled !== false,
-    ai_plan: selectedAiSource.ai_plan || 'standard',
     ai_web_enabled: selectedAiSource.ai_web_enabled !== false,
     ai_report_enabled: selectedAiSource.ai_report_enabled !== false,
     ai_auditor_enabled: selectedAiSource.ai_auditor_enabled !== false,
@@ -2717,9 +2714,6 @@ async function uploadSelectedTenantLogo(file: File) {
                               >
                                 {selectedAiAddonRuntimeActive && selectedAiDraft.ai_enabled ? 'Runtime IA habilitado' : 'Runtime IA inactivo'}
                               </span>
-                              <span className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold text-slate-600">
-                                Plan {selectedAiDraft.ai_plan}
-                              </span>
                             </div>
                             <p className="mt-2 text-sm text-slate-600">
                               El plan base no habilita IA. Los flags se mantienen como configuración/preconfiguración, pero runtime IA exige add-on activo.
@@ -2784,27 +2778,6 @@ async function uploadSelectedTenantLogo(file: File) {
                               />
                               IA
                             </label>
-                            <select
-                              value={selectedAiDraft.ai_plan}
-                              disabled={!canManageAdminSaas || !selectedAiAddonContracted || !selectedAiDraft.ai_enabled}
-                              onChange={(e) =>
-                                setAiSettingsDraftByTenant((prev) => ({
-                                  ...prev,
-                                  [selectedTenantId]: {
-                                    ...selectedAiDraft,
-                                    ai_plan: e.target.value,
-                                  },
-                                }))
-                              }
-                              className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm disabled:bg-slate-50"
-                            >
-                              <option value="none">none</option>
-                              <option value="basic">basic</option>
-                              <option value="standard">standard</option>
-                              <option value="pro">pro</option>
-                              <option value="premium">premium</option>
-                              <option value="enterprise">enterprise</option>
-                            </select>
                             {AI_FEATURE_TOGGLES.map(({ key, label }) => (
                               <label key={key} className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700">
                                 <input

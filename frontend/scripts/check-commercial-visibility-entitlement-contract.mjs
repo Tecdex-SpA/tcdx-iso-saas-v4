@@ -63,6 +63,8 @@ const permissions = read('utils/mvpPermissions.ts');
 const sidebar = read('components/Sidebar.tsx');
 const appLayout = read('components/AppLayout.tsx');
 const dashboard = read('app/dashboard/page.tsx');
+const tenantEntitlementsHook = read('hooks/useTenantEntitlements.ts');
+const adminSaas = read('app/admin-saas/page.tsx');
 const routeCapabilities = routeCapabilityMap(permissions);
 
 const requiredProtectedRoutes = [
@@ -92,6 +94,20 @@ assert(
 assert(
   appLayout.includes('canShowCapability(requiredCapability)'),
   'Direct route access must fail closed on effective commercial visibility.'
+);
+
+assert(
+  tenantEntitlementsHook.includes('const enabled = ai.enabled === true;') &&
+    !tenantEntitlementsHook.includes("planValue.toLowerCase() !== 'none'"),
+  'Frontend entitlements must not use legacy ai_plan as commercial authority.'
+);
+
+assert(
+  !adminSaas.includes('selectedAiDraft.ai_plan') &&
+    !adminSaas.includes('<option value="basic">basic</option>') &&
+    !adminSaas.includes('<option value="premium">premium</option>') &&
+    !adminSaas.includes('<option value="enterprise">enterprise</option>'),
+  'Admin SaaS must not expose legacy AI plan selection.'
 );
 
 assert(

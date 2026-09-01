@@ -49,17 +49,17 @@ function normalizeFeatures(value = {}, defaults = DISABLED_FEATURES) {
 function normalizeSettings(row = {}) {
   const aiEnabled = row.ai_enabled === true;
   const plan = normalizePlan(row.ai_plan || row.ai_tier || (aiEnabled ? 'standard' : 'none'), aiEnabled ? 'standard' : 'none');
-  const planEnabled = aiEnabled && plan !== 'none';
-  const features = planEnabled
+  const runtimeEnabled = aiEnabled;
+  const features = runtimeEnabled
     ? normalizeFeatures(row.ai_features_json, DEFAULT_FEATURES)
     : { ...DISABLED_FEATURES };
   return {
-    ai_enabled: planEnabled,
-    ai_plan: planEnabled ? plan : 'none',
-    ai_tier: planEnabled ? plan : 'none',
-    ai_web_enabled: planEnabled && (row.ai_web_enabled === undefined ? features.web_research !== false : bool(row.ai_web_enabled, true)),
-    ai_report_enabled: planEnabled && (row.ai_report_enabled === undefined ? features.report_enrichment !== false : bool(row.ai_report_enabled, true)),
-    ai_auditor_enabled: planEnabled && (row.ai_auditor_enabled === undefined ? features.auditor !== false : bool(row.ai_auditor_enabled, true)),
+    ai_enabled: runtimeEnabled,
+    ai_plan: runtimeEnabled ? plan : 'none',
+    ai_tier: runtimeEnabled ? plan : 'none',
+    ai_web_enabled: runtimeEnabled && (row.ai_web_enabled === undefined ? features.web_research !== false : bool(row.ai_web_enabled, true)),
+    ai_report_enabled: runtimeEnabled && (row.ai_report_enabled === undefined ? features.report_enrichment !== false : bool(row.ai_report_enabled, true)),
+    ai_auditor_enabled: runtimeEnabled && (row.ai_auditor_enabled === undefined ? features.auditor !== false : bool(row.ai_auditor_enabled, true)),
     ai_monthly_quota: row.ai_monthly_quota === null || row.ai_monthly_quota === undefined ? null : Number(row.ai_monthly_quota),
     ai_quota_used: Number(row.ai_quota_used || 0),
     ai_features_json: features,
@@ -150,14 +150,14 @@ async function isTenantAiFeatureEnabled(tenantId, feature) {
     Number(settings.ai_monthly_quota) >= 0 &&
     Number(settings.ai_quota_used || 0) >= Number(settings.ai_monthly_quota);
   const featureEnabled = settings.ai_features_json?.[key] !== false;
-  const planEnabled = settings.ai_enabled === true && settings.ai_plan !== 'none';
+  const runtimeEnabled = settings.ai_enabled === true;
   const specificEnabled =
     key === 'web_research' ? settings.ai_web_enabled !== false :
     key === 'report_enrichment' ? settings.ai_report_enabled !== false :
     key === 'auditor' ? settings.ai_auditor_enabled !== false :
     featureEnabled;
   const commercialEnabled = commercial.enabled === true;
-  const enabled = commercialEnabled && planEnabled && specificEnabled && !quotaExceeded;
+  const enabled = commercialEnabled && runtimeEnabled && specificEnabled && !quotaExceeded;
   return {
     enabled,
     feature: key,
@@ -168,7 +168,7 @@ async function isTenantAiFeatureEnabled(tenantId, feature) {
       ? 'ai_enabled'
       : (!commercialEnabled
         ? (commercial.reason_code || 'ai_addon_not_contracted')
-        : (quotaExceeded ? 'ai_quota_exceeded' : (planEnabled ? 'ai_feature_disabled' : 'ai_disabled_by_plan'))),
+        : (quotaExceeded ? 'ai_quota_exceeded' : (runtimeEnabled ? 'ai_feature_disabled' : 'ai_runtime_disabled'))),
   };
 }
 
