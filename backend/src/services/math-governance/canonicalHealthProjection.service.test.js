@@ -1,6 +1,8 @@
 'use strict';
 
 const assert = require('assert');
+const fs = require('node:fs');
+const path = require('node:path');
 const {
   EVIDENCE_COVERAGE_MAPPING,
   GLOBAL_HEALTH_AUTHORITY,
@@ -10,6 +12,8 @@ const {
   classifyOfficialComponent,
   projectHealthFromComponents,
 } = require('./canonicalHealthProjection.service');
+
+const serviceSource = fs.readFileSync(path.join(__dirname, 'canonicalHealthProjection.service.js'), 'utf8');
 
 const evidence = classifyOfficialComponent(
   { key: 'evidence', label: 'Vigencia de evidencia', weight: 0.2, metric_code: 'EVIDENCE-FRESH' },
@@ -45,5 +49,8 @@ assert.strictEqual(GLOBAL_SCORE_FORMULA, 'F5_5_GRC_HEALTH');
 assert.strictEqual(GLOBAL_SCORE_VERSION, 2);
 assert.strictEqual(LEGACY_KPI_HLT_ROLE, 'COMPATIBILITY_SOURCE_COMPONENT');
 assert.ok(EVIDENCE_COVERAGE_MAPPING.includes('compatibility_alias_only'));
+assert.doesNotMatch(serviceSource, /\bcr\.source_as_of\b/);
+assert.doesNotMatch(serviceSource, /\bcr\.created_at\b/);
+assert.match(serviceSource, /COALESCE\(cr\.period_end, cr\.completed_at, cr\.started_at, cr\.period_start\)/);
 
 process.stdout.write('NORMALIZATION02_CANONICAL_HEALTH_PROJECTION_PASS\n');

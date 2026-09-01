@@ -166,8 +166,8 @@ async function loadLatestRuns(client, tenantId) {
        cr.run_status,
        cr.period_start,
        cr.period_end,
-       cr.source_as_of,
-       cr.created_at,
+       cr.started_at,
+       cr.completed_at,
        cr.metadata,
        co.output_value,
        co.metadata AS output_metadata
@@ -175,14 +175,17 @@ async function loadLatestRuns(client, tenantId) {
      LEFT JOIN calculation_outputs co ON co.run_id = cr.id
      WHERE cr.tenant_id = $1::uuid
        AND cr.formula_code = ANY($2::text[])
-     ORDER BY cr.formula_code, cr.period_end DESC NULLS LAST, cr.source_as_of DESC NULLS LAST, cr.created_at DESC`,
+     ORDER BY cr.formula_code,
+       COALESCE(cr.period_end, cr.completed_at, cr.started_at, cr.period_start) DESC NULLS LAST,
+       cr.completed_at DESC NULLS LAST,
+       cr.started_at DESC NULLS LAST`,
     [tenantId, COMPONENTS.map((item) => item.formula_code).concat([GLOBAL_SCORE_FORMULA])],
   );
   return new Map(result.rows.map((row) => [row.formula_code, {
     value: row.output_value?.value ?? row.output_value ?? null,
     state: row.run_status,
-    period: { start: row.period_start || null, end: row.period_end || null, as_of: row.source_as_of || null },
-    updated_at: row.created_at || null,
+    period: { start: row.period_start || null, end: row.period_end || null, as_of: row.period_end || row.completed_at || row.started_at || null },
+    updated_at: row.completed_at || row.started_at || row.period_end || null,
     machine_reason: row.metadata?.machine_reason || row.output_metadata?.machine_reason || row.output_value?.machine_reason || null,
     payload: row.output_value || null,
   }]));

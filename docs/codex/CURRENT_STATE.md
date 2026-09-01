@@ -218,6 +218,23 @@ Cambios locales: el runner comercial clasifica ledger antes de catalog drift y b
 
 Validacion focal y preflight productivo read-only PASS; no hubo `--apply`, commit, push ni deploy. Handoff: `docs/codex/handoffs/AI-ADDON-MIGRATION-ORDER-RECONCILIATION.md`.
 
+## HOTFIX-POSTDEPLOY-01 — ISO Health / IA Compliance / GRC
+
+Status: `READY_FOR_HUMAN_REVIEW` local sobre `main@ab63c0c4d7f37a88275b030d7ce5920c75504365` sin commit/push/deploy ni migración aplicada por Codex.
+
+Root causes cerrados localmente:
+
+- `/iso-health` y `/grc` fallaban porque `canonicalHealthProjection.service.js` consultaba `calculation_runs cr.source_as_of` y `cr.created_at`, columnas inexistentes en producción. La proyección ahora usa sólo `period_end`, `completed_at`, `started_at` y `period_start`.
+- Request_id productivo `web-1788294251198-ff1293a847d9b` encontrado en logs backend con `SQLSTATE=42703`, mismo error `column cr.source_as_of does not exist`; `/api/grc/overview` conserva GET read-only.
+- `/ia-compliance` fallaba en el primer gate RBAC efectivo: add-on IA, capability `ai.compliance`, runtime `suggestions` y Auditor IA estaban OK, pero roles tenant esperados tenían `ai.view=false`; `audit.review=true` explicaba el control positivo Auditor Senior IA. Se agrega migración forward-only `20260901_hotfix_postdeploy01_ai_view_rbac` y runner `scripts/normalization/apply-hotfix-postdeploy-01-migration.js` para conceder `ai.view` sólo a `admin`, `tenant_admin` y `auditor`, con postcondition que bloquea roles no autorizados.
+- Sidebar i18n: `navigation.destinations.aiAuditor` agregado a `es.json` y `en.json`.
+
+Evidencia productiva read-only: `transaction_read_only=on`; `calculation_runs` no tiene `source_as_of` ni `created_at`; `HOTFIX_RBAC_STATE ai_permission_active=true ai_compliance_canonical=true tenant_expected_role_count=3 tenant_expected_ai_view_count=0 unauthorized_ai_view_role_count=0`; producción no fue modificada.
+
+Validación focal PASS: `git diff --check`, checks sintácticos de JS tocados, `bash -n scripts/deploy-vms.sh`, checksum/contrato del runner hotfix, `canonicalHealthProjection.service.test.js`, `grcHealthCalculation.service.test.js`, `aiAddonCommercial.contract.test.js`, `normalization01Authority.contract.test.js`, `npm --prefix frontend run test:phase6-sidebar-rbac`, `npm --prefix frontend run test:phase6-commercial-multitenant`.
+
+Next gate: `HUMAN_REVIEW -> COMMIT -> PUSH -> OFFICIAL_DEPLOY -> POSTDEPLOY_RUNTIME_VALIDATION`.
+
 ## Handoff relevante
 
 - `docs/codex/handoffs/CONT-00.md`
@@ -281,5 +298,6 @@ Validacion focal y preflight productivo read-only PASS; no hubo `--apply`, commi
 - `docs/codex/handoffs/NORMALIZATION-02-KPI-HEALTH-UI.md`
 - `docs/codex/handoffs/RELEASE-CLOSEOUT-NORMALIZATION.md`
 - `docs/codex/handoffs/AI-ADDON-MIGRATION-ORDER-RECONCILIATION.md`
+- `docs/codex/handoffs/HOTFIX-POSTDEPLOY-01-ISOHEALTH-AI-GRC.md`
 - `docs/codex/PHASE6_EXPANDED_CLOSURE.md`
 - `docs/architecture/grc_relationship_inventory.md`
