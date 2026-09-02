@@ -141,7 +141,7 @@ export const CLIENT_ENTERPRISE_NAV_DOMAINS: EnterpriseNavDomain[] = [
       { href: '/exportes', label: 'Exportes', labelKey: 'navigation.destinations.exports', feature: 'reports.read' },
       { href: '/bi', label: 'Analítica', labelKey: 'navigation.destinations.bi', feature: 'phase5.read', moduleKey: 'metrics_bi' },
       { href: '/reportes/studio', label: 'Diseñador de reportes', labelKey: 'navigation.destinations.reportStudio', feature: 'phase5.read', moduleKey: 'report_studio' },
-      { href: '/reportes/generaciones', label: 'Generaciones', labelKey: 'navigation.destinations.reportGenerations', feature: 'phase5.read', moduleKey: 'report_studio' },
+      { href: '/reportes/generaciones', label: 'Informes generados', labelKey: 'navigation.destinations.reportGenerations', feature: 'phase5.read', moduleKey: 'report_studio' },
     ],
   },
   {

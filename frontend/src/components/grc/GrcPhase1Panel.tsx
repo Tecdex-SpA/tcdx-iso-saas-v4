@@ -7,6 +7,8 @@ import {
   EnterpriseCard,
   EnterpriseEmptyState,
 } from '@/components/ui/enterprise';
+import { translateStandardLabel, translateStatusLabel } from '@/i18n/displayText';
+import { getUserFromToken } from '@/utils/auth';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
 
@@ -111,6 +113,18 @@ type AuditWorkspace = {
   open_conflicts?: number;
   open_followups?: number;
   review_queue?: Array<{ id: string; audit_id: string; code: string; version: number; status: string; objective: string }>;
+};
+
+type AuditOption = {
+  id: string;
+  iso?: string | null;
+  status?: string | null;
+  start_date?: string | null;
+  end_date?: string | null;
+  auditor_name?: string | null;
+  requester_name?: string | null;
+  title?: string | null;
+  name?: string | null;
 };
 
 type AuditOperations = {
@@ -231,6 +245,48 @@ function statusTone(status: string): 'success' | 'warning' | 'danger' | 'info' |
   if (['requested', 'submitted', 'under_review', 'changes_requested'].includes(status)) return 'warning';
   if (['draft', 'planned'].includes(status)) return 'info';
   return 'neutral';
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function isUuidLike(value?: string | null) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+    String(value || '').trim()
+  );
+}
+
+function resolveTenantId(user: unknown) {
+  const record = isRecord(user) ? user : {};
+  return String(record.tenant_id || record.tenantId || record.tenant || record.company_id || record.companyId || '');
+}
+
+function getApiErrorMessage(payload: unknown, fallback: string) {
+  const record = isRecord(payload) ? payload : {};
+  return String(record.error || fallback);
+}
+
+function auditOptionTitle(option: AuditOption) {
+  const title = String(option.title || option.name || '').trim();
+  if (title && !isUuidLike(title)) return title;
+  const requester = String(option.requester_name || '').trim();
+  const auditor = String(option.auditor_name || '').trim();
+  if (requester && !isUuidLike(requester)) return `Solicitante: ${requester}`;
+  if (auditor && !isUuidLike(auditor)) return `Auditor: ${auditor}`;
+  return 'Auditoría sin título';
+}
+
+function auditOptionLabel(option: AuditOption) {
+  const period = option.start_date || option.end_date
+    ? `${formatDate(option.start_date)} a ${formatDate(option.end_date)}`
+    : 'Sin periodo';
+  return [
+    auditOptionTitle(option),
+    translateStandardLabel(option.iso || '-', 'es'),
+    translateStatusLabel(option.status || 'pendiente', 'es'),
+    period,
+  ].join(' · ');
 }
 
 export default function GrcPhase1Panel({ mode }: { mode: PanelMode }) {
@@ -1085,6 +1141,10 @@ function AuditOperationsConsole({ canManage, canWorkpaper, canReview, canExport 
   canReview: boolean;
   canExport: boolean;
 }) {
+  const [auditOptions, setAuditOptions] = useState<AuditOption[]>([]);
+  const [selectedAuditId, setSelectedAuditId] = useState('');
+  const [auditSearch, setAuditSearch] = useState('');
+  const [loadingAudits, setLoadingAudits] = useState(true);
   const [auditId, setAuditId] = useState('');
   const [operations, setOperations] = useState<AuditOperations | null>(null);
   const [closeBlockers, setCloseBlockers] = useState<string[]>([]);
@@ -1099,12 +1159,76 @@ function AuditOperationsConsole({ canManage, canWorkpaper, canReview, canExport 
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadAuditOptions() {
+      const token = getToken();
+      const tenantId = resolveTenantId(getUserFromToken());
+
+      if (!token || !tenantId) {
+        if (!cancelled) {
+          setAuditOptions([]);
+          setLoadingAudits(false);
+          setError('Tu sesión no está disponible. Ingresa nuevamente.');
+        }
+        return;
+      }
+
+      try {
+        setLoadingAudits(true);
+        setError('');
+
+        const response = await fetch(`${API_URL}/api/audits/${tenantId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const json: unknown = await response.json().catch(() => []);
+
+        if (!response.ok) {
+          throw new Error(getApiErrorMessage(json, 'No fue posible cargar auditorías disponibles.'));
+        }
+
+        const rows = Array.isArray(json)
+          ? json.filter((item): item is AuditOption => isRecord(item) && isUuidLike(String(item.id || '')))
+          : [];
+
+        if (cancelled) return;
+
+        setAuditOptions(rows);
+        setSelectedAuditId((current) => rows.some((item) => item.id === current) ? current : '');
+        setAuditId((current) => rows.some((item) => item.id === current) ? current : '');
+      } catch (caught) {
+        if (!cancelled) {
+          setAuditOptions([]);
+          setError(caught instanceof Error ? caught.message : 'No fue posible cargar auditorías disponibles.');
+        }
+      } finally {
+        if (!cancelled) setLoadingAudits(false);
+      }
+    }
+
+    void loadAuditOptions();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   if (!canManage && !canWorkpaper && !canReview) return null;
-  async function refresh() {
-    if (!auditId) return;
+
+  const filteredAuditOptions = auditOptions.filter((item) => {
+    const query = auditSearch.trim().toLowerCase();
+    if (!query) return true;
+    return auditOptionLabel(item).toLowerCase().includes(query);
+  });
+  const selectedAudit = auditOptions.find((item) => item.id === selectedAuditId) || null;
+
+  async function refreshAudit(id: string) {
+    if (!id) return;
     const [next, readiness] = await Promise.all([
-      api<AuditOperations>(`/api/grc/audits/${auditId}/operations`),
-      api<{ can_close: boolean; blockers: string[] }>(`/api/grc/audits/${auditId}/close-readiness`),
+      api<AuditOperations>(`/api/grc/audits/${id}/operations`),
+      api<{ can_close: boolean; blockers: string[] }>(`/api/grc/audits/${id}/close-readiness`),
     ]);
     setOperations(next);
     setCloseBlockers(readiness.blockers || []);
@@ -1112,13 +1236,16 @@ function AuditOperationsConsole({ canManage, canWorkpaper, canReview, canExport 
     if (!conflictId && next.conflicts[0]) setConflictId(next.conflicts[0].id);
     if (!workpaperId && next.workpapers[0]) setWorkpaperId(next.workpapers[0].id);
   }
-  async function run(work: () => Promise<unknown>, success: string) {
+  async function refresh() {
+    await refreshAudit(auditId);
+  }
+  async function run(work: () => Promise<unknown>, success: string, reload = true) {
     setBusy(true);
     setMessage('');
     setError('');
     try {
       await work();
-      await refresh();
+      if (reload) await refresh();
       setMessage(success);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'No fue posible operar la auditoría.');
@@ -1126,14 +1253,66 @@ function AuditOperationsConsole({ canManage, canWorkpaper, canReview, canExport 
       setBusy(false);
     }
   }
+  async function loadSelectedAudit() {
+    if (!selectedAudit) return;
+    setAuditId(selectedAudit.id);
+    setOperations(null);
+    setCloseBlockers([]);
+    setMemberId('');
+    setConflictId('');
+    setWorkpaperId('');
+    await refreshAudit(selectedAudit.id);
+  }
   const post = (path: string, body: Record<string, unknown>) => api(path, { method: 'POST', body: JSON.stringify(body) });
   return (
     <EnterpriseCard title="Ejecución operacional de auditoría" subtitle="Equipo, independencia, programa, muestra, papeles, evidencia, seguimiento y cierre bloqueante." bodyClassName="p-5">
       {message ? <p role="status" aria-live="polite" className="mb-4 rounded-md bg-emerald-50 p-3 text-sm text-emerald-800">{message}</p> : null}
       {error ? <p role="alert" className="mb-4 rounded-md bg-red-50 p-3 text-sm text-red-800">{error}</p> : null}
-      <div className="mb-5 flex flex-wrap gap-2">
-        <input aria-label="ID de auditoría operacional" value={auditId} onChange={event => setAuditId(event.target.value)} pattern="[0-9a-fA-F-]{36}" className="min-h-11 min-w-72 flex-1 rounded-md border border-slate-300 px-3" />
-        <EnterpriseButton type="button" variant="secondary" disabled={busy || !auditId} onClick={() => void run(refresh, 'Workspace de auditoría actualizado.')}>Cargar auditoría</EnterpriseButton>
+      <div className="mb-5 space-y-3 rounded-md border border-slate-200 bg-slate-50 p-4">
+        {loadingAudits ? (
+          <p className="text-sm text-slate-600">Cargando auditorías disponibles...</p>
+        ) : auditOptions.length === 0 ? (
+          <div>
+            <p className="text-sm font-semibold text-slate-900">No hay auditorías disponibles para ejecutar.</p>
+            <EnterpriseButton type="button" variant="secondary" className="mt-3" onClick={() => { window.location.href = '/auditorias'; }}>
+              Ir a Programa de auditorías
+            </EnterpriseButton>
+          </div>
+        ) : (
+          <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)_auto] lg:items-end">
+            <label className="text-sm font-semibold text-slate-700">
+              Buscar auditoría
+              <input
+                aria-label="Buscar auditoría operacional"
+                value={auditSearch}
+                onChange={event => setAuditSearch(event.target.value)}
+                className="mt-2 min-h-11 w-full rounded-md border border-slate-300 bg-white px-3 font-normal text-slate-900"
+              />
+            </label>
+            <label className="text-sm font-semibold text-slate-700">
+              Auditoría
+              <select
+                aria-label="Seleccionar auditoría operacional"
+                value={selectedAuditId}
+                onChange={event => {
+                  setSelectedAuditId(event.target.value);
+                  setAuditId('');
+                  setOperations(null);
+                  setCloseBlockers([]);
+                }}
+                className="mt-2 min-h-11 w-full rounded-md border border-slate-300 bg-white px-3 font-normal text-slate-900"
+              >
+                <option value="">Selecciona una auditoría disponible</option>
+                {filteredAuditOptions.map(item => (
+                  <option key={item.id} value={item.id}>{auditOptionLabel(item)}</option>
+                ))}
+              </select>
+            </label>
+            <EnterpriseButton type="button" variant="secondary" disabled={busy || !selectedAudit} onClick={() => void run(loadSelectedAudit, 'Workspace de auditoría actualizado.', false)}>
+              Cargar auditoría
+            </EnterpriseButton>
+          </div>
+        )}
       </div>
       <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
         {canManage ? <form className="space-y-3 rounded-md border border-slate-200 p-4" onSubmit={event => {

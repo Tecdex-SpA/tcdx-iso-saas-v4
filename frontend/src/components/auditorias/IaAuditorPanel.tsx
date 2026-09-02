@@ -1081,11 +1081,11 @@ export default function IaAuditorPanel() {
                   <Pill value={trace?.ai_engine_used}>{copy.advisory}</Pill>
                 </div>
 
-                <h1 className="mt-5 text-4xl font-black tracking-tight text-slate-50">
+                <h1 className="mt-5 text-4xl font-black tracking-tight text-white">
                   {copy.title}
                 </h1>
 
-                <p className="mt-3 max-w-5xl text-sm leading-6 text-slate-100">
+                <p className="mt-3 max-w-5xl text-sm leading-6 text-white">
                   {copy.subtitle}
                 </p>
 
@@ -1095,10 +1095,10 @@ export default function IaAuditorPanel() {
               </div>
 
               <div className="rounded-3xl border border-white/20 bg-white/15 p-5 backdrop-blur xl:min-w-[360px]">
-                <div className="text-[11px] font-black uppercase tracking-[0.14em] text-slate-50">
+                <div className="text-[11px] font-black uppercase tracking-[0.14em] text-white">
                   {copy.safeMode}
                 </div>
-                <p className="mt-2 text-sm leading-6 text-slate-100">
+                <p className="mt-2 text-sm leading-6 text-slate-50">
                   {copy.safeModeText}
                 </p>
               </div>

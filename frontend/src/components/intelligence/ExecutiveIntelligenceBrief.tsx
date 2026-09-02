@@ -54,31 +54,31 @@ export default function ExecutiveIntelligenceBrief({
     ? 'rounded-lg border border-slate-700 bg-slate-950 p-4 shadow-sm'
     : 'rounded-lg border border-[var(--tcdx-color-border)] bg-white p-4 shadow-sm';
   const eyebrowClass = dark
-    ? 'text-xs font-bold uppercase tracking-[0.16em] text-blue-200'
+    ? 'text-xs font-bold uppercase tracking-[0.16em] text-sky-100'
     : 'text-xs font-bold uppercase tracking-[0.16em] text-[var(--tcdx-color-primary)]';
   const titleClass = dark
-    ? 'mt-1 text-lg font-bold text-slate-50'
+    ? 'mt-1 text-lg font-bold text-white'
     : 'mt-1 text-lg font-bold text-[var(--tcdx-color-text-ink)]';
   const bodyClass = dark
-    ? 'mt-2 max-w-5xl text-sm leading-6 text-slate-100'
+    ? 'mt-2 max-w-5xl text-sm leading-6 text-white'
     : 'mt-2 max-w-5xl text-sm leading-6 text-[var(--tcdx-color-text-secondary)]';
   const cardClass = dark
     ? 'rounded-lg border border-white/15 bg-white/10 p-3'
     : 'rounded-lg border border-[var(--tcdx-color-border)] bg-[var(--tcdx-color-surface)] p-3';
   const cardLabelClass = dark
-    ? 'text-xs font-semibold uppercase tracking-wide text-slate-300'
+    ? 'text-xs font-semibold uppercase tracking-wide text-slate-100'
     : 'text-xs font-semibold uppercase tracking-wide text-[var(--tcdx-color-text-muted)]';
   const cardValueClass = dark
     ? 'mt-2 text-xl font-bold text-slate-50'
     : 'mt-2 text-xl font-bold text-[var(--tcdx-color-text-ink)]';
   const cardSecondaryClass = dark
-    ? 'mt-1 text-xs text-slate-300'
+    ? 'mt-1 text-xs text-slate-100'
     : 'mt-1 text-xs text-[var(--tcdx-color-text-secondary)]';
   const panelHeadingClass = dark
     ? 'mb-3 text-sm font-semibold text-slate-50'
     : 'mb-3 text-sm font-semibold text-[var(--tcdx-color-text-ink)]';
   const secondaryTextClass = dark
-    ? 'mt-3 text-sm leading-6 text-slate-200'
+    ? 'mt-3 text-sm leading-6 text-slate-50'
     : 'mt-3 text-sm leading-6 text-[var(--tcdx-color-text-secondary)]';
 
   if (loading) {

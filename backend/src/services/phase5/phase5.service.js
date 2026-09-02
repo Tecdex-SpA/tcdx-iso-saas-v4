@@ -48,6 +48,23 @@ function text(value, fallback = null) {
   return normalized || fallback;
 }
 
+function reportOutputLabel(value, fallback = 'Sin dato') {
+  const labels = {
+    public: 'Público',
+    internal: 'Interno',
+    confidential: 'Confidencial',
+    restricted: 'Restringido',
+    trusted: 'Confiable',
+    trusted_with_warnings: 'Confiable con advertencias',
+    low_confidence: 'Baja confianza',
+    insufficient_data: 'Datos insuficientes',
+    untrusted: 'No confiable',
+    unknown: 'Sin dato',
+  };
+  const key = String(value || '').trim().toLowerCase();
+  return labels[key] || text(value, fallback);
+}
+
 function json(value, fallback = {}) {
   if (value === undefined || value === null) return JSON.stringify(fallback);
   return JSON.stringify(value);
@@ -1475,19 +1492,25 @@ async function generateReport(scope, reportId, body = {}, requestId = null) {
     [tenantId, report.id, generationKey, format, snapshot.id, userId(scope.user), requestId, json(body.metadata)]
   )).rows[0];
 
+  const requestedPeriod = body.period || body.filters?.period || report.filter_config?.period || {};
+  const periodLabel = requestedPeriod.start || requestedPeriod.end
+    ? `${text(requestedPeriod.start, 'sin inicio').slice(0, 10)} a ${text(requestedPeriod.end, 'sin término').slice(0, 10)}`
+    : text(body.period_key, 'no especificado');
   const lines = [
     report.display_name,
-    `Tenant: ${tenantId}`,
-    `Fecha: ${new Date().toISOString()}`,
-    `Periodo: ${text(body.period_key, 'no especificado')}`,
-    `Version: ${generation.generation_key}`,
-    `Clasificacion: ${report.classification}`,
-    `Identificador de emision: ${generation.id}`,
-    `Fuentes: snapshot ${snapshot.id}`,
+    `Fecha de generación: ${new Date().toISOString()}`,
+    `Periodo: ${periodLabel}`,
+    `Formato: ${format.toUpperCase()}`,
+    `Clasificación: ${reportOutputLabel(report.classification)}`,
     `Resultados oficiales: ${officialResults.length}`,
-    ...officialResults.map((item) => `${item.result_code}: ${item.value ?? 'unmeasured'} ${item.unit || ''} | formula=${item.formula.code}@v${item.formula.version} | run=${item.calculation_run_id || 'sin-run'} | trust=${item.trust.status}`),
-    `Confianza: proviene de Data Trust oficial asociado al calculation run.`,
-    `Freshness: resultados sin calculation_run oficial se reportan como source_unavailable.`,
+    ...officialResults.map((item) => {
+      const label = item.display_name || item.name || item.result_code || 'Resultado oficial';
+      const value = item.value ?? 'sin medición';
+      const unit = item.unit ? ` ${item.unit}` : '';
+      const trust = item.trust?.status ? ` | Confianza: ${reportOutputLabel(item.trust.status)}` : '';
+      return `${label}: ${value}${unit}${trust}`;
+    }),
+    `Nota: la trazabilidad técnica del informe queda registrada en el sistema y no se expone como dato de trabajo del usuario.`,
   ];
 
   let buffer;

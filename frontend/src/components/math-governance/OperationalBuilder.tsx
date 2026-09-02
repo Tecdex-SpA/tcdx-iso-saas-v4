@@ -130,17 +130,22 @@ function availabilityLabel(item: OfficialResult | undefined) {
   return presentationLabel(item.source_status || 'available');
 }
 
-function reportGenerationId(result: Entity | null) {
-  const generation = result?.generation as Entity | undefined;
-  const directId = result?.id;
-  return compact(generation?.id || directId);
-}
-
 function reportDownloadHref(result: Entity | null) {
   const generation = result?.generation as Entity | undefined;
   const generationId = generation?.id || result?.id;
   if (!generationId) return null;
   return `/api/report-generations/${encodeURIComponent(String(generationId))}/download`;
+}
+
+function safeDownloadName(value: string) {
+  const base = String(value || 'informe-generado')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 80);
+  return base || 'informe-generado';
 }
 
 function codePrefix(kind: BuilderKind) {
@@ -372,7 +377,7 @@ export default function OperationalBuilder({ kind, title, description, domain, d
   const selectedDefinition = visibleCatalog.find((item) => selectedResultCode(item) === form.resultCode);
   const hasReportSource = !isReportBuilder || Boolean(selectedDefinition);
   const typeOptions = isReportBuilder
-    ? ['executive', 'audit', 'operational', 'custom']
+    ? ['executive_grc', 'audit', 'compliance', 'risks', 'actions', 'data_quality', 'custom']
     : ['kpi', 'kri', 'kci', 'kqi', 'operational', 'custom', 'supplier_assessment', 'effectiveness_test'];
 
   const pushLog = (step: string, status: OperationLog['status'], message: string) => {
@@ -558,9 +563,6 @@ export default function OperationalBuilder({ kind, title, description, domain, d
     }
     const executed = dataOf<Entity>(await runStep('ejecutar', () => apiRequestJson(endpoint, { method: 'POST', body: JSON.stringify(payload), fallbackMessage: 'No fue posible ejecutar.' })));
     setResult(executed);
-    if (kind === 'report' && (executed.generation as Entity | undefined)?.id) {
-      await runStep('aprobar reporte', () => apiRequestJson(`/api/report-generations/${(executed.generation as Entity).id}/approve`, { method: 'POST', body: JSON.stringify({ approval_status: 'approved', comment: 'Aprobado desde builder operacional.' }) }));
-    }
     if (kind === 'assurance' && executed.id) {
       await runStep('cerrar assurance', () => apiRequestJson(`/api/assurance-tests/executions/${executed.id}/complete`, { method: 'POST', body: JSON.stringify({ result: 'pass_with_observations', conclusion: 'Resultado registrado desde builder operacional.' }) }));
       await runStep('revisar assurance', () => apiRequestJson(`/api/assurance-tests/executions/${executed.id}/review`, { method: 'POST', body: JSON.stringify({ status: 'reviewed' }) }));
@@ -584,7 +586,7 @@ export default function OperationalBuilder({ kind, title, description, domain, d
       const objectUrl = URL.createObjectURL(blob);
       const anchor = document.createElement('a');
       anchor.href = objectUrl;
-      anchor.download = `reporte-${reportGenerationId(result)}.${form.format}`;
+      anchor.download = `${safeDownloadName(form.name)}.${form.format}`;
       document.body.appendChild(anchor);
       anchor.click();
       anchor.remove();
@@ -716,13 +718,18 @@ export default function OperationalBuilder({ kind, title, description, domain, d
         <button type="button" data-testid={`builder-${testKey}-save`} disabled={busy} onClick={saveDraft} className="rounded-md border border-[var(--tcdx-color-border)] px-3 py-2 text-sm font-semibold disabled:bg-slate-100 disabled:text-slate-500">{isReportBuilder ? 'Guardar configuración' : 'Guardar draft'}</button>
         {!isReportBuilder && <button type="button" data-testid={`builder-${testKey}-publish`} disabled={busy || !entity?.id} onClick={publish} className="rounded-md border border-[var(--tcdx-color-border)] px-3 py-2 text-sm font-semibold disabled:bg-slate-100 disabled:text-slate-500">Publicar / aprobar</button>}
         <button type="button" data-testid={`builder-${testKey}-execute`} disabled={busy || (!isReportBuilder && !entity?.id)} onClick={execute} className="rounded-md bg-[var(--tcdx-color-action-primary)] px-3 py-2 text-sm font-semibold text-white disabled:bg-slate-300 disabled:text-slate-700">{isReportBuilder ? 'Generar informe' : 'Ejecutar'}</button>
-        {isReportBuilder && <Link href="/reportes/generaciones" className="rounded-md border border-[var(--tcdx-color-border)] px-3 py-2 text-sm font-semibold text-[var(--tcdx-color-text-ink)] hover:bg-[var(--tcdx-color-surface)]">Ir al historial</Link>}
+        {isReportBuilder && <Link href="/reportes/generaciones" className="rounded-md border border-[var(--tcdx-color-border)] px-3 py-2 text-sm font-semibold text-[var(--tcdx-color-text-ink)] hover:bg-[var(--tcdx-color-surface)]">Ver informes generados</Link>}
         <button type="button" disabled={busy} onClick={() => loadHistory()} className="rounded-md border border-[var(--tcdx-color-border)] px-3 py-2 text-sm font-semibold disabled:bg-slate-100 disabled:text-slate-500">{isReportBuilder ? 'Actualizar historial' : 'Actualizar historial'}</button>
       </div>
 
       <div className="mt-4 grid gap-3 lg:grid-cols-3">
         <article className="rounded-md border border-[var(--tcdx-color-border)] p-3 text-sm">
           <div className="font-semibold">{isReportBuilder ? 'Revisión del informe' : 'Resultado / vista previa'}</div>
+          {isReportBuilder && !result && (
+            <p className="mt-2 text-xs leading-5 text-[var(--tcdx-color-text-secondary)]">
+              Todavía no has generado este informe.
+            </p>
+          )}
           <dl className="mt-2 space-y-1 text-xs text-[var(--tcdx-color-text-secondary)]">
             {!isReportBuilder && <div className="flex justify-between gap-3"><dt>Entidad</dt><dd data-testid={`builder-${testKey}-entity`} className="text-right">{compact(entity?.id)}</dd></div>}
             {!isReportBuilder && <div className="flex justify-between gap-3"><dt>Secundario</dt><dd className="text-right">{compact(secondaryEntity?.id)}</dd></div>}
@@ -751,21 +758,9 @@ export default function OperationalBuilder({ kind, title, description, domain, d
                 Descargar
               </button>
             ) : null}
-            {isReportBuilder && result && <Link href="/reportes/generaciones">Ver generación</Link>}
+            {isReportBuilder && result && <Link href="/reportes/generaciones">Ver informes generados</Link>}
             {!isReportBuilder && runId && <span>Run {String(runId).slice(0, 8)}</span>}
           </div>
-          {isReportBuilder && (
-            <details className="mt-3 rounded-md border border-[var(--tcdx-color-border)] bg-[var(--tcdx-color-surface)] p-3">
-              <summary className="cursor-pointer text-xs font-semibold text-[var(--tcdx-color-text-secondary)]">Detalle técnico</summary>
-              <dl className="mt-2 space-y-1 text-xs text-[var(--tcdx-color-text-secondary)]">
-                <div className="flex justify-between gap-3"><dt>ID definición</dt><dd data-testid={`builder-${testKey}-entity`} className="text-right">{compact(entity?.id)}</dd></div>
-                <div className="flex justify-between gap-3"><dt>Código de resultado</dt><dd className="text-right">{compact(form.resultCode)}</dd></div>
-                <div className="flex justify-between gap-3"><dt>ID generación</dt><dd className="text-right">{reportGenerationId(result)}</dd></div>
-                <div className="flex justify-between gap-3"><dt>Ruta de generación</dt><dd className="text-right">/api/reports/:id/generate</dd></div>
-                <div className="flex justify-between gap-3"><dt>Ruta de descarga</dt><dd className="text-right">/api/report-generations/:id/download</dd></div>
-              </dl>
-            </details>
-          )}
         </article>
         <article className="rounded-md border border-[var(--tcdx-color-border)] p-3 text-sm">
           <div className="font-semibold">Historial</div>

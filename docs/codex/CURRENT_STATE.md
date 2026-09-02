@@ -1,6 +1,6 @@
 # CURRENT_STATE — TCDX ISO SaaS V4
 
-Actualizado: 2026-09-01
+Actualizado: 2026-09-02
 Repositorio: `Tecdex-SpA/tcdx-iso-saas-v4`
 Remote/base `main` verificado para F6.14-A: `e6b431df521300119efaf9194d3ff4d8e56d7004`
 Fuente: repositorio `main` + handoffs runtime cerrados + evidencia runtime validada por el responsable del proyecto + cierre runtime F6.11-A + cierre runtime F6.11-B + cierre runtime F6.12-A + cierre runtime F6.13-A + cierre local UI-04 + cierre local UI-07.
@@ -265,6 +265,16 @@ Validacion local PASS: `git diff --check`, `npm --prefix frontend run lint`, `np
 
 Autoridades preservadas: backend/API/BD/migraciones/RBAC/modelo comercial/Health authority/formulas oficiales/AI runtime sin cambios. Handoff: `docs/codex/handoffs/UI-OPT-03-REPORTING-CONTRAST-LOCALIZATION-CLOSEOUT.md`.
 
+## UI-FUNC-04 — REPORTS + AUDIT UX CLOSEOUT
+
+Status: `READY_FOR_HUMAN_REVIEW` local sobre `main@adc92877a5ecc5b5a84f29396ec60a218c6f4541` sin commit/push/deploy.
+
+Cambios locales: Report Studio alinea `report_type` con el CHECK real que fallaba en producción (`POST /api/reports/`, `SQLSTATE=23514`, `report_definitions_report_type_check`), `/reportes/generaciones` queda como `Informes generados` sobre `/api/report-generations` y `/api/reports`, `/auditorias/ejecucion` y `GrcPhase1Panel` usan selector real de auditorías por tenant sin input libre de ID, y se cierran contraste/localización focal y descargas sin IDs técnicos visibles para cliente.
+
+Validación local PASS: `git diff --check`, `node --check backend/src/services/phase5/phase5.service.js`, `npm --prefix frontend run typecheck`, `npm --prefix frontend run lint`, `npm --prefix frontend run test:phase6-sidebar-rbac`, `npm --prefix frontend run test:phase6-commercial-multitenant` y `npm --prefix frontend run build`. `FOCAL_RUNTIME_E2E=DEFERRED_TO_HUMAN_POSTDEPLOY`.
+
+Autoridades preservadas: BD/migraciones/RBAC/modelo comercial/Health formulas/AI runtime sin cambios. Handoff: `docs/codex/handoffs/UI-FUNC-04-REPORTS-AUDIT-UX-CLOSEOUT.md`.
+
 ## Handoff relevante
 
 - `docs/codex/handoffs/CONT-00.md`
@@ -322,6 +332,7 @@ Autoridades preservadas: backend/API/BD/migraciones/RBAC/modelo comercial/Health
 - `docs/codex/handoffs/UI-OPT-01-PRODUCTIVITY-CLEANUP.md`
 - `docs/codex/handoffs/UI-OPT-02-PRODUCTIVE-CLOSURE.md`
 - `docs/codex/handoffs/UI-OPT-03-REPORTING-CONTRAST-LOCALIZATION-CLOSEOUT.md`
+- `docs/codex/handoffs/UI-FUNC-04-REPORTS-AUDIT-UX-CLOSEOUT.md`
 - `docs/codex/handoffs/RBAC-01-BRAND-01.md`
 - `docs/codex/handoffs/RBAC-02-COMMERCIAL-GATING.md`
 - `docs/codex/handoffs/AI-ADDON-01-COMMERCIAL-UI-01.md`

@@ -2,12 +2,12 @@
 
 import type { ReactNode } from 'react';
 import { Suspense, useEffect, useMemo, useState } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import AppLayout from '@/components/AppLayout';
 import EnterpriseDomainWorkspaceShell from '@/components/enterprise-domain/EnterpriseDomainWorkspaceShell';
 import { getUserFromToken } from '@/utils/auth';
 import { useTranslation } from '@/hooks/useTranslation';
-import { translateDisplayText, translateStatusLabel, translateClauseLabel } from '@/i18n/displayText';
+import { translateDisplayText, translateStatusLabel, translateClauseLabel, translateStandardLabel } from '@/i18n/displayText';
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL || '';
@@ -26,6 +26,15 @@ type ReviewRow = {
 
 type AuditSummary = {
   iso?: string;
+  status?: string;
+  start_date?: string;
+  end_date?: string;
+  auditor_name?: string;
+  requester_name?: string;
+};
+
+type AuditOption = AuditSummary & {
+  id: string;
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -40,6 +49,13 @@ function resolveTenantId(user: unknown) {
 function getApiErrorMessage(payload: unknown, fallback: string) {
   const record = isRecord(payload) ? payload : {};
   return String(record.error || fallback);
+}
+
+function formatDate(value?: string | null) {
+  if (!value) return '-';
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return String(value).slice(0, 10);
+  return d.toLocaleDateString('es-CL');
 }
 
 function statusClass(value?: string) {
@@ -97,34 +113,91 @@ export default function AuditExecutionPage() {
 
 function AuditExecutionContent() {
   const { t, locale } = useTranslation();
+  const router = useRouter();
   const params = useSearchParams();
-  const auditId = params.get('id') || '';
+  const requestedAuditId = isUuidLike(params.get('id')) ? String(params.get('id')) : '';
 
   const [token, setToken] = useState('');
+  const [tenantId, setTenantId] = useState('');
+  const [auditOptions, setAuditOptions] = useState<AuditOption[]>([]);
+  const [selectedAuditId, setSelectedAuditId] = useState('');
+  const [loadedAuditId, setLoadedAuditId] = useState('');
   const [audit, setAudit] = useState<AuditSummary | null>(null);
   const [rows, setRows] = useState<ReviewRow[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loadingAudits, setLoadingAudits] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [savingId, setSavingId] = useState('');
+  const [selectorError, setSelectorError] = useState('');
 
   useEffect(() => {
     const t = localStorage.getItem('token') || '';
     const u = getUserFromToken();
 
-    if (!t || !resolveTenantId(u)) {
+    const resolvedTenantId = resolveTenantId(u);
+
+    if (!t || !resolvedTenantId) {
       window.location.href = '/login';
       return;
     }
 
     setToken(t);
+    setTenantId(resolvedTenantId);
   }, []);
 
+  useEffect(() => {
+    if (!token || !tenantId) return;
+
+    const loadAudits = async () => {
+      try {
+        setLoadingAudits(true);
+        setSelectorError('');
+
+        const res = await fetch(`${API_URL}/api/audits/${tenantId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const json: unknown = await res.json();
+
+        if (!res.ok) {
+          setAuditOptions([]);
+          setSelectorError(getApiErrorMessage(json, t('auditExecution.loadError')));
+          return;
+        }
+
+        const rows = Array.isArray(json) ? json.filter((item): item is AuditOption => isRecord(item) && isUuidLike(String(item.id || ''))) : [];
+        setAuditOptions(rows);
+
+        const requested = requestedAuditId && rows.some((item) => item.id === requestedAuditId)
+          ? requestedAuditId
+          : '';
+        const nextSelected = requested || (selectedAuditId && rows.some((item) => item.id === selectedAuditId) ? selectedAuditId : '');
+        setSelectedAuditId(nextSelected);
+
+        if (requested) {
+          setLoadedAuditId(requested);
+          router.replace('/auditorias/ejecucion');
+        } else if (params.get('id')) {
+          setSelectorError(t('auditExecution.auditNotAvailable'));
+          setLoadedAuditId('');
+        }
+      } catch (error) {
+        setAuditOptions([]);
+        setSelectorError(error instanceof Error ? error.message : t('auditExecution.loadError'));
+      } finally {
+        setLoadingAudits(false);
+      }
+    };
+
+    void loadAudits();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token, tenantId, requestedAuditId, t]);
+
   const load = async () => {
-    if (!token || !auditId) return;
+    if (!token || !loadedAuditId) return;
 
     try {
       setLoading(true);
 
-      const res = await fetch(`${API_URL}/api/audit-execution/${auditId}/checklist`, {
+      const res = await fetch(`${API_URL}/api/audit-execution/${loadedAuditId}/checklist`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
@@ -147,7 +220,13 @@ function AuditExecutionContent() {
   useEffect(() => {
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token, auditId]);
+  }, [token, loadedAuditId]);
+
+  const loadSelectedAudit = () => {
+    if (!selectedAuditId || !auditOptions.some((item) => item.id === selectedAuditId)) return;
+    setLoadedAuditId(selectedAuditId);
+    router.replace('/auditorias/ejecucion');
+  };
 
   const summary = useMemo(() => {
     return {
@@ -192,7 +271,9 @@ function AuditExecutionContent() {
     }
   };
 
-  if (!auditId) {
+  const selectedAudit = auditOptions.find((item) => item.id === selectedAuditId) || null;
+
+  if (!loadedAuditId) {
     return (
       <AppLayout>
         <EnterpriseDomainWorkspaceShell
@@ -201,9 +282,50 @@ function AuditExecutionContent() {
           title={t('auditExecution.title')}
           description={t('auditExecution.subtitle')}
         >
-          <div className="rounded-md border border-dashed border-[var(--tcdx-color-border)] bg-white p-6 text-sm text-[var(--tcdx-color-text-secondary)]">
-            {t('auditExecution.missingAuditId')}
-          </div>
+          <section className="rounded-md border border-[var(--tcdx-color-border)] bg-white p-6 shadow-sm">
+            {loadingAudits ? (
+              <div className="text-sm text-[var(--tcdx-color-text-secondary)]">{t('auditExecution.loading')}</div>
+            ) : auditOptions.length === 0 ? (
+              <div>
+                <h2 className="text-lg font-semibold text-[var(--tcdx-color-text-ink)]">{t('auditExecution.noAudits')}</h2>
+                <p className="mt-2 text-sm text-[var(--tcdx-color-text-secondary)]">{t('auditExecution.missingAuditId')}</p>
+                <button
+                  type="button"
+                  onClick={() => router.push('/auditorias')}
+                  className="mt-4 inline-flex min-h-10 items-center rounded-md bg-[var(--tcdx-color-action-primary)] px-4 text-sm font-semibold text-white"
+                >
+                  {t('auditExecution.createAudit')}
+                </button>
+              </div>
+            ) : (
+              <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
+                <label className="text-sm font-semibold text-[var(--tcdx-color-text-ink)]">
+                  {t('auditExecution.selectAudit')}
+                  <select
+                    value={selectedAuditId}
+                    onChange={(event) => setSelectedAuditId(event.target.value)}
+                    className="mt-2 w-full rounded-md border border-[var(--tcdx-color-border)] bg-white px-3 py-3 font-normal text-[var(--tcdx-color-text-ink)]"
+                  >
+                    <option value="">{t('auditExecution.selectAuditPlaceholder')}</option>
+                    {auditOptions.map((option) => (
+                      <option key={option.id} value={option.id}>
+                        {translateStandardLabel(option.iso || '-', locale)} · {formatDate(option.start_date)} a {formatDate(option.end_date)} · {translateStatusLabel(option.status || 'pendiente', locale)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <button
+                  type="button"
+                  disabled={!selectedAudit}
+                  onClick={loadSelectedAudit}
+                  className="inline-flex min-h-11 items-center justify-center rounded-md bg-[var(--tcdx-color-action-primary)] px-4 text-sm font-semibold text-white disabled:bg-slate-200 disabled:text-slate-600"
+                >
+                  {t('auditExecution.loadAudit')}
+                </button>
+                {selectorError && <div className="text-sm font-semibold text-amber-800 lg:col-span-2">{selectorError}</div>}
+              </div>
+            )}
+          </section>
         </EnterpriseDomainWorkspaceShell>
       </AppLayout>
     );
@@ -217,12 +339,25 @@ function AuditExecutionContent() {
         title={t('auditExecution.title')}
         description={t('auditExecution.subtitle')}
         actions={
-          <button
-            onClick={() => window.location.href = '/auditorias'}
-            className="inline-flex min-h-10 items-center rounded-md border border-[var(--tcdx-color-border)] bg-white px-4 text-sm font-semibold text-[var(--tcdx-color-text-ink)] hover:bg-[var(--tcdx-color-surface-subtle)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--tcdx-color-focus)]"
-          >
-            {t('auditExecution.backToAudits')}
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => {
+                setLoadedAuditId('');
+                setAudit(null);
+                setRows([]);
+                router.replace('/auditorias/ejecucion');
+              }}
+              className="inline-flex min-h-10 items-center rounded-md border border-[var(--tcdx-color-border)] bg-white px-4 text-sm font-semibold text-[var(--tcdx-color-text-ink)] hover:bg-[var(--tcdx-color-surface-subtle)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--tcdx-color-focus)]"
+            >
+              {t('auditExecution.selectAudit')}
+            </button>
+            <button
+              onClick={() => window.location.href = '/auditorias'}
+              className="inline-flex min-h-10 items-center rounded-md border border-[var(--tcdx-color-border)] bg-white px-4 text-sm font-semibold text-[var(--tcdx-color-text-ink)] hover:bg-[var(--tcdx-color-surface-subtle)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--tcdx-color-focus)]"
+            >
+              {t('auditExecution.backToAudits')}
+            </button>
+          </div>
         }
       >
       <div className="mx-auto max-w-[1700px] space-y-6">
