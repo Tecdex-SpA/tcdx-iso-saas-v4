@@ -1081,24 +1081,24 @@ export default function IaAuditorPanel() {
                   <Pill value={trace?.ai_engine_used}>{copy.advisory}</Pill>
                 </div>
 
-                <h1 className="mt-5 text-4xl font-black tracking-tight">
+                <h1 className="mt-5 text-4xl font-black tracking-tight text-slate-50">
                   {copy.title}
                 </h1>
 
-                <p className="mt-3 max-w-5xl text-sm leading-6 text-slate-300">
+                <p className="mt-3 max-w-5xl text-sm leading-6 text-slate-100">
                   {copy.subtitle}
                 </p>
 
-                <div className="mt-4 rounded-2xl border border-amber-300/30 bg-amber-400/10 px-4 py-3 text-sm font-semibold text-amber-100">
+                <div className="mt-4 rounded-2xl border border-amber-300/50 bg-amber-300/15 px-4 py-3 text-sm font-semibold text-amber-50">
                   {copy.warning}
                 </div>
               </div>
 
-              <div className="rounded-3xl border border-white/10 bg-white/10 p-5 backdrop-blur xl:min-w-[360px]">
-                <div className="text-[11px] font-black uppercase tracking-[0.14em] text-indigo-100">
+              <div className="rounded-3xl border border-white/20 bg-white/15 p-5 backdrop-blur xl:min-w-[360px]">
+                <div className="text-[11px] font-black uppercase tracking-[0.14em] text-slate-50">
                   {copy.safeMode}
                 </div>
-                <p className="mt-2 text-sm leading-6 text-slate-200">
+                <p className="mt-2 text-sm leading-6 text-slate-100">
                   {copy.safeModeText}
                 </p>
               </div>
@@ -1328,11 +1328,11 @@ export default function IaAuditorPanel() {
               <div className="bg-slate-950 p-5 text-white">
                 <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                   <div>
-                    <p className="text-xs font-black uppercase tracking-[0.16em] text-indigo-200">Tecdex GRC Compliance</p>
-                    <h3 className="mt-1 text-xl font-black">
+                    <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-200">Tecdex GRC Compliance</p>
+                    <h3 className="mt-1 text-xl font-black text-slate-50">
                       {copy.viewHistoryDetail}
                     </h3>
-                    <p className="mt-2 text-xs font-semibold text-slate-300">
+                    <p className="mt-2 text-xs font-semibold text-slate-200">
                       {copy.historyRunId}: {selectedHistory.id} · {copy.standard}: {translateStandardLabel(historyFull.standard_code || historyTrace.standard_code || '-', locale)} · {copy.depth}: {displayStatus(historyFull.depth || historyTrace.depth || '-', locale)}
                     </p>
                   </div>

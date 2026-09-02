@@ -255,6 +255,16 @@ Validacion local PASS: `git diff --check`, `npm --prefix frontend run lint`, `np
 
 Autoridades preservadas: backend/API/BD/migraciones/RBAC/modelo comercial/Health authority/formulas oficiales sin cambios. Handoff: `docs/codex/handoffs/UI-OPT-02-PRODUCTIVE-CLOSURE.md`.
 
+## UI-OPT-03 — REPORTING, CONTRASTE Y LOCALIZACION
+
+Status: `READY_FOR_HUMAN_REVIEW` local sobre `main@5236f4904463d5b422a6167564ba35a2aab7483c` sin commit/push/deploy.
+
+Cambios locales: `/reportes/studio` queda como flujo guiado para seleccionar contenido real desde catalogo oficial, configurar nombre/tipo/formato/periodo, revisar configuracion, generar informe, consultar historial y descargar salida. La exigencia de formula publicada queda fuera del flujo principal de usuario; codigos internos permanecen solo en payloads/detalle tecnico colapsado. `/exportes` conserva preview real premium y refuerza contraste de `Lectura ejecutiva del sistema`; IA Auditor Senior refuerza contraste en superficies oscuras; categorias/enums visibles usan `presentationLabels` sin modificar codigos enviados a backend.
+
+Validacion local PASS: `git diff --check`, `npm --prefix frontend run lint`, `npm --prefix frontend run typecheck`, `npm --prefix frontend run test:phase6-sidebar-rbac`, `npm --prefix frontend run test:phase6-commercial-multitenant` y `npm --prefix frontend run build`. No existe script focal de reportes en `frontend/package.json`. `frontend/tsconfig.json` fue restaurado tras el ajuste automatico de Next.
+
+Autoridades preservadas: backend/API/BD/migraciones/RBAC/modelo comercial/Health authority/formulas oficiales/AI runtime sin cambios. Handoff: `docs/codex/handoffs/UI-OPT-03-REPORTING-CONTRAST-LOCALIZATION-CLOSEOUT.md`.
+
 ## Handoff relevante
 
 - `docs/codex/handoffs/CONT-00.md`
@@ -310,6 +320,8 @@ Autoridades preservadas: backend/API/BD/migraciones/RBAC/modelo comercial/Health
 - `docs/codex/handoffs/UI-07.md`
 - `docs/codex/handoffs/UI-09.md`
 - `docs/codex/handoffs/UI-OPT-01-PRODUCTIVITY-CLEANUP.md`
+- `docs/codex/handoffs/UI-OPT-02-PRODUCTIVE-CLOSURE.md`
+- `docs/codex/handoffs/UI-OPT-03-REPORTING-CONTRAST-LOCALIZATION-CLOSEOUT.md`
 - `docs/codex/handoffs/RBAC-01-BRAND-01.md`
 - `docs/codex/handoffs/RBAC-02-COMMERCIAL-GATING.md`
 - `docs/codex/handoffs/AI-ADDON-01-COMMERCIAL-UI-01.md`

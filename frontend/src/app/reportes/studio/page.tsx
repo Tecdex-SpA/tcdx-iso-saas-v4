@@ -1,12 +1,11 @@
 import ReportStudioWorkspace from '@/components/math-governance/ReportStudioWorkspace';
-import OfficialAnalyticsPanel from '@/components/math-governance/OfficialAnalyticsPanel';
 import Phase5Workspace from '@/components/phase5/Phase5Workspace';
 
 export default function ReportStudio() {
   return (
     <Phase5Workspace
       title="Diseñador de reportes"
-      description="Definiciones de reporte, plantillas, filtros, clasificación, aprobación, scheduling y generación PDF/DOCX/XLSX basadas solo en resultados oficiales versionados."
+      description="Flujo guiado para seleccionar información real, revisar configuración, generar PDF/DOCX/XLSX y consultar historial sin requerir códigos internos."
       endpoint="/api/reports"
       primaryLabel="reportes"
       emptyMessage="No hay definiciones de reporte configuradas."
@@ -20,7 +19,6 @@ export default function ReportStudio() {
       ]}
     >
       <ReportStudioWorkspace />
-      <OfficialAnalyticsPanel title="Resultados oficiales disponibles para reportes" compact />
     </Phase5Workspace>
   );
 }

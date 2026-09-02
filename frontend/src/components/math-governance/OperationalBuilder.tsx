@@ -88,6 +88,16 @@ const DEFAULT_FORM: BuilderForm = {
   format: 'pdf',
 };
 
+const REPORT_CONTENT_LABELS: Record<string, string> = {
+  'health.grc': 'Salud GRC',
+  'compliance.weighted': 'Cumplimiento',
+  'risk.residual': 'Riesgos',
+  'actions.progress': 'Planes de acción',
+  'evidence.coverage': 'Evidencias',
+  'controls.effectiveness': 'Controles',
+  'audit.assurance': 'Auditorías',
+};
+
 function dataOf<T>(payload: unknown): T {
   if (payload && typeof payload === 'object' && 'data' in payload) return (payload as { data: T }).data;
   return payload as T;
@@ -97,6 +107,27 @@ function compact(value: unknown) {
   if (value === null || value === undefined || value === '') return 'Sin dato';
   if (typeof value === 'object') return JSON.stringify(value).slice(0, 220);
   return String(value);
+}
+
+function shortDate(value: string) {
+  if (!value) return 'Sin dato';
+  return value.slice(0, 10);
+}
+
+function selectedResultCode(item: OfficialResult | undefined, fallback = '') {
+  return item?.result_code || item?.analytical_result_code || fallback;
+}
+
+function reportContentLabel(item: OfficialResult | undefined, fallback: string) {
+  const code = selectedResultCode(item, fallback);
+  if (REPORT_CONTENT_LABELS[code]) return REPORT_CONTENT_LABELS[code];
+  if (!item) return presentationLabel(fallback, fallback);
+  return item.display_name || presentationLabel(item.domain, code);
+}
+
+function availabilityLabel(item: OfficialResult | undefined) {
+  if (!item) return 'No disponible';
+  return presentationLabel(item.source_status || 'available');
 }
 
 function reportGenerationId(result: Entity | null) {
@@ -159,7 +190,7 @@ function validate(kind: BuilderKind, form: BuilderForm, currentUserId: string | 
   if (!form.code.trim()) failures.push('Código requerido.');
   if (!form.name.trim()) failures.push('Nombre requerido.');
   if (!form.resultCode.trim()) failures.push('Resultado oficial requerido.');
-  if (kind === 'metric' && !form.sourceContract.trim()) failures.push('Source contract requerido.');
+  if (kind === 'metric' && !form.sourceContract.trim()) failures.push('Contrato de fuente requerido.');
   if (['metric', 'survey', 'assurance', 'loss'].includes(kind)) {
     const numerator = Number(form.numerator);
     const denominator = Number(form.denominator);
@@ -215,7 +246,7 @@ function createPayload(kind: BuilderKind, form: BuilderForm) {
       metric_code: code,
       display_name: name,
       business_definition: `Métrica gobernada ${name}`,
-      technical_definition: `Resultado oficial ${form.resultCode} con source contract ${form.sourceContract}`,
+      technical_definition: `Resultado oficial ${form.resultCode} con contrato de fuente ${form.sourceContract}`,
       metric_type: form.type,
       unit: form.unit,
       direction: 'higher_is_better',
@@ -338,6 +369,8 @@ export default function OperationalBuilder({ kind, title, description, domain, d
 
   const visibleCatalog = useMemo(() => catalog.filter((item) => !domain || item.domain === domain), [catalog, domain]);
   const isReportBuilder = kind === 'report';
+  const selectedDefinition = visibleCatalog.find((item) => selectedResultCode(item) === form.resultCode);
+  const hasReportSource = !isReportBuilder || Boolean(selectedDefinition);
   const typeOptions = isReportBuilder
     ? ['executive', 'audit', 'operational', 'custom']
     : ['kpi', 'kri', 'kci', 'kqi', 'operational', 'custom', 'supplier_assessment', 'effectiveness_test'];
@@ -391,6 +424,7 @@ export default function OperationalBuilder({ kind, title, description, domain, d
     if (isReportBuilder) {
       const codeIndex = failures.indexOf('Código requerido.');
       if (codeIndex >= 0) failures.splice(codeIndex, 1);
+      if (!selectedDefinition) failures.push('No hay un resultado oficial disponible para este informe.');
     }
     setErrors(failures);
     pushLog('validación', failures.length ? 'failed' : 'completed', failures.length ? failures.join(' ') : 'Configuración válida.');
@@ -484,10 +518,19 @@ export default function OperationalBuilder({ kind, title, description, domain, d
     await loadHistory();
   };
 
-  const selectedDefinition = visibleCatalog.find((item) => (item.result_code || item.analytical_result_code) === form.resultCode);
-
   const execute = async () => {
-    if (!entity?.id) return setErrors(['Primero guarda un draft.']);
+    let targetEntity = entity;
+    if (isReportBuilder && !targetEntity?.id) {
+      if (!validateForm()) return;
+      targetEntity = dataOf<Entity>(await runStep('guardar configuración', () => apiRequestJson(listEndpoint(kind), {
+        method: 'POST',
+        body: JSON.stringify(createPayload(kind, form)),
+        fallbackMessage: 'No fue posible preparar el informe.',
+      })));
+      setEntity(targetEntity);
+      await loadHistory();
+    }
+    if (!targetEntity?.id) return setErrors(['Primero guarda un draft.']);
     let endpoint = '';
     let payload: Record<string, unknown> = {};
     if (kind === 'metric') {
@@ -497,21 +540,21 @@ export default function OperationalBuilder({ kind, title, description, domain, d
         period: { start: form.periodStart, end: form.periodEnd, timezone: 'America/Santiago' },
         inputs: { numerator: Number(form.numerator), denominator: Number(form.denominator) },
         unit: form.unit,
-        metadata: { builder_entity_id: entity.id, result_code: form.resultCode, source_contract: form.sourceContract },
+        metadata: { builder_entity_id: targetEntity.id, result_code: form.resultCode, source_contract: form.sourceContract },
       };
     } else if (kind === 'dashboard') {
-      endpoint = `/api/dashboards/${entity.id}/snapshot`;
+      endpoint = `/api/dashboards/${targetEntity.id}/snapshot`;
     } else if (kind === 'report') {
-      endpoint = `/api/reports/${entity.id}/generate`;
+      endpoint = `/api/reports/${targetEntity.id}/generate`;
       payload = { format: form.format, result_codes: [form.resultCode], period: { start: form.periodStart, end: form.periodEnd } };
     } else if (kind === 'survey') {
       endpoint = '/api/survey-campaigns';
-      payload = { survey_definition_id: entity.id, campaign_key: `${form.code}_campaign`, display_name: `${form.name} campaña`, status: 'draft', target_population: { expected: Number(form.denominator) } };
+      payload = { survey_definition_id: targetEntity.id, campaign_key: `${form.code}_campaign`, display_name: `${form.name} campaña`, status: 'draft', target_population: { expected: Number(form.denominator) } };
     } else if (kind === 'assurance') {
-      endpoint = `/api/assurance-tests/${entity.id}/execute`;
+      endpoint = `/api/assurance-tests/${targetEntity.id}/execute`;
       payload = { execution_code: `${form.code}_exec`, population_description: `Población ${form.denominator}`, sample_method: 'risk_based', metadata: { sample_size: Number(form.numerator) } };
     } else {
-      endpoint = `/api/loss-events/${entity.id}/confirm`;
+      endpoint = `/api/loss-events/${targetEntity.id}/confirm`;
     }
     const executed = dataOf<Entity>(await runStep('ejecutar', () => apiRequestJson(endpoint, { method: 'POST', body: JSON.stringify(payload), fallbackMessage: 'No fue posible ejecutar.' })));
     setResult(executed);
@@ -556,7 +599,7 @@ export default function OperationalBuilder({ kind, title, description, domain, d
     <section className="rounded-[var(--tcdx-radius-tecdex-lg)] border border-[var(--tcdx-color-border)] bg-white p-5 shadow-[var(--tcdx-shadow-tecdex-sm)]" data-operational-builder={kind} data-testid={`operational-builder-${testKey}`}>
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--tcdx-color-primary)]">Constructor operacional</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--tcdx-color-primary)]">{isReportBuilder ? 'Flujo guiado' : 'Constructor operacional'}</p>
           <h2 className="mt-1 text-lg font-semibold text-[var(--tcdx-color-text-ink)]">{title}</h2>
           <p className="mt-1 max-w-3xl text-sm text-[var(--tcdx-color-text-secondary)]">{description}</p>
         </div>
@@ -571,23 +614,51 @@ export default function OperationalBuilder({ kind, title, description, domain, d
         </div>
       )}
 
+      {isReportBuilder && (
+        <div className="mt-4 grid gap-3 lg:grid-cols-4">
+          {[
+            ['1', 'Seleccionar contenido', selectedDefinition ? reportContentLabel(selectedDefinition, form.resultCode) : 'Elige una fuente real'],
+            ['2', 'Configurar informe', `${shortDate(form.periodStart)} a ${shortDate(form.periodEnd)} · ${form.format.toUpperCase()}`],
+            ['3', 'Revisar', preview ? 'Configuración revisada' : 'Pendiente'],
+            ['4', 'Generar y descargar', result ? 'Salida disponible' : 'Pendiente'],
+          ].map(([step, label, value]) => (
+            <div key={step} className="rounded-md border border-[var(--tcdx-color-border)] bg-[var(--tcdx-color-surface)] p-3">
+              <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--tcdx-color-text-muted)]">Paso {step}</div>
+              <div className="mt-1 text-sm font-semibold text-[var(--tcdx-color-text-ink)]">{label}</div>
+              <div className="mt-1 text-xs text-[var(--tcdx-color-text-secondary)]">{value}</div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {isReportBuilder && !hasReportSource && (
+        <div className="mt-4 rounded-md border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+          <div className="font-semibold">No hay resultados disponibles para este informe.</div>
+          <p className="mt-1 leading-6">Carga indicadores oficiales o completa datos antes de generar. No se usa información ficticia ni preview simulado.</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Link href="/indicadores" className="rounded-md bg-white px-3 py-2 text-xs font-semibold text-amber-900 ring-1 ring-amber-200 hover:bg-amber-100">Ver indicadores</Link>
+            <Link href="/datos" className="rounded-md bg-white px-3 py-2 text-xs font-semibold text-amber-900 ring-1 ring-amber-200 hover:bg-amber-100">Completar datos</Link>
+          </div>
+        </div>
+      )}
+
       <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         {!isReportBuilder && <label className="text-sm font-semibold">Código
           <input data-testid={`builder-${testKey}-code`} className="mt-1 w-full rounded-md border border-[var(--tcdx-color-border)] px-3 py-2 font-normal" value={form.code} onChange={(event) => patch('code', event.target.value)} />
         </label>}
-        {isReportBuilder && <label className="text-sm font-semibold md:col-span-2">Resultado oficial
+        {isReportBuilder && <label className="text-sm font-semibold md:col-span-2">Contenido del informe
           <select data-testid={`builder-${testKey}-result`} className="mt-1 w-full rounded-md border border-[var(--tcdx-color-border)] px-3 py-2 font-normal" value={form.resultCode} onChange={(event) => patch('resultCode', event.target.value)}>
             {visibleCatalog.map((item) => {
-              const code = item.result_code || item.analytical_result_code || '';
-              return <option key={code} value={code}>{item.display_name || code}</option>;
+              const code = selectedResultCode(item);
+              return <option key={code} value={code}>{reportContentLabel(item, code)}</option>;
             })}
-            {!visibleCatalog.length && <option value={form.resultCode}>{form.resultCode}</option>}
+            {!visibleCatalog.length && <option value={form.resultCode}>Sin resultados disponibles</option>}
           </select>
         </label>}
-        <label className="text-sm font-semibold">Nombre
+        <label className="text-sm font-semibold">{isReportBuilder ? 'Nombre del informe' : 'Nombre'}
           <input data-testid={`builder-${testKey}-name`} className="mt-1 w-full rounded-md border border-[var(--tcdx-color-border)] px-3 py-2 font-normal" value={form.name} onChange={(event) => patch('name', event.target.value)} />
         </label>
-        <label className="text-sm font-semibold">Tipo
+        <label className="text-sm font-semibold">{isReportBuilder ? 'Tipo de informe' : 'Tipo'}
           <select className="mt-1 w-full rounded-md border border-[var(--tcdx-color-border)] px-3 py-2 font-normal" value={form.type} onChange={(event) => patch('type', event.target.value)}>
             {typeOptions.map((option) => <option key={option} value={option}>{presentationOptionLabel(option)}</option>)}
           </select>
@@ -601,7 +672,7 @@ export default function OperationalBuilder({ kind, title, description, domain, d
             {!visibleCatalog.length && <option value={form.resultCode}>{form.resultCode}</option>}
           </select>
         </label>}
-        {!isReportBuilder && <label className="text-sm font-semibold">Source contract
+        {!isReportBuilder && <label className="text-sm font-semibold">Contrato de fuente
           <input className="mt-1 w-full rounded-md border border-[var(--tcdx-color-border)] px-3 py-2 font-normal" value={form.sourceContract} onChange={(event) => patch('sourceContract', event.target.value)} />
         </label>}
         {!isReportBuilder && <label className="text-sm font-semibold">Unidad
@@ -624,36 +695,44 @@ export default function OperationalBuilder({ kind, title, description, domain, d
         {!isReportBuilder && <label className="text-sm font-semibold">Threshold warning
           <input type="number" className="mt-1 w-full rounded-md border border-[var(--tcdx-color-border)] px-3 py-2 font-normal" value={form.thresholdWarning} onChange={(event) => patch('thresholdWarning', event.target.value)} />
         </label>}
-        {isReportBuilder && <label className="text-sm font-semibold">Formato reporte
+        {isReportBuilder && <label className="text-sm font-semibold">Formato
           <select className="mt-1 w-full rounded-md border border-[var(--tcdx-color-border)] px-3 py-2 font-normal" value={form.format} onChange={(event) => patch('format', event.target.value as BuilderForm['format'])}>
             <option value="pdf">PDF</option>
             <option value="docx">DOCX</option>
             <option value="xlsx">XLSX</option>
           </select>
         </label>}
+        {isReportBuilder && <label className="text-sm font-semibold">Desde
+          <input type="date" className="mt-1 w-full rounded-md border border-[var(--tcdx-color-border)] px-3 py-2 font-normal" value={shortDate(form.periodStart)} onChange={(event) => patch('periodStart', `${event.target.value}T00:00:00.000Z`)} />
+        </label>}
+        {isReportBuilder && <label className="text-sm font-semibold">Hasta
+          <input type="date" className="mt-1 w-full rounded-md border border-[var(--tcdx-color-border)] px-3 py-2 font-normal" value={shortDate(form.periodEnd)} onChange={(event) => patch('periodEnd', `${event.target.value}T23:59:59.999Z`)} />
+        </label>}
       </div>
 
       <div className="mt-4 flex flex-wrap gap-2">
         {!isReportBuilder && <button type="button" data-testid={`builder-${testKey}-validate`} disabled={busy} onClick={validateForm} className="rounded-md border border-[var(--tcdx-color-border)] px-3 py-2 text-sm font-semibold disabled:bg-slate-100 disabled:text-slate-500">Validar</button>}
         <button type="button" data-testid={`builder-${testKey}-preview`} disabled={busy} onClick={previewConfig} className="rounded-md border border-[var(--tcdx-color-border)] px-3 py-2 text-sm font-semibold disabled:bg-slate-100 disabled:text-slate-500">{isReportBuilder ? 'Revisar configuración' : 'Previsualizar'}</button>
-        <button type="button" data-testid={`builder-${testKey}-save`} disabled={busy} onClick={saveDraft} className="rounded-md bg-[var(--tcdx-color-action-primary)] px-3 py-2 text-sm font-semibold text-white disabled:bg-slate-300 disabled:text-slate-700">{isReportBuilder ? 'Guardar definición' : 'Guardar draft'}</button>
+        <button type="button" data-testid={`builder-${testKey}-save`} disabled={busy} onClick={saveDraft} className="rounded-md border border-[var(--tcdx-color-border)] px-3 py-2 text-sm font-semibold disabled:bg-slate-100 disabled:text-slate-500">{isReportBuilder ? 'Guardar configuración' : 'Guardar draft'}</button>
         {!isReportBuilder && <button type="button" data-testid={`builder-${testKey}-publish`} disabled={busy || !entity?.id} onClick={publish} className="rounded-md border border-[var(--tcdx-color-border)] px-3 py-2 text-sm font-semibold disabled:bg-slate-100 disabled:text-slate-500">Publicar / aprobar</button>}
-        <button type="button" data-testid={`builder-${testKey}-execute`} disabled={busy || !entity?.id} onClick={execute} className="rounded-md border border-[var(--tcdx-color-border)] px-3 py-2 text-sm font-semibold disabled:bg-slate-100 disabled:text-slate-500">{isReportBuilder ? 'Generar reporte' : 'Ejecutar'}</button>
-        <button type="button" disabled={busy} onClick={() => loadHistory()} className="rounded-md border border-[var(--tcdx-color-border)] px-3 py-2 text-sm font-semibold disabled:bg-slate-100 disabled:text-slate-500">Actualizar historial</button>
+        <button type="button" data-testid={`builder-${testKey}-execute`} disabled={busy || (!isReportBuilder && !entity?.id)} onClick={execute} className="rounded-md bg-[var(--tcdx-color-action-primary)] px-3 py-2 text-sm font-semibold text-white disabled:bg-slate-300 disabled:text-slate-700">{isReportBuilder ? 'Generar informe' : 'Ejecutar'}</button>
+        {isReportBuilder && <Link href="/reportes/generaciones" className="rounded-md border border-[var(--tcdx-color-border)] px-3 py-2 text-sm font-semibold text-[var(--tcdx-color-text-ink)] hover:bg-[var(--tcdx-color-surface)]">Ir al historial</Link>}
+        <button type="button" disabled={busy} onClick={() => loadHistory()} className="rounded-md border border-[var(--tcdx-color-border)] px-3 py-2 text-sm font-semibold disabled:bg-slate-100 disabled:text-slate-500">{isReportBuilder ? 'Actualizar historial' : 'Actualizar historial'}</button>
       </div>
 
       <div className="mt-4 grid gap-3 lg:grid-cols-3">
         <article className="rounded-md border border-[var(--tcdx-color-border)] p-3 text-sm">
-          <div className="font-semibold">{isReportBuilder ? 'Configuración / generación' : 'Resultado / vista previa'}</div>
+          <div className="font-semibold">{isReportBuilder ? 'Revisión del informe' : 'Resultado / vista previa'}</div>
           <dl className="mt-2 space-y-1 text-xs text-[var(--tcdx-color-text-secondary)]">
-            <div className="flex justify-between gap-3"><dt>{isReportBuilder ? 'Definición' : 'Entidad'}</dt><dd data-testid={`builder-${testKey}-entity`} className="text-right">{compact(entity?.id)}</dd></div>
+            {!isReportBuilder && <div className="flex justify-between gap-3"><dt>Entidad</dt><dd data-testid={`builder-${testKey}-entity`} className="text-right">{compact(entity?.id)}</dd></div>}
             {!isReportBuilder && <div className="flex justify-between gap-3"><dt>Secundario</dt><dd className="text-right">{compact(secondaryEntity?.id)}</dd></div>}
-            <div className="flex justify-between gap-3"><dt>{isReportBuilder ? 'Revisión' : 'Valor'}</dt><dd data-testid={`builder-${testKey}-value`} className="text-right">{isReportBuilder ? compact(preview?.status || result?.status || 'Sin generar') : compact(preview?.value ?? result?.value ?? (result?.measurement as Entity | undefined)?.value_numeric)}</dd></div>
+            <div className="flex justify-between gap-3"><dt>{isReportBuilder ? 'Estado' : 'Valor'}</dt><dd data-testid={`builder-${testKey}-value`} className="text-right">{isReportBuilder ? presentationLabel(preview?.status || result?.status || 'Sin generar') : compact(preview?.value ?? result?.value ?? (result?.measurement as Entity | undefined)?.value_numeric)}</dd></div>
             {isReportBuilder ? (
               <>
+                <div className="flex justify-between gap-3"><dt>Contenido</dt><dd className="text-right">{compact(reportContentLabel(selectedDefinition, form.resultCode))}</dd></div>
+                <div className="flex justify-between gap-3"><dt>Periodo</dt><dd className="text-right">{shortDate(form.periodStart)} a {shortDate(form.periodEnd)}</dd></div>
                 <div className="flex justify-between gap-3"><dt>Formato</dt><dd className="text-right">{form.format.toUpperCase()}</dd></div>
-                <div className="flex justify-between gap-3"><dt>Resultado oficial</dt><dd className="text-right">{compact(selectedDefinition?.display_name || form.resultCode)}</dd></div>
-                <div className="flex justify-between gap-3"><dt>Generación</dt><dd className="text-right">{reportGenerationId(result)}</dd></div>
+                <div className="flex justify-between gap-3"><dt>Disponibilidad</dt><dd className="text-right">{availabilityLabel(selectedDefinition)}</dd></div>
               </>
             ) : (
               <>
@@ -669,11 +748,24 @@ export default function OperationalBuilder({ kind, title, description, domain, d
             {(preview?.lineage_url as string | undefined) && <Link href={preview?.lineage_url as string}>Lineage</Link>}
             {isReportBuilder && reportDownloadHref(result) ? (
               <button type="button" onClick={downloadReportOutput} className="font-semibold text-[var(--tcdx-color-primary)]">
-                Descargar salida
+                Descargar
               </button>
             ) : null}
-            {runId && <span>Run {String(runId).slice(0, 8)}</span>}
+            {isReportBuilder && result && <Link href="/reportes/generaciones">Ver generación</Link>}
+            {!isReportBuilder && runId && <span>Run {String(runId).slice(0, 8)}</span>}
           </div>
+          {isReportBuilder && (
+            <details className="mt-3 rounded-md border border-[var(--tcdx-color-border)] bg-[var(--tcdx-color-surface)] p-3">
+              <summary className="cursor-pointer text-xs font-semibold text-[var(--tcdx-color-text-secondary)]">Detalle técnico</summary>
+              <dl className="mt-2 space-y-1 text-xs text-[var(--tcdx-color-text-secondary)]">
+                <div className="flex justify-between gap-3"><dt>ID definición</dt><dd data-testid={`builder-${testKey}-entity`} className="text-right">{compact(entity?.id)}</dd></div>
+                <div className="flex justify-between gap-3"><dt>Código de resultado</dt><dd className="text-right">{compact(form.resultCode)}</dd></div>
+                <div className="flex justify-between gap-3"><dt>ID generación</dt><dd className="text-right">{reportGenerationId(result)}</dd></div>
+                <div className="flex justify-between gap-3"><dt>Ruta de generación</dt><dd className="text-right">/api/reports/:id/generate</dd></div>
+                <div className="flex justify-between gap-3"><dt>Ruta de descarga</dt><dd className="text-right">/api/report-generations/:id/download</dd></div>
+              </dl>
+            </details>
+          )}
         </article>
         <article className="rounded-md border border-[var(--tcdx-color-border)] p-3 text-sm">
           <div className="font-semibold">Historial</div>

@@ -276,7 +276,7 @@ function sourceRefList(value: unknown) {
 }
 
 function humanizeKey(key: string) {
-  return String(key || '')
+  return presentationLabel(String(key || ''))
     .replace(/_/g, ' ')
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
@@ -638,6 +638,7 @@ export default function PremiumReportsPanel({ locale, selectedStandard }: Premiu
         error={intelligence.error}
         status={intelligence.status}
         onRefresh={intelligence.refresh}
+        surface="dark"
       />
 
       {intelligenceReportPayload && (
@@ -738,7 +739,7 @@ export default function PremiumReportsPanel({ locale, selectedStandard }: Premiu
           <div className="mt-5 grid gap-3 md:grid-cols-3">
             <InfoCard label="Descripción" value={currentTemplate.description} />
             <InfoCard label="Roles permitidos" value={(currentTemplate.allowed_roles || []).join(', ') || 'Según backend'} />
-            <InfoCard label="Salida" value={[...(currentTemplate.output_modes || ['preview']), 'pdf', 'zip'].join(' / ')} />
+            <InfoCard label="Salida" value={[...(currentTemplate.output_modes || ['preview']), 'pdf', 'zip'].map((mode) => presentationLabel(mode)).join(' / ')} />
           </div>
         )}
 
@@ -777,7 +778,7 @@ export default function PremiumReportsPanel({ locale, selectedStandard }: Premiu
             disabled={!selectedTemplate || requestState.loading}
             className="rounded-xl bg-[#0B2F4F] px-4 py-2.5 text-sm font-bold text-white disabled:cursor-not-allowed disabled:bg-slate-300"
           >
-            {requestState.loading ? 'Generando preview...' : 'Generar preview'}
+            {requestState.loading ? 'Generando vista previa...' : 'Generar vista previa'}
           </button>
           <button
             type="button"
@@ -869,7 +870,7 @@ function Badge({ value }: { value: unknown }) {
 function PreviewPanel({ preview, userRole }: { preview: ReportPreview | null; userRole: string }) {
   return (
     <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-      <h3 className="text-lg font-bold text-slate-900">Preview estructurado</h3>
+      <h3 className="text-lg font-bold text-slate-900">Vista previa estructurada</h3>
       {preview ? (
         <div className="mt-4 space-y-4">
           <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">
@@ -897,7 +898,7 @@ function PreviewPanel({ preview, userRole }: { preview: ReportPreview | null; us
         </div>
       ) : (
         <div className="mt-4 rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-5 text-sm text-slate-500">
-          Genera preview para ver secciones, health, brechas, controles, evidencias, riesgos y warnings.
+          Genera una vista previa para ver secciones, salud, brechas, controles, evidencias, riesgos y advertencias.
         </div>
       )}
     </div>
@@ -1240,7 +1241,7 @@ function SimpleTable({ columns, rows }: { columns: string[][]; rows: UnknownReco
                   <td key={key} className="max-w-[260px] px-3 py-3 text-slate-700">
                     {/(status|severity|priority|level|residual)/i.test(key)
                       ? <Badge value={row?.[key]} />
-                      : <span className="line-clamp-3">{asText(row?.[key])}</span>}
+                      : <span className="line-clamp-3">{presentationLabel(row?.[key], asText(row?.[key]))}</span>}
                   </td>
                 ))}
               </tr>
@@ -1338,15 +1339,15 @@ function SourcesPanel({ preview, narrative }: { preview: ReportPreview | null; n
             <table className="min-w-full text-left text-sm">
               <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
                 <tr>
-                  <th className="px-4 py-3">Source ref</th>
+                  <th className="px-4 py-3">Referencia</th>
                   <th className="px-4 py-3">ID interno</th>
                   <th className="px-4 py-3">Tipo</th>
                   <th className="px-4 py-3">Título</th>
                   <th className="px-4 py-3">Estado</th>
                   <th className="px-4 py-3">Uso</th>
                   <th className="px-4 py-3">Visibilidad</th>
-                  <th className="px-4 py-3">Provider</th>
-                  <th className="px-4 py-3">Referencia</th>
+                  <th className="px-4 py-3">Origen</th>
+                  <th className="px-4 py-3">Tabla o tipo</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">

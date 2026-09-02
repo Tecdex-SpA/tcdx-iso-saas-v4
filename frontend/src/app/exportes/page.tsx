@@ -9,6 +9,7 @@ import TcdxIcon, { type TcdxIconName } from '@/components/icons/TcdxIcon';
 import { useTranslation } from '@/hooks/useTranslation';
 import { useTenantEntitlements } from '@/hooks/useTenantEntitlements';
 import { translateDisplayText } from '@/i18n/displayText';
+import { presentationLabel } from '@/utils/presentationLabels';
 import PremiumReportsPanel from '@/components/reports/PremiumReportsPanel';
 import { fetchReportCatalogBootstrap } from '@/utils/reportCatalogBootstrap';
 import {
@@ -163,7 +164,7 @@ function appendLocaleParam(params: URLSearchParams, locale: string) {
 }
 
 function getAbsoluteFileUrl(fileUrl: string) {
-  if (!fileUrl) return '#';
+  if (!fileUrl) return '';
 
   if (fileUrl.startsWith('http://') || fileUrl.startsWith('https://')) {
     return fileUrl;
@@ -211,7 +212,12 @@ function getDownloadFileName(res: Response, fallback: string) {
 }
 
 async function openAuthenticatedReport(fileUrl: string, token: string) {
-  const res = await fetch(getAbsoluteFileUrl(fileUrl), {
+  const absoluteFileUrl = getAbsoluteFileUrl(fileUrl);
+  if (!absoluteFileUrl) {
+    throw new Error('El reporte no tiene archivo disponible para descarga.');
+  }
+
+  const res = await fetch(absoluteFileUrl, {
     headers: buildLocaleHeadersForReport(token),
   });
 
@@ -273,7 +279,7 @@ function getReportIcon(code: string): TcdxIconName {
 function getCategoryLabel(category: string, t: (key: string) => string) {
   return t(`exports.categories.${category}`) !== `exports.categories.${category}`
     ? t(`exports.categories.${category}`)
-    : category || t('exports.categories.default');
+    : presentationLabel(category, category || t('exports.categories.default'));
 }
 
 function getCategoryDescription(category: string, t: (key: string) => string) {

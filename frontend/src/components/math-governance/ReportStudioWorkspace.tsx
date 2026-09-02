@@ -1,5 +1,5 @@
 import OperationalBuilder from './OperationalBuilder';
 
 export default function ReportStudioWorkspace() {
-  return <OperationalBuilder kind="report" title="Diseñador de reportes" description="Crea definiciones, selecciona resultados oficiales, genera PDF/DOCX/XLSX, aprueba y expone snapshot, checksum, explicación y lineage." defaultResultCode="health.grc" />;
+  return <OperationalBuilder kind="report" title="Diseñador de reportes" description="Elige qué informar, define periodo y formato, revisa la configuración y genera una salida descargable con datos oficiales existentes." defaultResultCode="health.grc" />;
 }
