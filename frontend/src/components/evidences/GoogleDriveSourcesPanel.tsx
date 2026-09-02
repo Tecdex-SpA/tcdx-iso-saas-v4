@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { presentationLabel } from '@/utils/presentationLabels';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
 
@@ -232,6 +233,10 @@ export default function GoogleDriveSourcesPanel({ tenantId }: { tenantId: string
   const pendingSuggestions = useMemo(
     () => suggestions.filter((item) => item.status === 'pending'),
     [suggestions]
+  );
+  const visibleSources = useMemo(
+    () => sources.filter((source) => source.provider === 'google_drive'),
+    [sources]
   );
 
   const approvedSuggestions = useMemo(
@@ -573,7 +578,7 @@ export default function GoogleDriveSourcesPanel({ tenantId }: { tenantId: string
           <p className="text-xs font-black uppercase tracking-[0.16em] text-blue-600">Fuentes documentales</p>
           <h2 className="mt-2 text-2xl font-black text-slate-950">Fuentes documentales tenant-scoped</h2>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
-            Conecta carpetas Google Drive, Zoho WorkDrive, agentes locales o rutas montadas seguras. Cada fuente, documento y sugerencia queda aislada por tenant y requiere revisión humana antes de crear evidencia formal.
+            Conecta carpetas Google Drive o usa carga manual. Cada fuente, documento y sugerencia queda aislada por tenant y requiere revisión humana antes de crear evidencia formal.
           </p>
         </div>
         <button
@@ -619,7 +624,7 @@ export default function GoogleDriveSourcesPanel({ tenantId }: { tenantId: string
           onClick={() => setWizardOpen((value) => !value)}
           className="rounded-2xl bg-slate-950 px-5 py-3 text-sm font-black text-white shadow-sm hover:bg-slate-800"
         >
-          {wizardOpen ? 'Cerrar conexión' : 'Conectar fuente externa'}
+          {wizardOpen ? 'Cerrar conexión' : 'Conectar fuente'}
         </button>
         {!googleIntegration ? (
           <button
@@ -645,9 +650,6 @@ export default function GoogleDriveSourcesPanel({ tenantId }: { tenantId: string
           <div className="grid grid-cols-1 gap-3 lg:grid-cols-5">
             {[
               ['google_drive', 'Google Drive'],
-              ['zoho_workdrive', 'Zoho WorkDrive'],
-              ['local_agent', 'TCDX Sync Agent'],
-              ['mounted_share', 'Carpeta montada'],
               ['manual_upload', 'Carga manual'],
             ].map(([value, label]) => (
               <button
@@ -786,15 +788,15 @@ export default function GoogleDriveSourcesPanel({ tenantId }: { tenantId: string
         <div className="rounded-3xl border border-slate-200 p-4">
           <h3 className="text-lg font-black text-slate-900">Fuentes configuradas</h3>
           <div className="mt-4 space-y-3">
-            {sources.map((source) => (
+            {visibleSources.map((source) => (
               <div key={source.id} className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <div className="font-black text-slate-900">{source.source_name}</div>
-                    <div className="mt-1 text-xs text-slate-500">{source.provider} · {source.status || 'active'}</div>
+                    <div className="mt-1 text-xs text-slate-500">{presentationLabel(source.provider)} · {presentationLabel(source.status || 'active')}</div>
                     <div className="mt-1 text-xs text-slate-500">{source.folder_display_name || source.folder_path || source.folder_id || 'Sin carpeta'}</div>
                     <div className="mt-1 text-xs text-slate-500">
-                      Subcarpetas: {source.include_subfolders === false ? 'no' : 'sí'} · Último estado: {source.last_sync_status || '—'}
+                      Subcarpetas: {source.include_subfolders === false ? 'no' : 'sí'} · Último estado: {presentationLabel(source.last_sync_status || '—', source.last_sync_status || '—')}
                     </div>
                     {source.last_sync_error && <div className="mt-1 text-xs font-semibold text-red-700">{source.last_sync_error}</div>}
                     {source.associated_standard_code && <div className="mt-1 text-xs font-bold text-blue-700">{source.associated_standard_code}</div>}
@@ -818,7 +820,7 @@ export default function GoogleDriveSourcesPanel({ tenantId }: { tenantId: string
                 </div>
               </div>
             ))}
-            {sources.length === 0 && <p className="text-sm text-slate-500">Aún no hay carpetas configuradas.</p>}
+            {visibleSources.length === 0 && <p className="text-sm text-slate-500">Aún no hay carpetas Google Drive configuradas.</p>}
           </div>
         </div>
 
@@ -829,7 +831,7 @@ export default function GoogleDriveSourcesPanel({ tenantId }: { tenantId: string
               <div key={log.id} className="rounded-2xl border border-slate-100 bg-white p-4 text-sm">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="font-bold text-slate-900">{log.source_name || 'Fuente documental'}</span>
-                  <span className={`rounded-full px-2 py-1 text-xs font-bold ring-1 ${badgeClass(log.status)}`}>{log.status || '—'}</span>
+                  <span className={`rounded-full px-2 py-1 text-xs font-bold ring-1 ${badgeClass(log.status)}`}>{presentationLabel(log.status || '—', log.status || '—')}</span>
                 </div>
                 <div className="mt-2 grid grid-cols-4 gap-2 text-xs text-slate-500">
                   <span>Vistos: {log.files_seen ?? 0}</span>
@@ -1172,7 +1174,7 @@ export default function GoogleDriveSourcesPanel({ tenantId }: { tenantId: string
                   <td className="px-3 py-3 text-slate-500">{fmtDate(doc.modified_at)}</td>
                   <td className="px-3 py-3">
                     <span className={`rounded-full px-2 py-1 text-xs font-bold ring-1 ${badgeClass(doc.status)}`}>
-                      {doc.status || '—'}
+                      {presentationLabel(doc.status || '—', doc.status || '—')}
                     </span>
                   </td>
                   <td className="px-3 py-3">

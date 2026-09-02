@@ -9,12 +9,9 @@ import CompanyProfileImpactPanel from '@/components/company-profile/CompanyProfi
 import IsoAuditorPreview from '@/components/auditor-iso/IsoAuditorPreview';
 import AuditPreparationPanel from '@/components/auditorias/AuditPreparationPanel';
 import IaAuditorPanel from '@/components/auditorias/IaAuditorPanel';
-import AuditReadinessCard from '@/components/intelligence/AuditReadinessCard';
-import IntelligenceErrorState from '@/components/intelligence/IntelligenceErrorState';
 import { EnterpriseScrollPanel } from '@/components/ui/enterprise';
 import { getUserFromToken } from '@/utils/auth';
 import { useTranslation } from '@/hooks/useTranslation';
-import useIntelligenceBrief from '@/hooks/useIntelligenceBrief';
 import { useTenantEntitlements } from '@/hooks/useTenantEntitlements';
 import { translateDisplayText, translateStatusLabel, translatePriorityLabel, translateSeverityLabel, translateStandardLabel } from '@/i18n/displayText';
 
@@ -223,7 +220,6 @@ const auditWorkspaceTabs = [
 function AuditoriasWorkspaceContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const intelligence = useIntelligenceBrief();
   const { loading: entitlementsLoading, canUseAiFeature } = useTenantEntitlements();
   const canUseAiAuditor = !entitlementsLoading && canUseAiFeature('auditor');
   const rawView = searchParams.get('view') || 'programa';
@@ -306,16 +302,6 @@ function AuditoriasWorkspaceContent() {
           title="Foco auditor según Perfil Empresa"
           compact
         />
-
-        <div className="mx-auto max-w-[1800px]">
-          {intelligence.loading ? (
-            <div className="h-36 animate-pulse rounded-lg border border-slate-200 bg-white" />
-          ) : intelligence.data ? (
-            <AuditReadinessCard brief={intelligence.data} compact />
-          ) : intelligence.status === 'error' || intelligence.status === 'timeout' || intelligence.status === 'forbidden' ? (
-            <IntelligenceErrorState status={intelligence.status} error={intelligence.error} onRetry={intelligence.refresh} />
-          ) : null}
-        </div>
 
         {activeView === 'preauditoria' ? (
           <IsoAuditorPreview />

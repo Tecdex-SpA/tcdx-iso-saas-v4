@@ -27,6 +27,7 @@ import {
 } from '@/components/ui/enterprise';
 import { useTranslation } from '@/hooks/useTranslation';
 import { useTenantEntitlements } from '@/hooks/useTenantEntitlements';
+import { presentationLabel } from '@/utils/presentationLabels';
 import {
   PieChart,
   Pie,
@@ -2200,17 +2201,17 @@ function DashboardPageContent() {
                         <HealthKpiMiniCard
                           title="Evidencia vigente"
                           item={healthCoverageKpi}
-                          fallback="EVIDENCE-FRESH"
+                          fallback={presentationLabel('EVIDENCE-FRESH')}
                         />
                         <HealthKpiMiniCard
                           title={t('dashboard.evidenceCoverage')}
                           item={healthComplianceCoverageKpi}
-                          fallback="COVERAGE"
+                          fallback={presentationLabel('COVERAGE')}
                         />
                         <HealthKpiMiniCard
-                          title="Data Trust"
+                          title={presentationLabel('DATA-TRUST')}
                           item={healthDeterioratedKpi}
-                          fallback="DATA-TRUST"
+                          fallback={presentationLabel('DATA-TRUST')}
                         />
                       </div>
                     )}
@@ -3599,7 +3600,7 @@ function HealthKpiMiniCard({
       <div className="flex items-start justify-between gap-3">
         <div>
           <div className="text-xs font-semibold uppercase tracking-wide text-[var(--tcdx-color-text-muted)]">
-            {item?.code || fallback}
+            {presentationLabel(item?.code || fallback)}
           </div>
           <div className="mt-1 text-lg font-semibold text-[var(--tcdx-color-text-ink)]">{title}</div>
         </div>

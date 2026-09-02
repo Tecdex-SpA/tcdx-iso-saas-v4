@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import EnterpriseDomainWorkspaceShell from '@/components/enterprise-domain/EnterpriseDomainWorkspaceShell';
+import { ActionableEmptyState } from '@/components/ui/enterprise';
 import { apiRequestJson } from '@/utils/apiClient';
 
 type GraphPayload = {
@@ -61,9 +62,11 @@ export default function LineageExplorer() {
       <section className="rounded-[var(--tcdx-radius-tecdex-md)] border border-[var(--tcdx-color-border)] bg-white p-5 shadow-[var(--tcdx-shadow-tecdex-sm)]">
 
         {!endpoint && (
-          <div className="mt-6 rounded-md border border-dashed p-6 text-sm text-[var(--tcdx-color-text-secondary)]">
-            Selecciona una entidad desde métricas, tests, pérdidas, dashboard o reporte para consultar lineage o impacto.
-          </div>
+          <ActionableEmptyState
+            className="mt-6"
+            title="Selecciona una entidad"
+            reason="Lineage e impacto requieren una entidad real. Abre esta vista desde métricas, evidencias, tests, pérdidas, dashboards o reportes para consultar relaciones tenant-scoped."
+          />
         )}
         {loading && <div className="mt-6 rounded-md border border-dashed p-6 text-sm">Cargando grafo…</div>}
         {error && <div className="mt-6 rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-800">{error}</div>}

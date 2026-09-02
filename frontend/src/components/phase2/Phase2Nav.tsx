@@ -4,7 +4,6 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
 const sections = [
-  { href: '/grc-global', label: 'Vista global' },
   { href: '/privacidad', label: 'Privacidad' },
   { href: '/incidentes', label: 'Incidentes' },
   { href: '/proveedores', label: 'Terceros' },

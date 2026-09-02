@@ -1,0 +1,77 @@
+const PRESENTATION_LABELS: Record<string, string> = {
+  ACTIONS: 'Acciones',
+  REMEDIATION: 'Remediación',
+  'AUDIT-ASSURANCE': 'Aseguramiento de auditoría',
+  COVERAGE: 'Cobertura',
+  official_indicator: 'Indicador oficial',
+  higher_is_better: 'Mayor es mejor',
+  lower_is_better: 'Menor es mejor',
+  daily: 'Diario',
+  weekly: 'Semanal',
+  monthly: 'Mensual',
+  quarterly: 'Trimestral',
+  yearly: 'Anual',
+  on_demand: 'Bajo demanda',
+  'GRC-HEALTH': 'Salud GRC',
+  'DATA-TRUST': 'Confianza del dato',
+  'EVIDENCE-FRESH': 'Vigencia de evidencias',
+  executive: 'Ejecutivo',
+  audit: 'Auditoría',
+  operational: 'Operacional',
+  custom: 'Personalizado',
+  supplier_assessment: 'Evaluación de proveedor',
+  effectiveness_test: 'Prueba de efectividad',
+  preview: 'Preview',
+  excluded_reference: 'Referencia excluida',
+  internal: 'Interno',
+  public: 'Público',
+  private: 'Privado',
+  active: 'Activo',
+  inactive: 'Inactivo',
+  enabled: 'Activo',
+  disabled: 'Inactivo',
+  published: 'Publicado',
+  draft: 'Borrador',
+  pending: 'Pendiente',
+  in_progress: 'En progreso',
+  completed: 'Completado',
+  failed: 'Error técnico',
+  trusted: 'Confiable',
+  trusted_with_warnings: 'Confiable con advertencias',
+  low_confidence: 'Baja confianza',
+  insufficient_data: 'Datos insuficientes',
+  source_unavailable: 'Sin fuente',
+  dependency_pending: 'Dependencia pendiente',
+  not_processed: 'No procesado',
+  processed: 'Procesado',
+  indexed: 'Indexado',
+  updated: 'Actualizado',
+  excluded: 'Excluido',
+  google_drive: 'Google Drive',
+  manual_upload: 'Carga manual',
+  folder_required: 'Carpeta requerida',
+  configuration_required: 'Configuración requerida',
+  available: 'Disponible',
+  disconnected: 'Desconectado',
+  reviewed: 'Revisado',
+  approved: 'Aprobado',
+  rejected: 'Rechazado',
+  kpi: 'KPI',
+  kri: 'KRI',
+  kci: 'KCI',
+  kqi: 'KQI',
+};
+
+function normalizeKey(value: unknown) {
+  return String(value || '').trim();
+}
+
+export function presentationLabel(value: unknown, fallback?: string) {
+  const raw = normalizeKey(value);
+  if (!raw) return fallback || 'Sin dato';
+  return PRESENTATION_LABELS[raw] || PRESENTATION_LABELS[raw.toLowerCase()] || fallback || raw.replaceAll('_', ' ');
+}
+
+export function presentationOptionLabel(value: unknown) {
+  return presentationLabel(value, String(value || ''));
+}

@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { ApiClientError, apiRequestJson, apiRequestJsonSingleFlight, isUuid } from '@/utils/apiClient';
 import { getUserIdFromToken } from '@/utils/auth';
+import { presentationLabel, presentationOptionLabel } from '@/utils/presentationLabels';
 
 type BuilderKind = 'metric' | 'dashboard' | 'report' | 'survey' | 'assurance' | 'loss';
 
@@ -323,6 +324,10 @@ export default function OperationalBuilder({ kind, title, description, domain, d
   const [busy, setBusy] = useState(false);
 
   const visibleCatalog = useMemo(() => catalog.filter((item) => !domain || item.domain === domain), [catalog, domain]);
+  const isReportBuilder = kind === 'report';
+  const typeOptions = isReportBuilder
+    ? ['executive', 'audit', 'operational', 'custom']
+    : ['kpi', 'kri', 'kci', 'kqi', 'operational', 'custom', 'supplier_assessment', 'effectiveness_test'];
 
   const pushLog = (step: string, status: OperationLog['status'], message: string) => {
     setLog((items) => [{ step, status, message, at: new Date().toLocaleString('es-CL') }, ...items].slice(0, 12));
@@ -370,6 +375,10 @@ export default function OperationalBuilder({ kind, title, description, domain, d
 
   const validateForm = () => {
     const failures = validate(kind, form, getUserIdFromToken());
+    if (isReportBuilder) {
+      const codeIndex = failures.indexOf('Código requerido.');
+      if (codeIndex >= 0) failures.splice(codeIndex, 1);
+    }
     setErrors(failures);
     pushLog('validación', failures.length ? 'failed' : 'completed', failures.length ? failures.join(' ') : 'Configuración válida.');
     return failures.length === 0;
@@ -514,18 +523,10 @@ export default function OperationalBuilder({ kind, title, description, domain, d
       )}
 
       <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        <label className="text-sm font-semibold">Código
+        {!isReportBuilder && <label className="text-sm font-semibold">Código
           <input data-testid={`builder-${testKey}-code`} className="mt-1 w-full rounded-md border border-[var(--tcdx-color-border)] px-3 py-2 font-normal" value={form.code} onChange={(event) => patch('code', event.target.value)} />
-        </label>
-        <label className="text-sm font-semibold">Nombre
-          <input data-testid={`builder-${testKey}-name`} className="mt-1 w-full rounded-md border border-[var(--tcdx-color-border)] px-3 py-2 font-normal" value={form.name} onChange={(event) => patch('name', event.target.value)} />
-        </label>
-        <label className="text-sm font-semibold">Tipo
-          <select className="mt-1 w-full rounded-md border border-[var(--tcdx-color-border)] px-3 py-2 font-normal" value={form.type} onChange={(event) => patch('type', event.target.value)}>
-            {['kpi', 'kri', 'kci', 'kqi', 'operational', 'custom', 'supplier_assessment', 'effectiveness_test'].map((option) => <option key={option}>{option}</option>)}
-          </select>
-        </label>
-        <label className="text-sm font-semibold">Resultado oficial
+        </label>}
+        {isReportBuilder && <label className="text-sm font-semibold md:col-span-2">Resultado oficial
           <select data-testid={`builder-${testKey}-result`} className="mt-1 w-full rounded-md border border-[var(--tcdx-color-border)] px-3 py-2 font-normal" value={form.resultCode} onChange={(event) => patch('resultCode', event.target.value)}>
             {visibleCatalog.map((item) => {
               const code = item.result_code || item.analytical_result_code || '';
@@ -533,59 +534,85 @@ export default function OperationalBuilder({ kind, title, description, domain, d
             })}
             {!visibleCatalog.length && <option value={form.resultCode}>{form.resultCode}</option>}
           </select>
+        </label>}
+        <label className="text-sm font-semibold">Nombre
+          <input data-testid={`builder-${testKey}-name`} className="mt-1 w-full rounded-md border border-[var(--tcdx-color-border)] px-3 py-2 font-normal" value={form.name} onChange={(event) => patch('name', event.target.value)} />
         </label>
-        <label className="text-sm font-semibold">Source contract
-          <input className="mt-1 w-full rounded-md border border-[var(--tcdx-color-border)] px-3 py-2 font-normal" value={form.sourceContract} onChange={(event) => patch('sourceContract', event.target.value)} />
-        </label>
-        <label className="text-sm font-semibold">Unidad
-          <input className="mt-1 w-full rounded-md border border-[var(--tcdx-color-border)] px-3 py-2 font-normal" value={form.unit} onChange={(event) => patch('unit', event.target.value)} />
-        </label>
-        <label className="text-sm font-semibold">Frecuencia
-          <select className="mt-1 w-full rounded-md border border-[var(--tcdx-color-border)] px-3 py-2 font-normal" value={form.frequency} onChange={(event) => patch('frequency', event.target.value)}>
-            {['daily', 'weekly', 'monthly', 'quarterly', 'yearly', 'on_demand'].map((option) => <option key={option}>{option}</option>)}
+        <label className="text-sm font-semibold">Tipo
+          <select className="mt-1 w-full rounded-md border border-[var(--tcdx-color-border)] px-3 py-2 font-normal" value={form.type} onChange={(event) => patch('type', event.target.value)}>
+            {typeOptions.map((option) => <option key={option} value={option}>{presentationOptionLabel(option)}</option>)}
           </select>
         </label>
-        <label className="text-sm font-semibold">Dimensión
+        {!isReportBuilder && <label className="text-sm font-semibold">Resultado oficial
+          <select data-testid={`builder-${testKey}-result`} className="mt-1 w-full rounded-md border border-[var(--tcdx-color-border)] px-3 py-2 font-normal" value={form.resultCode} onChange={(event) => patch('resultCode', event.target.value)}>
+            {visibleCatalog.map((item) => {
+              const code = item.result_code || item.analytical_result_code || '';
+              return <option key={code} value={code}>{item.display_name || code}</option>;
+            })}
+            {!visibleCatalog.length && <option value={form.resultCode}>{form.resultCode}</option>}
+          </select>
+        </label>}
+        {!isReportBuilder && <label className="text-sm font-semibold">Source contract
+          <input className="mt-1 w-full rounded-md border border-[var(--tcdx-color-border)] px-3 py-2 font-normal" value={form.sourceContract} onChange={(event) => patch('sourceContract', event.target.value)} />
+        </label>}
+        {!isReportBuilder && <label className="text-sm font-semibold">Unidad
+          <input className="mt-1 w-full rounded-md border border-[var(--tcdx-color-border)] px-3 py-2 font-normal" value={form.unit} onChange={(event) => patch('unit', event.target.value)} />
+        </label>}
+        {!isReportBuilder && <label className="text-sm font-semibold">Frecuencia
+          <select className="mt-1 w-full rounded-md border border-[var(--tcdx-color-border)] px-3 py-2 font-normal" value={form.frequency} onChange={(event) => patch('frequency', event.target.value)}>
+            {['daily', 'weekly', 'monthly', 'quarterly', 'yearly', 'on_demand'].map((option) => <option key={option} value={option}>{presentationOptionLabel(option)}</option>)}
+          </select>
+        </label>}
+        {!isReportBuilder && <label className="text-sm font-semibold">Dimensión
           <input className="mt-1 w-full rounded-md border border-[var(--tcdx-color-border)] px-3 py-2 font-normal" value={form.dimension} onChange={(event) => patch('dimension', event.target.value)} />
-        </label>
-        <label className="text-sm font-semibold">Valor / muestra
+        </label>}
+        {!isReportBuilder && <label className="text-sm font-semibold">Valor / muestra
           <input type="number" className="mt-1 w-full rounded-md border border-[var(--tcdx-color-border)] px-3 py-2 font-normal" value={form.numerator} onChange={(event) => patch('numerator', event.target.value)} />
-        </label>
-        <label className="text-sm font-semibold">Base / recuperación
+        </label>}
+        {!isReportBuilder && <label className="text-sm font-semibold">Base / recuperación
           <input type="number" className="mt-1 w-full rounded-md border border-[var(--tcdx-color-border)] px-3 py-2 font-normal" value={form.denominator} onChange={(event) => patch('denominator', event.target.value)} />
-        </label>
-        <label className="text-sm font-semibold">Threshold warning
+        </label>}
+        {!isReportBuilder && <label className="text-sm font-semibold">Threshold warning
           <input type="number" className="mt-1 w-full rounded-md border border-[var(--tcdx-color-border)] px-3 py-2 font-normal" value={form.thresholdWarning} onChange={(event) => patch('thresholdWarning', event.target.value)} />
-        </label>
-        <label className="text-sm font-semibold">Formato reporte
+        </label>}
+        {isReportBuilder && <label className="text-sm font-semibold">Formato reporte
           <select className="mt-1 w-full rounded-md border border-[var(--tcdx-color-border)] px-3 py-2 font-normal" value={form.format} onChange={(event) => patch('format', event.target.value as BuilderForm['format'])}>
             <option value="pdf">PDF</option>
             <option value="docx">DOCX</option>
             <option value="xlsx">XLSX</option>
           </select>
-        </label>
+        </label>}
       </div>
 
       <div className="mt-4 flex flex-wrap gap-2">
-        <button type="button" data-testid={`builder-${testKey}-validate`} disabled={busy} onClick={validateForm} className="rounded-md border border-[var(--tcdx-color-border)] px-3 py-2 text-sm font-semibold">Validar</button>
-        <button type="button" data-testid={`builder-${testKey}-preview`} disabled={busy} onClick={previewConfig} className="rounded-md border border-[var(--tcdx-color-border)] px-3 py-2 text-sm font-semibold">Preview oficial</button>
-        <button type="button" data-testid={`builder-${testKey}-save`} disabled={busy} onClick={saveDraft} className="rounded-md bg-[var(--tcdx-color-action-primary)] px-3 py-2 text-sm font-semibold text-white">Guardar draft</button>
-        <button type="button" data-testid={`builder-${testKey}-publish`} disabled={busy || !entity?.id} onClick={publish} className="rounded-md border border-[var(--tcdx-color-border)] px-3 py-2 text-sm font-semibold">Publicar / aprobar</button>
-        <button type="button" data-testid={`builder-${testKey}-execute`} disabled={busy || !entity?.id} onClick={execute} className="rounded-md border border-[var(--tcdx-color-border)] px-3 py-2 text-sm font-semibold">Ejecutar</button>
-        <button type="button" disabled={busy} onClick={() => loadHistory()} className="rounded-md border border-[var(--tcdx-color-border)] px-3 py-2 text-sm font-semibold">Actualizar historial</button>
+        {!isReportBuilder && <button type="button" data-testid={`builder-${testKey}-validate`} disabled={busy} onClick={validateForm} className="rounded-md border border-[var(--tcdx-color-border)] px-3 py-2 text-sm font-semibold disabled:bg-slate-100 disabled:text-slate-500">Validar</button>}
+        <button type="button" data-testid={`builder-${testKey}-preview`} disabled={busy} onClick={previewConfig} className="rounded-md border border-[var(--tcdx-color-border)] px-3 py-2 text-sm font-semibold disabled:bg-slate-100 disabled:text-slate-500">Previsualizar</button>
+        <button type="button" data-testid={`builder-${testKey}-save`} disabled={busy} onClick={saveDraft} className="rounded-md bg-[var(--tcdx-color-action-primary)] px-3 py-2 text-sm font-semibold text-white disabled:bg-slate-300 disabled:text-slate-700">{isReportBuilder ? 'Guardar definición' : 'Guardar draft'}</button>
+        {!isReportBuilder && <button type="button" data-testid={`builder-${testKey}-publish`} disabled={busy || !entity?.id} onClick={publish} className="rounded-md border border-[var(--tcdx-color-border)] px-3 py-2 text-sm font-semibold disabled:bg-slate-100 disabled:text-slate-500">Publicar / aprobar</button>}
+        <button type="button" data-testid={`builder-${testKey}-execute`} disabled={busy || !entity?.id} onClick={execute} className="rounded-md border border-[var(--tcdx-color-border)] px-3 py-2 text-sm font-semibold disabled:bg-slate-100 disabled:text-slate-500">{isReportBuilder ? 'Generar reporte' : 'Ejecutar'}</button>
+        <button type="button" disabled={busy} onClick={() => loadHistory()} className="rounded-md border border-[var(--tcdx-color-border)] px-3 py-2 text-sm font-semibold disabled:bg-slate-100 disabled:text-slate-500">Actualizar historial</button>
       </div>
 
       <div className="mt-4 grid gap-3 lg:grid-cols-3">
         <article className="rounded-md border border-[var(--tcdx-color-border)] p-3 text-sm">
-          <div className="font-semibold">Resultado / preview</div>
+          <div className="font-semibold">{isReportBuilder ? 'Preview / generación' : 'Resultado / preview'}</div>
           <dl className="mt-2 space-y-1 text-xs text-[var(--tcdx-color-text-secondary)]">
-            <div className="flex justify-between gap-3"><dt>Entidad</dt><dd data-testid={`builder-${testKey}-entity`} className="text-right">{compact(entity?.id)}</dd></div>
-            <div className="flex justify-between gap-3"><dt>Secundario</dt><dd className="text-right">{compact(secondaryEntity?.id)}</dd></div>
-            <div className="flex justify-between gap-3"><dt>Valor</dt><dd data-testid={`builder-${testKey}-value`} className="text-right">{compact(preview?.value ?? result?.value ?? (result?.measurement as Entity | undefined)?.value_numeric)}</dd></div>
-            <div className="flex justify-between gap-3"><dt>Fórmula</dt><dd className="text-right">{compact(selectedDefinition?.formula_code || preview?.formula_code || (preview?.formula as Entity | undefined)?.code)}</dd></div>
-            <div className="flex justify-between gap-3"><dt>Versión</dt><dd className="text-right">{compact(selectedDefinition?.formula_version || (preview?.formula as Entity | undefined)?.version)}</dd></div>
-            <div className="flex justify-between gap-3"><dt>Fuente</dt><dd className="text-right">{compact(preview?.source_status || selectedDefinition?.source_status)}</dd></div>
-            <div className="flex justify-between gap-3"><dt>Confianza</dt><dd className="text-right">{compact((preview?.trust as Entity | undefined)?.status || selectedDefinition?.source_status)}</dd></div>
+            <div className="flex justify-between gap-3"><dt>{isReportBuilder ? 'Definición' : 'Entidad'}</dt><dd data-testid={`builder-${testKey}-entity`} className="text-right">{compact(entity?.id)}</dd></div>
+            {!isReportBuilder && <div className="flex justify-between gap-3"><dt>Secundario</dt><dd className="text-right">{compact(secondaryEntity?.id)}</dd></div>}
+            <div className="flex justify-between gap-3"><dt>{isReportBuilder ? 'Preview' : 'Valor'}</dt><dd data-testid={`builder-${testKey}-value`} className="text-right">{isReportBuilder ? compact(preview?.status || result?.status || 'Sin generar') : compact(preview?.value ?? result?.value ?? (result?.measurement as Entity | undefined)?.value_numeric)}</dd></div>
+            {isReportBuilder ? (
+              <>
+                <div className="flex justify-between gap-3"><dt>Formato</dt><dd className="text-right">{form.format.toUpperCase()}</dd></div>
+                <div className="flex justify-between gap-3"><dt>Resultado oficial</dt><dd className="text-right">{compact(selectedDefinition?.display_name || form.resultCode)}</dd></div>
+              </>
+            ) : (
+              <>
+                <div className="flex justify-between gap-3"><dt>Fórmula</dt><dd className="text-right">{compact(selectedDefinition?.formula_code || preview?.formula_code || (preview?.formula as Entity | undefined)?.code)}</dd></div>
+                <div className="flex justify-between gap-3"><dt>Versión</dt><dd className="text-right">{compact(selectedDefinition?.formula_version || (preview?.formula as Entity | undefined)?.version)}</dd></div>
+                <div className="flex justify-between gap-3"><dt>Fuente</dt><dd className="text-right">{presentationLabel(preview?.source_status || selectedDefinition?.source_status, compact(preview?.source_status || selectedDefinition?.source_status))}</dd></div>
+                <div className="flex justify-between gap-3"><dt>Confianza</dt><dd className="text-right">{presentationLabel((preview?.trust as Entity | undefined)?.status || selectedDefinition?.source_status, compact((preview?.trust as Entity | undefined)?.status || selectedDefinition?.source_status))}</dd></div>
+              </>
+            )}
           </dl>
           <div className="mt-3 flex flex-wrap gap-2 text-xs font-semibold text-[var(--tcdx-color-primary)]">
             {(preview?.explanation_url as string | undefined) && <Link href={preview?.explanation_url as string}>Explicación</Link>}
@@ -603,7 +630,7 @@ export default function OperationalBuilder({ kind, title, description, domain, d
         <article className="rounded-md border border-[var(--tcdx-color-border)] p-3 text-sm">
           <div className="font-semibold">Bitácora</div>
           <div className="mt-2 max-h-48 space-y-2 overflow-auto text-xs" tabIndex={0} aria-label="Bitácora de operaciones">
-            {log.map((item) => <div key={`${item.at}-${item.step}`} className="rounded border border-[var(--tcdx-color-border)] p-2"><span className="font-semibold">{item.step}</span> · {item.status}<br />{item.message}</div>)}
+            {log.map((item) => <div key={`${item.at}-${item.step}`} className="rounded border border-[var(--tcdx-color-border)] p-2"><span className="font-semibold">{item.step}</span> · {presentationLabel(item.status)}<br />{item.message}</div>)}
             {!log.length && <div className="text-[var(--tcdx-color-text-secondary)]">Sin operaciones ejecutadas.</div>}
           </div>
         </article>

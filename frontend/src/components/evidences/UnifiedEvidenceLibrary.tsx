@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { presentationLabel } from '@/utils/presentationLabels';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
 
@@ -170,14 +171,12 @@ const usageOptions = [
 
 const fallbackSources: SourceCard[] = [
   { source_type: 'google_drive', source_name: 'Google Drive', status: 'available', documents_count: 0, actions: [{ key: 'connect', label: 'Conectar Google Drive', method: 'POST', path: '/api/document-integrations/google/oauth/start', kind: 'oauth', enabled: true }] },
-  { source_type: 'zoho_drive', source_name: 'Zoho Drive', status: 'available', documents_count: 0, actions: [{ key: 'connect', label: 'Conectar Zoho Drive', method: 'GET', path: '/api/document-integrations/zoho/oauth/start', kind: 'oauth', enabled: true }] },
-  { source_type: 'sync_agent', source_name: 'Sync Agent', status: 'available', documents_count: 0, actions: [{ key: 'configure', label: 'Configurar agente', method: 'POST', path: '/api/document-integrations/agents/pairing-codes', kind: 'api', enabled: true }] },
-  { source_type: 'mounted_folder', source_name: 'Carpeta montada', status: 'available', documents_count: 0, actions: [{ key: 'configure', label: 'Configurar carpeta', kind: 'info', enabled: false, reason: 'Configuración pendiente: requiere registrar una ruta montada autorizada.' }] },
   { source_type: 'manual_upload', source_name: 'Carga manual', status: 'available', documents_count: 0, actions: [
     { key: 'upload_files', label: 'Subir archivos', kind: 'upload_files', enabled: true, path: '/api/evidence-library/manual-upload/files', method: 'POST' },
     { key: 'upload_zip', label: 'Subir ZIP', kind: 'upload_zip', enabled: true, path: '/api/evidence-library/manual-upload/zip', method: 'POST' },
   ] },
 ];
+const VISIBLE_EVIDENCE_SOURCE_TYPES = new Set(['google_drive', 'manual_upload']);
 
 function isRecord(value: unknown): value is UnknownRecord {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -214,10 +213,8 @@ function formatDate(value?: string | null) {
 function sourceBadge(source?: string | null) {
   const raw = String(source || '').toLowerCase();
   if (raw.includes('google')) return 'Google Drive';
-  if (raw.includes('zoho')) return 'Zoho Drive';
-  if (raw.includes('sync')) return 'Sync Agent';
-  if (raw.includes('mounted')) return 'Carpeta montada';
   if (raw.includes('manual')) return 'Carga manual';
+  if (raw.includes('zoho') || raw.includes('sync') || raw.includes('mounted')) return 'Fuente documental';
   return source || 'Otro';
 }
 
@@ -446,7 +443,10 @@ export default function UnifiedEvidenceLibrary({
   const selectedCanExclude = Boolean(selected && canManage && !selectedIsExcluded && selected.source_type === 'document_index' && selected.can_exclude !== false);
   const selectedCanRestore = Boolean(selected && canManage && selectedIsExcluded && selected.source_type === 'document_index' && selected.can_restore !== false);
   const selectedProfile = asRecord(detail?.document?.profile);
-  const visibleSources = sources.length ? sources : fallbackSources;
+  const sourceRows = sources.length
+    ? sources.filter((source) => VISIBLE_EVIDENCE_SOURCE_TYPES.has(source.source_type))
+    : fallbackSources;
+  const visibleSources = sourceRows.length ? sourceRows : fallbackSources;
   const currentFolder = folderNavigationStack[folderNavigationStack.length - 1]?.folder || null;
   const hasActiveFilters = Boolean(
     filters.search ||
@@ -1109,16 +1109,16 @@ export default function UnifiedEvidenceLibrary({
         <div className="mb-3 flex items-center justify-between">
           <div>
             <h2 className="text-lg font-bold text-slate-900">Fuentes documentales</h2>
-            <p className="text-sm text-slate-500">Conecta, sincroniza y gestiona fuentes de informacion.</p>
+            <p className="text-sm text-slate-500">Gestiona Google Drive y carga manual como fuentes productivas visibles.</p>
           </div>
           <button
-            onClick={() => setManualUploadMessage('Nueva fuente: usa las acciones de cada tarjeta disponible. Los conectores sin ruta configurada se muestran como configuración pendiente.')}
+            onClick={() => setManualUploadMessage('Nueva fuente: usa Google Drive o carga manual. Otros conectores quedan preservados en backend, pero fuera de esta vista productiva.')}
             className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700"
           >
             Nueva fuente
           </button>
         </div>
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
           {visibleSources.map((source) => (
             <div key={source.source_type} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
               <div className="flex items-start justify-between gap-2">
@@ -1127,7 +1127,7 @@ export default function UnifiedEvidenceLibrary({
                   <div className="mt-1 text-xs text-slate-500">{source.documents_count || 0} documentos</div>
                 </div>
                 <span className={`rounded-full border px-2 py-1 text-[11px] font-semibold ${statusClass(source.status)}`}>
-                  {source.status || 'available'}
+                  {presentationLabel(source.status || 'available')}
                 </span>
               </div>
               <div className="mt-4 text-xs text-slate-500">Ultima sincronizacion</div>
@@ -1141,22 +1141,6 @@ export default function UnifiedEvidenceLibrary({
               {source.source_type === 'google_drive' && source.status === 'folder_required' && (
                 <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-2 py-1 text-xs text-amber-800">
                   Google Drive conectado. Seleccione una carpeta para sincronizar.
-                </div>
-              )}
-              {source.source_type === 'zoho_drive' && source.status === 'folder_required' && (
-                <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-2 py-1 text-xs text-amber-800">
-                  Zoho WorkDrive conectado. Seleccione una carpeta para sincronizar.
-                </div>
-              )}
-              {source.source_type === 'zoho_drive' && source.status === 'zoho_oauth_unauthorized' && (
-                <div className="mt-2 rounded-lg border border-red-200 bg-red-50 px-2 py-1 text-xs text-red-700">
-                  Zoho conectado, pero sin permisos WorkDrive suficientes. Reconecte aceptando los permisos requeridos.
-                  {source.last_sync_error ? ` ${source.last_sync_error}` : ''}
-                </div>
-              )}
-              {source.source_type === 'zoho_drive' && source.status === 'configuration_required' && (
-                <div className="mt-2 rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs text-slate-600">
-                  Zoho WorkDrive no está configurado por la plataforma.
                 </div>
               )}
               {source.last_sync_error && (
@@ -1396,7 +1380,6 @@ export default function UnifiedEvidenceLibrary({
           <select value={filters.origin} onChange={(event) => setFilters((prev) => ({ ...prev, origin: event.target.value }))} className="rounded-xl border border-slate-200 px-3 py-2 text-sm">
             <option value="">Origen: todos</option>
             <option value="google_drive">Google Drive</option>
-            <option value="zoho">Zoho Drive</option>
             <option value="manual_upload">Carga manual</option>
           </select>
           <select value={filters.document_type} onChange={(event) => setFilters((prev) => ({ ...prev, document_type: event.target.value }))} className="rounded-xl border border-slate-200 px-3 py-2 text-sm">
@@ -1488,7 +1471,7 @@ export default function UnifiedEvidenceLibrary({
               </div>
             )}
           </div>
-          <div className="max-h-[68vh] overflow-auto">
+          <div className="max-h-[560px] overflow-auto tcdx-scrollbar lg:max-h-[68vh]">
             <table className="w-full min-w-[980px] text-left text-sm">
               <thead className="sticky top-0 z-10 bg-slate-50 text-xs uppercase text-slate-500 shadow-sm">
                 <tr>
@@ -1575,7 +1558,7 @@ export default function UnifiedEvidenceLibrary({
                       <td className="px-3 py-3">{sourceBadge(doc.origin || doc.source_label)}</td>
                       <td className="px-3 py-3">
                         <div className="flex flex-wrap gap-1">
-                          <span className={`rounded-full border px-2 py-1 text-xs font-semibold ${statusClass(doc.status)}`}>{doc.status || 'indexed'}</span>
+                          <span className={`rounded-full border px-2 py-1 text-xs font-semibold ${statusClass(doc.status)}`}>{presentationLabel(doc.status || 'indexed')}</span>
                           {doc.is_excluded && <span className="rounded-full border border-slate-300 bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-700">Excluido</span>}
                         </div>
                       </td>
@@ -1588,7 +1571,7 @@ export default function UnifiedEvidenceLibrary({
                       </td>
                       <td className="px-3 py-3">
                         <span className={`rounded-full border px-2 py-1 text-xs font-semibold ${statusClass(doc.semantic_status)}`}>
-                          {doc.usefulness_score ? `${doc.usefulness_score}% util` : doc.semantic_status || 'not_processed'}
+                          {doc.usefulness_score ? `${doc.usefulness_score}% util` : presentationLabel(doc.semantic_status || 'not_processed')}
                         </span>
                       </td>
                       <td className="px-3 py-3 text-xs text-slate-500">{formatDate(doc.last_indexed_at)}</td>

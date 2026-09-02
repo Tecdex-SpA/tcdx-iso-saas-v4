@@ -8,7 +8,7 @@ export default function DataCatalogPage() {
       description="Elementos de datos con definición de negocio, definición técnica, fuente, clasificación y responsable."
       endpoint="/api/data/elements"
       primaryLabel="elementos de datos"
-      emptyMessage="No hay elementos de datos registrados. Crea elementos desde la API o administración autorizada."
+      emptyMessage="No hay elementos de datos registrados. Esta vista es de gobierno avanzado y depende de carga/catalogación autorizada; no hay alta productiva disponible desde esta pantalla."
       columns={[
         { key: 'element_key', label: 'Elemento' },
         { key: 'display_name', label: 'Nombre' },

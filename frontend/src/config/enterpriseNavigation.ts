@@ -35,7 +35,6 @@ export const CLIENT_ENTERPRISE_NAV_DOMAINS: EnterpriseNavDomain[] = [
     routes: ['/dashboard', '/grc-global'],
     items: [
       { href: '/dashboard', label: 'Centro ejecutivo', labelKey: 'navigation.destinations.executiveCenter', feature: 'dashboard.read' },
-      { href: '/grc-global', label: 'Portfolio GRC', labelKey: 'navigation.destinations.grcPortfolio', feature: 'phase2.read', moduleKey: 'integrated_grc' },
     ],
   },
   {
@@ -111,8 +110,6 @@ export const CLIENT_ENTERPRISE_NAV_DOMAINS: EnterpriseNavDomain[] = [
     items: [
       { href: '/evidencias', label: 'Evidencias', labelKey: 'navigation.destinations.evidence', feature: 'evidences.read', moduleKey: 'evidences' },
       { href: '/datos', label: 'Datos', labelKey: 'navigation.destinations.data', feature: 'phase5.read', moduleKey: 'data_governance' },
-      { href: '/datos/calidad', label: 'Calidad', labelKey: 'navigation.destinations.dataQuality', feature: 'phase5.read', moduleKey: 'data_governance' },
-      { href: '/datos/lineage', label: 'Lineage', labelKey: 'navigation.destinations.lineage', feature: 'phase5.read', moduleKey: 'data_governance' },
       { href: '/importaciones', label: 'Importaciones', labelKey: 'navigation.destinations.imports', feature: 'phase3.read', moduleKey: 'operations_grc' },
     ],
   },

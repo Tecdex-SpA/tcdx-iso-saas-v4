@@ -6,12 +6,14 @@ import EnterpriseDomainWorkspaceShell, { type EnterpriseDomainWorkspaceKey } fro
 import { ApiClientError, apiRequestJson } from '@/utils/apiClient';
 import OfficialAnalyticsPanel from '@/components/math-governance/OfficialAnalyticsPanel';
 import {
+  ActionableEmptyState,
   DataTrustIndicator,
   EnterpriseFilterBar,
   EnterpriseRowActions,
   EnterpriseTableShell,
   UniversalStateBlock,
 } from '@/components/ui/enterprise';
+import { presentationLabel } from '@/utils/presentationLabels';
 
 type Phase5Item = Record<string, unknown>;
 
@@ -22,6 +24,7 @@ type Phase5WorkspaceProps = {
   primaryLabel: string;
   columns: Array<{ key: string; label: string }>;
   emptyMessage: string;
+  emptyAction?: { label: string; href: string };
   capabilityLabel?: string;
   analyticsDomain?: string;
   loadCollection?: boolean;
@@ -38,31 +41,12 @@ function text(value: unknown) {
 function displayValue(key: string, value: unknown) {
   const raw = text(value);
   const normalized = raw.toLowerCase();
-  const labels: Record<string, string> = {
-    active: 'Activo',
-    inactive: 'Inactivo',
-    enabled: 'Activo',
-    disabled: 'Inactivo',
-    published: 'Publicado',
-    draft: 'Borrador',
-    pending: 'Pendiente',
-    in_progress: 'En progreso',
-    completed: 'Completado',
-    failed: 'Error técnico',
-    monthly: 'Mensual',
-    trusted: 'Confiable',
-    trusted_with_warnings: 'Confiable con advertencias',
-    low_confidence: 'Baja confianza',
-    insufficient_data: 'Datos insuficientes',
-    source_unavailable: 'Sin fuente',
-    dependency_pending: 'Dependencia pendiente',
-  };
 
-  if (key.toLowerCase().includes('frequency') || normalized === 'monthly') {
-    return labels[normalized] || raw;
+  if (key.toLowerCase().includes('frequency') || ['daily', 'weekly', 'monthly', 'quarterly', 'yearly', 'on_demand'].includes(normalized)) {
+    return presentationLabel(normalized, raw);
   }
 
-  return labels[normalized] || raw.replaceAll('_', ' ');
+  return presentationLabel(normalized, raw.replaceAll('_', ' '));
 }
 
 function isWarning(item: Phase5Item) {
@@ -108,6 +92,7 @@ export default function Phase5Workspace({
   primaryLabel,
   columns,
   emptyMessage,
+  emptyAction,
   capabilityLabel,
   analyticsDomain,
   loadCollection = true,
@@ -259,7 +244,12 @@ export default function Phase5Workspace({
         )}
 
         {loadCollection && !loading && !error && rows.length === 0 && (
-          <UniversalStateBlock state="empty" title="Sin datos" description={emptyMessage} />
+          <ActionableEmptyState
+            title="Sin datos"
+            reason={emptyMessage}
+            ctaLabel={emptyAction?.label}
+            href={emptyAction?.href}
+          />
         )}
 
         {loadCollection && !loading && !error && rows.length > 0 && (

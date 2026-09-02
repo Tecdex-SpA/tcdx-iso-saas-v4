@@ -2,7 +2,9 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import ExecutiveIntelligenceBrief from '@/components/intelligence/ExecutiveIntelligenceBrief';
+import { ActionableEmptyState } from '@/components/ui/enterprise';
 import useIntelligenceBrief from '@/hooks/useIntelligenceBrief';
+import { presentationLabel } from '@/utils/presentationLabels';
 import {
   asArray as intelligenceArray,
   collectKnowledgeBasis,
@@ -812,12 +814,21 @@ export default function PremiumReportsPanel({ locale, selectedStandard }: Premiu
         </div>
       </div>
 
-      <div className="grid gap-5 xl:grid-cols-[1.1fr_0.9fr]">
-        <PreviewPanel preview={preview} userRole={userRole} />
-        <NarrativePanel narrative={narrative} />
-      </div>
+      {preview || narrative ? (
+        <div className="grid gap-5 xl:grid-cols-[1.1fr_0.9fr]">
+          {preview && <PreviewPanel preview={preview} userRole={userRole} />}
+          {narrative && <NarrativePanel narrative={narrative} />}
+        </div>
+      ) : (
+        <ActionableEmptyState
+          title="Sin preview generado"
+          reason="Selecciona plantilla y periodo para generar una vista previa real. La narrativa y las fuentes aparecen sólo después de una generación válida."
+        />
+      )}
 
-      <SourcesPanel preview={preview} narrative={narrative} />
+      {(preview?.sources?.length || narrative?.sources?.length) ? (
+        <SourcesPanel preview={preview} narrative={narrative} />
+      ) : null}
 
       <ScopeRecommendationPanel
         scopeStandard={scopeStandard}
@@ -897,7 +908,7 @@ function PreviewSummary({ preview }: { preview: ReportPreview }) {
   const filters = preview.filters || {};
   return (
     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-      <InfoCard label="Estado" value={preview.status || 'preview'} />
+      <InfoCard label="Estado" value={presentationLabel(preview.status || 'preview')} />
       <InfoCard label="Plantilla" value={preview.template_code || '-'} />
       <InfoCard label="Tenant" value={preview.tenant?.name || '-'} />
       <InfoCard label="Periodo" value={`${filters.period_from || '-'} a ${filters.period_to || '-'}`} />
@@ -1343,15 +1354,15 @@ function SourcesPanel({ preview, narrative }: { preview: ReportPreview | null; n
                   <tr key={`${source.source_id}-${index}`} className="align-top">
                     <td className="px-4 py-3 font-mono text-xs text-slate-600">{source.ref_id || `source_${index + 1}`}</td>
                     <td className="px-4 py-3 font-mono text-xs text-slate-600">{source.source_id || '-'}</td>
-                    <td className="px-4 py-3 text-slate-700">{source.source_type}</td>
+                    <td className="px-4 py-3 text-slate-700">{presentationLabel(source.source_type)}</td>
                     <td className="px-4 py-3 text-slate-700">{source.title}</td>
-                    <td className="px-4 py-3 text-slate-600">{source.status}</td>
+                    <td className="px-4 py-3 text-slate-600">{presentationLabel(source.status)}</td>
                     <td className="px-4 py-3">
                       <span className={source.used_for === 'excluded_reference' ? 'rounded-full bg-amber-50 px-2 py-1 text-xs font-bold text-amber-800' : 'text-slate-600'}>
-                        {source.used_for}
+                        {presentationLabel(source.used_for)}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-slate-600">{source.visibility}</td>
+                    <td className="px-4 py-3 text-slate-600">{presentationLabel(source.visibility)}</td>
                     <td className="px-4 py-3 text-slate-600">{source.provider || '-'}</td>
                     <td className="px-4 py-3 text-slate-600">{source.reference_table || source.reference_type || source.internal_reference || '-'}</td>
                   </tr>

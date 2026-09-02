@@ -339,12 +339,6 @@ export const CLIENT_MVP_NAV_ITEMS: MvpNavItem[] = [
   { href: '/planes-accion', label: 'Planes de acción', feature: 'action_plans.read' },
   { href: '/exportes', label: 'Reportes', feature: 'reports.read' },
   {
-    href: '/grc-global',
-    label: 'GRC integrado',
-    feature: 'phase2.read',
-    moduleKey: 'integrated_grc',
-  },
-  {
     href: '/operaciones-grc',
     label: 'Riesgo Operativo',
     feature: 'phase3.read',

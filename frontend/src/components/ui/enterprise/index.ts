@@ -1,4 +1,5 @@
 export { default as EnterpriseAiPanel } from './EnterpriseAiPanel';
+export { default as ActionableEmptyState } from './ActionableEmptyState';
 export { default as EnterpriseBadge } from './EnterpriseBadge';
 export { default as EnterpriseButton } from './EnterpriseButton';
 export { default as EnterpriseCard } from './EnterpriseCard';

@@ -36,10 +36,6 @@ const DOMAIN_TABS: Record<EnterpriseDomainWorkspaceKey, DomainTab[]> = {
   data: [
     { href: '/evidencias', labelKey: 'navigation.destinations.evidence' },
     { href: '/datos', labelKey: 'navigation.destinations.data' },
-    { href: '/datos/calidad', labelKey: 'navigation.destinations.dataQuality' },
-    { href: '/datos/catalogo', labelKey: 'navigation.destinations.dataCatalog' },
-    { href: '/datos/lineage', labelKey: 'navigation.destinations.lineage' },
-    { href: '/datos/semantica', labelKey: 'navigation.destinations.semanticLayer' },
     { href: '/importaciones', labelKey: 'navigation.destinations.imports' },
   ],
   intelligence: [

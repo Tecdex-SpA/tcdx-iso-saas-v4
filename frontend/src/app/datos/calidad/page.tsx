@@ -8,7 +8,8 @@ export default function DataQualityPanel() {
       description="Evaluaciones de calidad, freshness y estado de confianza. Un dato stale, rejected o unknown se marca con advertencia visible."
       endpoint="/api/data/quality"
       primaryLabel="evaluaciones de calidad"
-      emptyMessage="No hay evaluaciones de calidad ejecutadas para este tenant."
+      emptyMessage="No hay evaluaciones de calidad ejecutadas para este tenant. Importa datos o carga evidencias para generar material evaluable."
+      emptyAction={{ label: 'Abrir importaciones', href: '/importaciones' }}
       columns={[
         { key: 'assessed_entity_type', label: 'Entidad' },
         { key: 'assessment_status', label: 'Calidad' },

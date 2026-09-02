@@ -1,5 +1,5 @@
-import SemanticLayerWorkspace from '@/components/semantic/SemanticLayerWorkspace';
 import EnterpriseDomainWorkspaceShell from '@/components/enterprise-domain/EnterpriseDomainWorkspaceShell';
+import { ActionableEmptyState } from '@/components/ui/enterprise';
 
 export default function SemanticDataPage() {
   return (
@@ -10,7 +10,10 @@ export default function SemanticDataPage() {
         title="Capa semántica GRC"
         description="Administra disponibilidad, calidad, vigencia y trazabilidad de las fuentes usadas por métricas oficiales."
       >
-        <SemanticLayerWorkspace compactHeader />
+        <ActionableEmptyState
+          title="Capa semántica preservada"
+          reason="Esta ruta conserva la consulta avanzada de disponibilidad, calidad, vigencia y trazabilidad, pero no expone alta productiva ni configuración directa desde la UI principal."
+        />
       </EnterpriseDomainWorkspaceShell>
     </main>
   );
