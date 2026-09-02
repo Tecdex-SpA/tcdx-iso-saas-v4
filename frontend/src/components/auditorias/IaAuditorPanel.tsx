@@ -1072,7 +1072,7 @@ export default function IaAuditorPanel() {
   return (
     <div className="mx-auto max-w-[1700px] space-y-6">
         <section className="overflow-hidden rounded-[34px] border border-white/70 bg-white shadow-[0_20px_60px_rgba(15,23,42,0.08)]">
-          <div className="bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 p-7 text-white">
+          <div className="ia-auditor-dark-surface bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 p-7 text-white">
             <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
               <div>
                 <div className="flex flex-wrap gap-2">

@@ -126,8 +126,12 @@ function reportContentLabel(item: OfficialResult | undefined, fallback: string) 
 }
 
 function availabilityLabel(item: OfficialResult | undefined) {
-  if (!item) return 'No disponible';
+  if (!item) return 'Selecciona contenido';
   return presentationLabel(item.source_status || 'available');
+}
+
+function reportStatus(result: Entity | null, preview: Entity | null) {
+  return (result?.generation as Entity | undefined)?.status || result?.status || preview?.status || 'Sin generar';
 }
 
 function reportDownloadHref(result: Entity | null) {
@@ -135,6 +139,12 @@ function reportDownloadHref(result: Entity | null) {
   const generationId = generation?.id || result?.id;
   if (!generationId) return null;
   return `/api/report-generations/${encodeURIComponent(String(generationId))}/download`;
+}
+
+function hasGeneratedReportArtifact(result: Entity | null) {
+  if (!result) return false;
+  const status = String((result.generation as Entity | undefined)?.status || result.status || '').toLowerCase();
+  return status === 'generated' && Boolean(reportDownloadHref(result));
 }
 
 function safeDownloadName(value: string) {
@@ -157,6 +167,10 @@ function codePrefix(kind: BuilderKind) {
     assurance: 'ASSURANCE',
     loss: 'LOSS',
   }[kind];
+}
+
+function reportHistoryLabel(item: Entity) {
+  return compact(item.display_name || item.name || 'Configuración guardada');
 }
 
 function officialMetricCode(item: OfficialResult | undefined, fallback: string) {
@@ -561,7 +575,7 @@ export default function OperationalBuilder({ kind, title, description, domain, d
     } else {
       endpoint = `/api/loss-events/${targetEntity.id}/confirm`;
     }
-    const executed = dataOf<Entity>(await runStep('ejecutar', () => apiRequestJson(endpoint, { method: 'POST', body: JSON.stringify(payload), fallbackMessage: 'No fue posible ejecutar.' })));
+    const executed = dataOf<Entity>(await runStep(isReportBuilder ? 'generar informe' : 'ejecutar', () => apiRequestJson(endpoint, { method: 'POST', body: JSON.stringify(payload), fallbackMessage: isReportBuilder ? 'No fue posible generar el informe.' : 'No fue posible ejecutar.' })));
     setResult(executed);
     if (kind === 'assurance' && executed.id) {
       await runStep('cerrar assurance', () => apiRequestJson(`/api/assurance-tests/executions/${executed.id}/complete`, { method: 'POST', body: JSON.stringify({ result: 'pass_with_observations', conclusion: 'Resultado registrado desde builder operacional.' }) }));
@@ -622,7 +636,7 @@ export default function OperationalBuilder({ kind, title, description, domain, d
             ['1', 'Seleccionar contenido', selectedDefinition ? reportContentLabel(selectedDefinition, form.resultCode) : 'Elige una fuente real'],
             ['2', 'Configurar informe', `${shortDate(form.periodStart)} a ${shortDate(form.periodEnd)} · ${form.format.toUpperCase()}`],
             ['3', 'Revisar', preview ? 'Configuración revisada' : 'Pendiente'],
-            ['4', 'Generar y descargar', result ? 'Salida disponible' : 'Pendiente'],
+            ['4', 'Generar y descargar', hasGeneratedReportArtifact(result) ? 'Archivo disponible' : 'Pendiente'],
           ].map(([step, label, value]) => (
             <div key={step} className="rounded-md border border-[var(--tcdx-color-border)] bg-[var(--tcdx-color-surface)] p-3">
               <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--tcdx-color-text-muted)]">Paso {step}</div>
@@ -733,7 +747,7 @@ export default function OperationalBuilder({ kind, title, description, domain, d
           <dl className="mt-2 space-y-1 text-xs text-[var(--tcdx-color-text-secondary)]">
             {!isReportBuilder && <div className="flex justify-between gap-3"><dt>Entidad</dt><dd data-testid={`builder-${testKey}-entity`} className="text-right">{compact(entity?.id)}</dd></div>}
             {!isReportBuilder && <div className="flex justify-between gap-3"><dt>Secundario</dt><dd className="text-right">{compact(secondaryEntity?.id)}</dd></div>}
-            <div className="flex justify-between gap-3"><dt>{isReportBuilder ? 'Estado' : 'Valor'}</dt><dd data-testid={`builder-${testKey}-value`} className="text-right">{isReportBuilder ? presentationLabel(preview?.status || result?.status || 'Sin generar') : compact(preview?.value ?? result?.value ?? (result?.measurement as Entity | undefined)?.value_numeric)}</dd></div>
+            <div className="flex justify-between gap-3"><dt>{isReportBuilder ? 'Estado' : 'Valor'}</dt><dd data-testid={`builder-${testKey}-value`} className="text-right">{isReportBuilder ? presentationLabel(reportStatus(result, preview)) : compact(preview?.value ?? result?.value ?? (result?.measurement as Entity | undefined)?.value_numeric)}</dd></div>
             {isReportBuilder ? (
               <>
                 <div className="flex justify-between gap-3"><dt>Contenido</dt><dd className="text-right">{compact(reportContentLabel(selectedDefinition, form.resultCode))}</dd></div>
@@ -753,19 +767,19 @@ export default function OperationalBuilder({ kind, title, description, domain, d
           <div className="mt-3 flex flex-wrap gap-2 text-xs font-semibold text-[var(--tcdx-color-primary)]">
             {(preview?.explanation_url as string | undefined) && <Link href={preview?.explanation_url as string}>Explicación</Link>}
             {(preview?.lineage_url as string | undefined) && <Link href={preview?.lineage_url as string}>Lineage</Link>}
-            {isReportBuilder && reportDownloadHref(result) ? (
+            {isReportBuilder && hasGeneratedReportArtifact(result) ? (
               <button type="button" onClick={downloadReportOutput} className="font-semibold text-[var(--tcdx-color-primary)]">
                 Descargar
               </button>
             ) : null}
-            {isReportBuilder && result && <Link href="/reportes/generaciones">Ver informes generados</Link>}
+            {isReportBuilder && hasGeneratedReportArtifact(result) && <Link href="/reportes/generaciones">Ver informe generado</Link>}
             {!isReportBuilder && runId && <span>Run {String(runId).slice(0, 8)}</span>}
           </div>
         </article>
         <article className="rounded-md border border-[var(--tcdx-color-border)] p-3 text-sm">
-          <div className="font-semibold">Historial</div>
+          <div className="font-semibold">{isReportBuilder ? 'Configuraciones guardadas' : 'Historial'}</div>
           <div className="mt-2 max-h-48 space-y-2 overflow-auto text-xs" tabIndex={0} aria-label="Historial de operaciones">
-            {history.slice(0, 8).map((item, index) => <div key={String(item.id || index)} className="rounded border border-[var(--tcdx-color-border)] p-2">{compact(item.display_name || item.metric_code || item.dashboard_key || item.report_key || item.survey_key || item.test_code || item.event_code || item.generation_key || item.id)}</div>)}
+            {history.slice(0, 8).map((item, index) => <div key={String(item.id || index)} className="rounded border border-[var(--tcdx-color-border)] p-2">{isReportBuilder ? reportHistoryLabel(item) : compact(item.display_name || item.metric_code || item.dashboard_key || item.report_key || item.survey_key || item.test_code || item.event_code || item.generation_key || item.id)}</div>)}
             {!history.length && <div className="text-[var(--tcdx-color-text-secondary)]">Sin historial cargado.</div>}
           </div>
         </article>

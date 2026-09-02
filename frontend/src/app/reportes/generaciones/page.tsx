@@ -2,7 +2,6 @@
 
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
-import AppLayout from '@/components/AppLayout';
 import EnterpriseDomainWorkspaceShell from '@/components/enterprise-domain/EnterpriseDomainWorkspaceShell';
 import { ApiClientError, apiRequestJson, buildTenantHeaders, getApiBaseUrl } from '@/utils/apiClient';
 import { presentationLabel } from '@/utils/presentationLabels';
@@ -11,6 +10,7 @@ type ReportDefinition = {
   id?: string;
   display_name?: string;
   report_key?: string;
+  report_type?: string;
   section_config?: Array<{ title?: string; result_code?: string; analytical_result_code?: string }>;
   filter_config?: { period?: { start?: string; end?: string } };
 };
@@ -53,7 +53,12 @@ function contentLabel(definition?: ReportDefinition) {
 }
 
 function rowTitle(generation: ReportGeneration, definition?: ReportDefinition) {
-  return definition?.display_name || generation.generation_key || 'Informe generado';
+  const metadataTitle = typeof generation.metadata?.report_title === 'string' ? generation.metadata.report_title : '';
+  return definition?.display_name || metadataTitle || 'Informe generado';
+}
+
+function rowType(definition?: ReportDefinition) {
+  return presentationLabel(definition?.report_type, 'Contenido configurado');
 }
 
 function canDownload(generation: ReportGeneration) {
@@ -125,7 +130,7 @@ export default function ReportGenerationHistory() {
   };
 
   return (
-    <AppLayout>
+    <main className="min-h-full bg-[var(--tcdx-color-surface)] px-4 py-6 text-[var(--tcdx-color-text-ink)] sm:px-6">
       <EnterpriseDomainWorkspaceShell
         domain="reports"
         eyebrow="Reportes"
@@ -192,6 +197,7 @@ export default function ReportGenerationHistory() {
                     <tr className="border-b border-[var(--tcdx-color-border)] bg-[var(--tcdx-color-surface)] text-left text-xs font-bold uppercase tracking-[0.12em] text-[var(--tcdx-color-text-muted)]">
                       <th className="px-4 py-3">Informe</th>
                       <th className="px-4 py-3">Contenido</th>
+                      <th className="px-4 py-3">Tipo</th>
                       <th className="px-4 py-3">Período</th>
                       <th className="px-4 py-3">Formato</th>
                       <th className="px-4 py-3">Fecha</th>
@@ -206,6 +212,7 @@ export default function ReportGenerationHistory() {
                         <tr key={generation.id || `${generation.generation_key}-${index}`} className="border-b border-[var(--tcdx-color-border)] align-top last:border-b-0">
                           <td className="px-4 py-4 font-semibold text-[var(--tcdx-color-text-ink)]">{rowTitle(generation, definition)}</td>
                           <td className="px-4 py-4 text-[var(--tcdx-color-text-secondary)]">{contentLabel(definition)}</td>
+                          <td className="px-4 py-4 text-[var(--tcdx-color-text-secondary)]">{rowType(definition)}</td>
                           <td className="px-4 py-4 text-[var(--tcdx-color-text-secondary)]">{formatPeriod(definition)}</td>
                           <td className="px-4 py-4 font-semibold text-[var(--tcdx-color-text-ink)]">{String(generation.format || '-').toUpperCase()}</td>
                           <td className="px-4 py-4 text-[var(--tcdx-color-text-secondary)]">{formatDate(generation.finished_at || generation.requested_at || generation.started_at)}</td>
@@ -234,6 +241,6 @@ export default function ReportGenerationHistory() {
           )}
         </div>
       </EnterpriseDomainWorkspaceShell>
-    </AppLayout>
+    </main>
   );
 }

@@ -784,6 +784,19 @@ a[class*="flex"] {
   color: var(--text-main);
 }
 
+.tcdx-premium-view .ia-auditor-dark-surface,
+.tcdx-premium-view .ia-auditor-dark-surface :is(h1, h2, h3, p, span, div) {
+  color: #f8fafc !important;
+}
+
+.tcdx-premium-view .ia-auditor-dark-surface [class*="text-amber"] {
+  color: #fffbeb !important;
+}
+
+.tcdx-premium-view .ia-auditor-dark-surface [class*="bg-white/"] {
+  background-color: rgb(255 255 255 / 0.15) !important;
+}
+
 .tcdx-premium-view :is(p, li, td, label, span) {
   letter-spacing: 0;
 }

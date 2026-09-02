@@ -275,6 +275,16 @@ Validación local PASS: `git diff --check`, `node --check backend/src/services/p
 
 Autoridades preservadas: BD/migraciones/RBAC/modelo comercial/Health formulas/AI runtime sin cambios. Handoff: `docs/codex/handoffs/UI-FUNC-04-REPORTS-AUDIT-UX-CLOSEOUT.md`.
 
+## UI-FUNC-05 — REPORTS + AUDIT PRODUCT CLOSEOUT
+
+Status: `READY_FOR_HUMAN_REVIEW` local sobre `main@274278f62b78c64c1f8ea3ce00983bb3c4bbd61b` sin commit/push/deploy.
+
+Cambios locales: `/reportes/studio` queda sin tabla primaria de definiciones técnicas y separa configuración guardada de generación real; la descarga/ver informe generado sólo aparece con `generation.status=generated`. `/reportes/generaciones` elimina el `AppLayout` interior bajo el layout de reportes y mantiene biblioteca de generaciones reales con descarga. `/auditorias/ejecucion` conserva selector real y agrega flujo operacional de 8 pasos con estados derivados del audit/checklist. Se agrega `GET /api/audits/generated-report/:id` para PDF operacional read-only generado al vuelo con empresa, norma, periodo, equipo, checklist, hallazgos y acciones reales disponibles. IA Auditor Senior corrige contraste desde la causa efectiva de cascade `.tcdx-premium-view`.
+
+Validación local PASS: `git diff --check`, `node --check backend/src/services/phase5/phase5.service.js`, `node --check backend/src/routes/audits.routes.js`, `npm --prefix frontend run typecheck`, `npm --prefix frontend run lint`, `npm --prefix frontend run test:phase6-sidebar-rbac`, `npm --prefix frontend run test:phase6-commercial-multitenant` y `npm --prefix frontend run build`. `frontend/tsconfig.json` fue restaurado tras el ajuste automático de Next. `FOCAL_RUNTIME_E2E=DEFERRED_TO_HUMAN_POSTDEPLOY`.
+
+Autoridades preservadas: BD/migraciones/RBAC/modelo comercial/Health formulas/AI runtime sin cambios; sin lógica tenant-specific. Handoff: `docs/codex/handoffs/UI-FUNC-05-REPORTS-AUDIT-PRODUCT-CLOSEOUT.md`.
+
 ## Handoff relevante
 
 - `docs/codex/handoffs/CONT-00.md`
@@ -333,6 +343,7 @@ Autoridades preservadas: BD/migraciones/RBAC/modelo comercial/Health formulas/AI
 - `docs/codex/handoffs/UI-OPT-02-PRODUCTIVE-CLOSURE.md`
 - `docs/codex/handoffs/UI-OPT-03-REPORTING-CONTRAST-LOCALIZATION-CLOSEOUT.md`
 - `docs/codex/handoffs/UI-FUNC-04-REPORTS-AUDIT-UX-CLOSEOUT.md`
+- `docs/codex/handoffs/UI-FUNC-05-REPORTS-AUDIT-PRODUCT-CLOSEOUT.md`
 - `docs/codex/handoffs/RBAC-01-BRAND-01.md`
 - `docs/codex/handoffs/RBAC-02-COMMERCIAL-GATING.md`
 - `docs/codex/handoffs/AI-ADDON-01-COMMERCIAL-UI-01.md`

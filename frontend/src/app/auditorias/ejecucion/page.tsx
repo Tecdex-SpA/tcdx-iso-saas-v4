@@ -30,6 +30,7 @@ type AuditSummary = {
   start_date?: string;
   end_date?: string;
   auditor_name?: string;
+  auditor_type?: string;
   requester_name?: string;
 };
 
@@ -101,6 +102,10 @@ function friendlyControlMeta(row: ReviewRow) {
   return parts.length ? parts.join(' · ') : 'Sin código visible';
 }
 
+function stepState(done: boolean, pending = 'Pendiente') {
+  return done ? 'Listo' : pending;
+}
+
 export default function AuditExecutionPage() {
   const { t } = useTranslation();
 
@@ -126,8 +131,10 @@ function AuditExecutionContent() {
   const [rows, setRows] = useState<ReviewRow[]>([]);
   const [loadingAudits, setLoadingAudits] = useState(true);
   const [loading, setLoading] = useState(false);
+  const [pdfLoading, setPdfLoading] = useState(false);
   const [savingId, setSavingId] = useState('');
   const [selectorError, setSelectorError] = useState('');
+  const [pdfError, setPdfError] = useState('');
 
   useEffect(() => {
     const t = localStorage.getItem('token') || '';
@@ -226,6 +233,35 @@ function AuditExecutionContent() {
     if (!selectedAuditId || !auditOptions.some((item) => item.id === selectedAuditId)) return;
     setLoadedAuditId(selectedAuditId);
     router.replace('/auditorias/ejecucion');
+  };
+
+  const downloadOperationalPdf = async () => {
+    if (!token || !loadedAuditId) return;
+
+    try {
+      setPdfLoading(true);
+      setPdfError('');
+      const res = await fetch(`${API_URL}/api/audits/generated-report/${loadedAuditId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        setPdfError(getApiErrorMessage(json, 'No fue posible generar el informe de auditoría.'));
+        return;
+      }
+      const blobUrl = URL.createObjectURL(await res.blob());
+      const anchor = document.createElement('a');
+      anchor.href = blobUrl;
+      anchor.download = `informe-auditoria-${formatDate(audit?.start_date).replace(/[^0-9-]+/g, '-') || 'operacional'}.pdf`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(blobUrl);
+    } catch (error) {
+      setPdfError(error instanceof Error ? error.message : 'No fue posible generar el informe de auditoría.');
+    } finally {
+      setPdfLoading(false);
+    }
   };
 
   const summary = useMemo(() => {
@@ -341,6 +377,14 @@ function AuditExecutionContent() {
         actions={
           <div className="flex flex-wrap gap-2">
             <button
+              type="button"
+              onClick={downloadOperationalPdf}
+              disabled={pdfLoading}
+              className="inline-flex min-h-10 items-center rounded-md bg-[var(--tcdx-color-action-primary)] px-4 text-sm font-semibold text-white disabled:bg-slate-200 disabled:text-slate-600"
+            >
+              {pdfLoading ? 'Generando...' : 'Generar informe'}
+            </button>
+            <button
               onClick={() => {
                 setLoadedAuditId('');
                 setAudit(null);
@@ -361,6 +405,12 @@ function AuditExecutionContent() {
         }
       >
       <div className="mx-auto max-w-[1700px] space-y-6">
+        {pdfError && (
+          <div className="rounded-md border border-red-200 bg-red-50 p-4 text-sm font-semibold text-red-800" role="alert">
+            {pdfError}
+          </div>
+        )}
+
         <section className="rounded-md border border-[var(--tcdx-color-border)] bg-white p-5 shadow-sm">
           {audit && (
             <div className="grid grid-cols-2 gap-3 md:grid-cols-6">
@@ -373,6 +423,29 @@ function AuditExecutionContent() {
             </div>
           )}
         </section>
+
+        {audit && (
+          <section className="rounded-md border border-[var(--tcdx-color-border)] bg-white p-5 shadow-sm">
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+              {[
+                ['1', 'Seleccionar auditoría', stepState(Boolean(loadedAuditId), 'Selecciona una auditoría real')],
+                ['2', 'Preparar equipo e independencia', stepState(Boolean(audit.auditor_name || audit.auditor_type), 'Sin equipo registrado')],
+                ['3', 'Definir programa y muestra', stepState(Boolean(audit.start_date && rows.length), `${summary.total} control(es) en muestra`)],
+                ['4', 'Ejecutar trabajo y evidencia', stepState(summary.total > summary.pendientes, `${summary.pendientes} pendiente(s)`)],
+                ['5', 'Registrar hallazgos/resultados', stepState(summary.observaciones + summary.noConformes > 0, 'Sin hallazgos registrados en checklist')],
+                ['6', 'Seguimiento', stepState(rows.some((row) => row.notes && row.notes.trim()), 'Sin notas de seguimiento')],
+                ['7', 'Cierre', translateStatusLabel(audit.status || 'pendiente', locale)],
+                ['8', 'Generar informe', 'PDF operacional disponible al generar'],
+              ].map(([step, label, value]) => (
+                <div key={step} className="rounded-md border border-[var(--tcdx-color-border)] bg-[var(--tcdx-color-surface)] p-3">
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--tcdx-color-text-muted)]">Paso {step}</div>
+                  <div className="mt-1 text-sm font-semibold text-[var(--tcdx-color-text-ink)]">{label}</div>
+                  <div className="mt-1 text-xs text-[var(--tcdx-color-text-secondary)]">{value}</div>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
 
         {loading ? (
           <div className="rounded-3xl bg-white p-6 shadow-sm">{t('auditExecution.loadingControls')}</div>

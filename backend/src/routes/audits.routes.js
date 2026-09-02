@@ -2,8 +2,12 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../config/db');
 const auth = require('../middleware/auth');
+const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
+const { renderHtmlToPdf } = require('../reports/services/htmlPdfRenderer.service');
+const { renderBaseTemplate } = require('../reports/templates/common/baseTemplate');
+const { escapeHtml } = require('../reports/templates/common/sanitize');
 const {
   createDiskUpload,
   safeUploadError,
@@ -193,6 +197,198 @@ function resolveAuditReportPath(filePath) {
   ];
 
   return candidates.find((candidate) => fs.existsSync(candidate)) || null;
+}
+
+function isUuidLike(value) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+    String(value || '').trim()
+  );
+}
+
+function publicText(value, fallback = '-') {
+  const text = String(value || '').trim();
+  if (!text || isUuidLike(text)) return fallback;
+  return text;
+}
+
+function sanitizeGeneratedAuditFileName(value) {
+  return String(value || 'informe-auditoria')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9._-]+/g, '-')
+    .replace(/(^-|-$)+/g, '')
+    .slice(0, 100) || 'informe-auditoria';
+}
+
+function auditDate(value) {
+  if (!value) return '-';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value).slice(0, 10);
+  return date.toLocaleDateString('es-CL');
+}
+
+function auditStatusLabel(value) {
+  const normalized = normalizeStatus(value);
+  if (normalized === 'completada') return 'Completada';
+  if (normalized === 'en_ejecucion') return 'En ejecución';
+  return 'Pendiente';
+}
+
+function listItems(items, mapper) {
+  const rows = Array.isArray(items) ? items.filter(Boolean) : [];
+  if (!rows.length) return '<p class="muted">No hay registros asociados.</p>';
+  return `<ul>${rows.map((item) => `<li>${escapeHtml(mapper(item))}</li>`).join('')}</ul>`;
+}
+
+function checklistRows(rows) {
+  const safeRows = Array.isArray(rows) ? rows.slice(0, 80) : [];
+  if (!safeRows.length) return '<p class="muted">No hay checklist cargado para esta auditoría.</p>';
+  return `
+    <table>
+      <thead><tr><th>Cláusula</th><th>Control</th><th>Resultado</th><th>Nota</th></tr></thead>
+      <tbody>
+        ${safeRows.map((row) => `
+          <tr>
+            <td>${escapeHtml(publicText(row.clause))}</td>
+            <td>${escapeHtml(publicText(row.control_title || row.control_code, 'Control sin nombre'))}</td>
+            <td>${escapeHtml(publicText(row.result || row.initial_status, 'Pendiente'))}</td>
+            <td>${escapeHtml(publicText(row.notes, '-'))}</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  `;
+}
+
+async function buildGeneratedAuditReport(audit, requestId) {
+  const [tenantResult, reviewsResult, findingsResult, actionsResult] = await Promise.all([
+    pool.query('SELECT name FROM tenants WHERE id = $1::uuid LIMIT 1', [audit.tenant_id]),
+    pool.query(
+      `
+      SELECT clause, control_code, control_title, initial_status, initial_health_status, result, notes
+      FROM audit_control_reviews
+      WHERE audit_id = $1::uuid
+      ORDER BY clause NULLS LAST, control_code NULLS LAST, created_at ASC
+      `,
+      [audit.id]
+    ),
+    pool.query(
+      `
+      SELECT title, finding_type, severity, status, description
+      FROM findings
+      WHERE tenant_id = $1::uuid
+        AND audit_id = $2::uuid
+      ORDER BY created_at DESC NULLS LAST
+      LIMIT 40
+      `,
+      [audit.tenant_id, audit.id]
+    ),
+    pool.query(
+      `
+      SELECT title, priority, status, owner, due_date
+      FROM action_plans
+      WHERE tenant_id = $1::uuid
+        AND audit_id = $2::uuid
+      ORDER BY due_date ASC NULLS LAST, created_at DESC NULLS LAST
+      LIMIT 40
+      `,
+      [audit.tenant_id, audit.id]
+    ),
+  ]);
+
+  const tenantName = publicText(tenantResult.rows[0]?.name, 'Empresa');
+  const reviews = reviewsResult.rows || [];
+  const findings = findingsResult.rows || [];
+  const actions = actionsResult.rows || [];
+  const summary = {
+    total: reviews.length,
+    conformes: reviews.filter((row) => row.result === 'conforme').length,
+    observaciones: reviews.filter((row) => row.result === 'observacion').length,
+    noConformes: reviews.filter((row) => row.result === 'no_conforme').length,
+    sinEvidencia: reviews.filter((row) => row.result === 'sin_evidencia').length,
+    pendientes: reviews.filter((row) => !row.result || row.result === 'pendiente').length,
+  };
+  const title = `Informe de Auditoría ${publicText(audit.iso, '')}`.trim();
+  const period = `${auditDate(audit.start_date)} a ${auditDate(audit.end_date)}`;
+  const outputPath = path.join('/tmp', `tcdx-audit-report-${crypto.randomUUID()}.pdf`);
+  const html = renderBaseTemplate({
+    title,
+    body: `
+      <main class="page">
+        <section class="hero keep-together">
+          <div class="brand">TCDX by Tecdex</div>
+          <h1>${escapeHtml(title)}</h1>
+          <p class="subtitle">${escapeHtml(tenantName)} · ${escapeHtml(period)} · ${escapeHtml(auditStatusLabel(audit.status))}</p>
+        </section>
+        <section class="section grid-4">
+          ${[
+            ['Controles revisados', summary.total],
+            ['Conformes', summary.conformes],
+            ['Observaciones', summary.observaciones],
+            ['No conformes', summary.noConformes],
+            ['Sin evidencia', summary.sinEvidencia],
+            ['Pendientes', summary.pendientes],
+          ].map(([label, value]) => `<div class="kpi-card"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`).join('')}
+        </section>
+        <section class="section card keep-together">
+          <h2>Datos de auditoría</h2>
+          <table><tbody>
+            <tr><td><strong>Empresa</strong></td><td>${escapeHtml(tenantName)}</td></tr>
+            <tr><td><strong>Norma</strong></td><td>${escapeHtml(publicText(audit.iso))}</td></tr>
+            <tr><td><strong>Periodo</strong></td><td>${escapeHtml(period)}</td></tr>
+            <tr><td><strong>Alcance</strong></td><td>${escapeHtml(summary.total ? `Checklist operacional de ${summary.total} control(es)` : 'Alcance registrado en la auditoría')}</td></tr>
+            <tr><td><strong>Estado</strong></td><td>${escapeHtml(auditStatusLabel(audit.status))}</td></tr>
+            <tr><td><strong>Equipo auditor</strong></td><td>${escapeHtml([publicText(audit.auditor_name, ''), publicText(audit.auditor_type, '')].filter(Boolean).join(' · ') || '-')}</td></tr>
+            <tr><td><strong>Solicitante</strong></td><td>${escapeHtml(publicText(audit.requester_name))}</td></tr>
+          </tbody></table>
+        </section>
+        <section class="section card">
+          <h2>Programa y muestra</h2>
+          <p>Periodo de trabajo: ${escapeHtml(period)}. Muestra operacional: ${escapeHtml(String(summary.total))} control(es) del checklist disponible.</p>
+          ${checklistRows(reviews)}
+        </section>
+        <section class="section card">
+          <h2>Hallazgos y no conformidades</h2>
+          ${listItems(findings, (item) => [
+            publicText(item.title, 'Hallazgo sin título'),
+            publicText(item.finding_type, ''),
+            publicText(item.severity, ''),
+            publicText(item.status, ''),
+            publicText(item.description, ''),
+          ].filter(Boolean).join(' · '))}
+        </section>
+        <section class="section card">
+          <h2>Seguimiento y acciones</h2>
+          ${listItems(actions, (item) => [
+            publicText(item.title, 'Acción sin título'),
+            publicText(item.priority, ''),
+            publicText(item.status, ''),
+            publicText(item.owner, ''),
+            item.due_date ? `Vence ${auditDate(item.due_date)}` : '',
+          ].filter(Boolean).join(' · '))}
+        </section>
+        <section class="section card keep-together">
+          <h2>Conclusión operacional</h2>
+          <p>Este informe resume datos registrados en la plataforma para revisión humana. No reemplaza aprobación formal, cierre de auditoría ni certificación externa.</p>
+        </section>
+      </main>
+    `,
+    extraStyles: `
+      .muted { color: #64748b; }
+      ul { margin: 0; padding-left: 16px; }
+      li { margin-bottom: 5px; }
+    `,
+  });
+
+  await renderHtmlToPdf({
+    html,
+    outputPath,
+    requestId,
+    metadata: { templateName: 'audit-operational-report' },
+    minBytes: 6 * 1024,
+  });
+
+  return { outputPath, fileName: `${sanitizeGeneratedAuditFileName(`informe-auditoria-${audit.iso || 'iso'}-${auditDate(audit.start_date)}`)}.pdf` };
 }
 
 // =============================
@@ -427,6 +623,46 @@ router.put('/complete/:id', auth, async (req, res) => {
     safeErrorLog('ERROR COMPLETE AUDIT:', err, req);
     return res.status(500).json({
       error: 'Error completando auditoría',
+    });
+  }
+});
+
+// =============================
+// Generar informe operacional de auditoría con autorización tenant
+// =============================
+router.get('/generated-report/:id', auth, async (req, res) => {
+  let outputPath = null;
+
+  try {
+    const current = await getAuditById(req.params.id);
+
+    if (current.rowCount === 0) {
+      return res.status(404).json({ error: 'Auditoría no encontrada' });
+    }
+
+    const audit = current.rows[0];
+
+    if (!canReadAudits(req.user)) {
+      return denyReadAudits(res);
+    }
+
+    if (!ensureTenantAccess(req, audit.tenant_id)) {
+      return res.status(403).json({ error: 'No autorizado para este tenant' });
+    }
+
+    const report = await buildGeneratedAuditReport(audit, req.requestId || null);
+    outputPath = report.outputPath;
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${report.fileName}"`);
+    return fs.createReadStream(outputPath)
+      .on('close', () => fs.unlink(outputPath, () => {}))
+      .pipe(res);
+  } catch (err) {
+    if (outputPath) fs.unlink(outputPath, () => {});
+    safeErrorLog('ERROR GENERATED AUDIT REPORT:', err, req);
+    return res.status(500).json({
+      error: 'Error generando informe de auditoría',
     });
   }
 });
