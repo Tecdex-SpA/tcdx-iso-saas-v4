@@ -245,6 +245,16 @@ Validacion local PASS: `git diff --check`, `npm --prefix frontend run lint`, `np
 
 Autoridades preservadas: backend/API/BD/migraciones/RBAC/modelo comercial/Health authority/formulas oficiales sin cambios. Handoff: `docs/codex/handoffs/UI-OPT-01-PRODUCTIVITY-CLEANUP.md`.
 
+## UI-OPT-02 — PRODUCTIVE CLOSURE
+
+Status: `READY_FOR_HUMAN_REVIEW` local sobre `main@d0326953744354e0e8a6c5be55a0b87f1426fd44` sin commit/push/deploy.
+
+Cambios locales: `/datos` deja de ser wrapper generico y pasa a `DataTraceabilityCenter`, usando endpoints reales existentes (`/api/grc/overview`, `/api/data/domains`, `/api/data/elements`, `/api/data/quality`, `/api/evidence-library/sources`, `/api/grc/official/analytics/catalog`) para mostrar datos disponibles, origen, uso, calidad/confianza, dependencias, faltantes y proxima accion. Report Studio separa `Revisar configuracion` local de `Vista previa` real: no existe preview backend propio de definicion studio, generacion/historial/descarga quedan mapeados a `/api/reports/:id/generate`, `/api/report-generations` y `/api/report-generations/:id/download`. `/exportes` corrige contraste y compacta la lectura ejecutiva/contexto; Dashboard KPI localiza labels visibles sin cambiar identificadores internos ni formulas.
+
+Validacion local PASS: `git diff --check`, `npm --prefix frontend run lint`, `npm --prefix frontend run typecheck`, `npm --prefix frontend run test:phase6-sidebar-rbac`, `npm --prefix frontend run test:phase6-commercial-multitenant` y `npm --prefix frontend run build`. Test focal de reportes Phase 5.5 disponible quedo `BLOCKED_BY_ENV` por `WEB_BASE_URL` ausente. `frontend/tsconfig.json` fue restaurado tras el ajuste automatico de Next.
+
+Autoridades preservadas: backend/API/BD/migraciones/RBAC/modelo comercial/Health authority/formulas oficiales sin cambios. Handoff: `docs/codex/handoffs/UI-OPT-02-PRODUCTIVE-CLOSURE.md`.
+
 ## Handoff relevante
 
 - `docs/codex/handoffs/CONT-00.md`

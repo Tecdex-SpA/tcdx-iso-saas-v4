@@ -70,18 +70,18 @@ export default function ExecutiveIntelligenceBrief({
   }
 
   return (
-    <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+    <section className="rounded-lg border border-[var(--tcdx-color-border)] bg-white p-4 shadow-sm">
       <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
         <div>
-          <div className="text-xs font-bold uppercase tracking-[0.16em] text-blue-600">Intelligence Layer</div>
-          <h2 className="mt-1 text-xl font-bold text-slate-950">Lectura ejecutiva del sistema</h2>
-          <p className="mt-2 max-w-5xl text-sm leading-6 text-slate-600">{executiveSummary(brief)}</p>
+          <div className="text-xs font-bold uppercase tracking-[0.16em] text-[var(--tcdx-color-primary)]">Lectura complementaria</div>
+          <h2 className="mt-1 text-lg font-bold text-[var(--tcdx-color-text-ink)]">Lectura ejecutiva del sistema</h2>
+          <p className="mt-2 max-w-5xl text-sm leading-6 text-[var(--tcdx-color-text-secondary)]">{executiveSummary(brief)}</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
             onClick={onRefresh}
-            className="rounded border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+            className="rounded border border-[var(--tcdx-color-border)] px-3 py-2 text-xs font-semibold text-[var(--tcdx-color-text-ink)] hover:bg-[var(--tcdx-color-surface)]"
           >
             Actualizar
           </button>
@@ -95,44 +95,44 @@ export default function ExecutiveIntelligenceBrief({
         </div>
       </div>
 
-      <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
-          <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Estado general</div>
+      <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="rounded-lg border border-[var(--tcdx-color-border)] bg-[var(--tcdx-color-surface)] p-3">
+          <div className="text-xs font-semibold uppercase tracking-wide text-[var(--tcdx-color-text-muted)]">Estado general</div>
           <div className={`mt-2 inline-flex rounded-full border px-3 py-1 text-sm font-semibold ${stateClass}`}>
             {cleanText(brief.overall?.state, 'sin estado')}
           </div>
         </div>
-        <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
-          <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Score global</div>
+        <div className="rounded-lg border border-[var(--tcdx-color-border)] bg-[var(--tcdx-color-surface)] p-3">
+          <div className="text-xs font-semibold uppercase tracking-wide text-[var(--tcdx-color-text-muted)]">Score global</div>
           <div className={`mt-2 inline-flex rounded-full border px-3 py-1 text-sm font-semibold ${scoreClass}`}>
             {formatScore(score)}
           </div>
         </div>
-        <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
-          <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Audit readiness</div>
-          <div className="mt-2 text-2xl font-bold text-slate-950">{formatScore(brief.audit_readiness?.score)}</div>
-          <div className="mt-1 text-xs text-slate-500">{cleanText(brief.audit_readiness?.state, 'sin estado')}</div>
+        <div className="rounded-lg border border-[var(--tcdx-color-border)] bg-[var(--tcdx-color-surface)] p-3">
+          <div className="text-xs font-semibold uppercase tracking-wide text-[var(--tcdx-color-text-muted)]">Preparación auditora</div>
+          <div className="mt-2 text-xl font-bold text-[var(--tcdx-color-text-ink)]">{formatScore(brief.audit_readiness?.score)}</div>
+          <div className="mt-1 text-xs text-[var(--tcdx-color-text-secondary)]">{cleanText(brief.audit_readiness?.state, 'sin estado')}</div>
         </div>
-        <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
-          <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Riesgo principal</div>
-          <div className="mt-2 text-sm font-semibold text-slate-900">{cleanText(risk?.title || risk?.rule_key, 'Sin riesgo crítico')}</div>
-          <div className="mt-1 text-xs text-slate-500">{cleanText(risk?.severity || risk?.category, 'no informado')}</div>
+        <div className="rounded-lg border border-[var(--tcdx-color-border)] bg-[var(--tcdx-color-surface)] p-3">
+          <div className="text-xs font-semibold uppercase tracking-wide text-[var(--tcdx-color-text-muted)]">Riesgo principal</div>
+          <div className="mt-2 text-sm font-semibold text-[var(--tcdx-color-text-ink)]">{cleanText(risk?.title || risk?.rule_key, 'Sin riesgo crítico')}</div>
+          <div className="mt-1 text-xs text-[var(--tcdx-color-text-secondary)]">{cleanText(risk?.severity || risk?.category, 'no informado')}</div>
         </div>
       </div>
 
-      <div className="mt-5 grid gap-5 xl:grid-cols-[1fr_360px]">
+      <div className="mt-4 grid gap-4 xl:grid-cols-[1fr_340px]">
         <div>
-          <div className="mb-3 text-sm font-semibold text-slate-900">3 acciones prioritarias</div>
+          <div className="mb-3 text-sm font-semibold text-[var(--tcdx-color-text-ink)]">3 acciones prioritarias</div>
           <NextBestActionsPanel brief={brief} maxItems={3} />
         </div>
         <div className="space-y-3">
-          <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
-            <div className="text-sm font-semibold text-slate-900">Confianza</div>
+          <div className="rounded-lg border border-[var(--tcdx-color-border)] bg-[var(--tcdx-color-surface)] p-3">
+            <div className="text-sm font-semibold text-[var(--tcdx-color-text-ink)]">Confianza</div>
             <div className="mt-3">
               <IntelligenceConfidenceBadge brief={brief} />
             </div>
             {brief.metadata?.ai_used === false && (
-              <p className="mt-3 text-sm leading-6 text-slate-600">
+              <p className="mt-3 text-sm leading-6 text-[var(--tcdx-color-text-secondary)]">
                 IA narrativa desactivada o en fallback. La lectura se mantiene con reglas determinísticas.
               </p>
             )}

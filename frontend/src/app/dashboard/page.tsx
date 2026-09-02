@@ -848,7 +848,17 @@ function getKpiStatusClass(color?: string | null) {
   return 'bg-[var(--tcdx-color-surface-alt)] text-[var(--tcdx-color-text-primary)] border-[var(--tcdx-color-border)]';
 }
 
+function kpiCodeLabel(code?: string | null) {
+  const value = String(code || '').trim();
+  if (!value) return 'Sin dato';
+  if (value.startsWith('KPI-HLT-')) return 'Indicador Health';
+  const label = presentationLabel(value);
+  return label === value ? 'Indicador oficial' : label;
+}
 
+function kpiMetaLabel(value?: string | null) {
+  return presentationLabel(value || 'Sin dato');
+}
 
 function getRuntimePeriodLabel() {
   if (typeof document !== 'undefined' && document.documentElement.lang === 'en') {
@@ -3653,7 +3663,7 @@ function KpiRow({ item }: { item: KpiDashboardItem }) {
         <div className="min-w-0">
           <div className="flex items-center gap-2">
             <span className="rounded-lg bg-[var(--tcdx-color-navy)] px-2 py-1 text-[11px] font-semibold text-white">
-              {item.code}
+              {kpiCodeLabel(item.code)}
             </span>
             <span
               className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getKpiStatusClass(
@@ -3672,7 +3682,7 @@ function KpiRow({ item }: { item: KpiDashboardItem }) {
           <div className="mt-3 font-semibold text-[var(--tcdx-color-text-ink)]">{item.name}</div>
 
           <div className="mt-1 text-sm text-[var(--tcdx-color-text-secondary)]">
-            {item.category} · {item.frequency}
+            {kpiMetaLabel(item.category)} · {kpiMetaLabel(item.frequency)}
           </div>
         </div>
 
@@ -3685,7 +3695,7 @@ function KpiRow({ item }: { item: KpiDashboardItem }) {
             Objetivo:{' '}
             {item.target_value !== null && item.target_value !== undefined
               ? formatKpiValue(item.target_value, item.unit)
-              : 'N/A'}
+                : 'No disponible'}
           </div>
         </div>
       </div>
@@ -3702,7 +3712,7 @@ function KpiCard({ item }: { item: KpiDashboardItem }) {
         <div>
           <div className="flex flex-wrap items-center gap-2">
             <span className="rounded-lg bg-[var(--tcdx-color-navy)] px-2 py-1 text-[11px] font-semibold text-white">
-              {item.code}
+              {kpiCodeLabel(item.code)}
             </span>
             <span
               className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getKpiStatusClass(
@@ -3732,26 +3742,26 @@ function KpiCard({ item }: { item: KpiDashboardItem }) {
           <div className="text-3xl font-bold tracking-tight text-[var(--tcdx-color-text-ink)]">
             {formatKpiValue(item.latest_snapshot?.value, item.unit)}
           </div>
-          <div className="mt-1 text-xs text-[var(--tcdx-color-text-secondary)]">{item.frequency}</div>
+          <div className="mt-1 text-xs text-[var(--tcdx-color-text-secondary)]">{kpiMetaLabel(item.frequency)}</div>
         </div>
       </div>
 
       <div className="mt-5 grid grid-cols-2 gap-3">
-        <StatChip label="Categoría" value={item.category} color="text-[var(--tcdx-color-text-ink)]" />
-        <StatChip label="Dirección" value={item.direction} color="text-[var(--tcdx-color-text-ink)]" />
+        <StatChip label="Categoría" value={kpiMetaLabel(item.category)} color="text-[var(--tcdx-color-text-ink)]" />
+        <StatChip label="Dirección" value={kpiMetaLabel(item.direction)} color="text-[var(--tcdx-color-text-ink)]" />
         <StatChip
           label="Objetivo"
           value={
             item.target_value !== null && item.target_value !== undefined
               ? formatKpiValue(item.target_value, item.unit)
-              : 'N/A'
+              : 'No disponible'
           }
           color="text-[var(--tcdx-color-text-ink)]"
         />
         <StatChip
           label="Delta"
           value={
-            item.delta !== null && item.delta !== undefined ? item.delta.toFixed(2) : 'N/A'
+            item.delta !== null && item.delta !== undefined ? item.delta.toFixed(2) : 'No disponible'
           }
           color={
             item.delta !== null && item.delta !== undefined && item.delta < 0

@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
-import { ApiClientError, apiRequestJson, apiRequestJsonSingleFlight, isUuid } from '@/utils/apiClient';
+import { ApiClientError, apiRequestJson, apiRequestJsonSingleFlight, buildTenantHeaders, getApiBaseUrl, isUuid } from '@/utils/apiClient';
 import { getUserIdFromToken } from '@/utils/auth';
 import { presentationLabel, presentationOptionLabel } from '@/utils/presentationLabels';
 
@@ -97,6 +97,19 @@ function compact(value: unknown) {
   if (value === null || value === undefined || value === '') return 'Sin dato';
   if (typeof value === 'object') return JSON.stringify(value).slice(0, 220);
   return String(value);
+}
+
+function reportGenerationId(result: Entity | null) {
+  const generation = result?.generation as Entity | undefined;
+  const directId = result?.id;
+  return compact(generation?.id || directId);
+}
+
+function reportDownloadHref(result: Entity | null) {
+  const generation = result?.generation as Entity | undefined;
+  const generationId = generation?.id || result?.id;
+  if (!generationId) return null;
+  return `/api/report-generations/${encodeURIComponent(String(generationId))}/download`;
 }
 
 function codePrefix(kind: BuilderKind) {
@@ -386,10 +399,21 @@ export default function OperationalBuilder({ kind, title, description, domain, d
 
   const previewConfig = async () => {
     if (!validateForm()) return;
+    if (isReportBuilder) {
+      setPreview({
+        status: 'configuration_reviewed',
+        report_key: form.code,
+        result_code: form.resultCode,
+        format: form.format,
+        period: { start: form.periodStart, end: form.periodEnd },
+      });
+      pushLog('revisión', 'completed', 'Configuración revisada en cliente. La vista previa de definición no existe como endpoint backend.');
+      return;
+    }
     const payload = await runStep('preview', () => apiRequestJson(`/api/grc/official/analytics/${encodeURIComponent(form.resultCode)}`, {
       method: 'POST',
       body: JSON.stringify(officialPreviewPayload(kind, form)),
-      fallbackMessage: 'Preview oficial no disponible.',
+      fallbackMessage: 'Vista previa oficial no disponible.',
     }));
     const data = dataOf<Entity>(payload);
     if (data?.value === null || data?.value === undefined) {
@@ -501,6 +525,31 @@ export default function OperationalBuilder({ kind, title, description, domain, d
     await loadHistory();
   };
 
+  const downloadReportOutput = async () => {
+    const href = reportDownloadHref(result);
+    if (!href) {
+      setErrors(['Genera el reporte antes de descargar la salida.']);
+      return;
+    }
+    await runStep('descarga', async () => {
+      const { headers } = buildTenantHeaders();
+      const requestHeaders = new Headers(headers);
+      requestHeaders.delete('Content-Type');
+      const response = await fetch(`${getApiBaseUrl()}${href}`, { headers: requestHeaders });
+      if (!response.ok) throw new ApiClientError(`HTTP_${response.status}`, 'No fue posible descargar la salida del reporte.', response.status);
+      const blob = await response.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = objectUrl;
+      anchor.download = `reporte-${reportGenerationId(result)}.${form.format}`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(objectUrl);
+      return true;
+    });
+  };
+
   const runId = (preview?.calculation_run_id || result?.calculation_run_id || (result?.generation as Entity | undefined)?.id) as string | undefined;
 
   return (
@@ -586,7 +635,7 @@ export default function OperationalBuilder({ kind, title, description, domain, d
 
       <div className="mt-4 flex flex-wrap gap-2">
         {!isReportBuilder && <button type="button" data-testid={`builder-${testKey}-validate`} disabled={busy} onClick={validateForm} className="rounded-md border border-[var(--tcdx-color-border)] px-3 py-2 text-sm font-semibold disabled:bg-slate-100 disabled:text-slate-500">Validar</button>}
-        <button type="button" data-testid={`builder-${testKey}-preview`} disabled={busy} onClick={previewConfig} className="rounded-md border border-[var(--tcdx-color-border)] px-3 py-2 text-sm font-semibold disabled:bg-slate-100 disabled:text-slate-500">Previsualizar</button>
+        <button type="button" data-testid={`builder-${testKey}-preview`} disabled={busy} onClick={previewConfig} className="rounded-md border border-[var(--tcdx-color-border)] px-3 py-2 text-sm font-semibold disabled:bg-slate-100 disabled:text-slate-500">{isReportBuilder ? 'Revisar configuración' : 'Previsualizar'}</button>
         <button type="button" data-testid={`builder-${testKey}-save`} disabled={busy} onClick={saveDraft} className="rounded-md bg-[var(--tcdx-color-action-primary)] px-3 py-2 text-sm font-semibold text-white disabled:bg-slate-300 disabled:text-slate-700">{isReportBuilder ? 'Guardar definición' : 'Guardar draft'}</button>
         {!isReportBuilder && <button type="button" data-testid={`builder-${testKey}-publish`} disabled={busy || !entity?.id} onClick={publish} className="rounded-md border border-[var(--tcdx-color-border)] px-3 py-2 text-sm font-semibold disabled:bg-slate-100 disabled:text-slate-500">Publicar / aprobar</button>}
         <button type="button" data-testid={`builder-${testKey}-execute`} disabled={busy || !entity?.id} onClick={execute} className="rounded-md border border-[var(--tcdx-color-border)] px-3 py-2 text-sm font-semibold disabled:bg-slate-100 disabled:text-slate-500">{isReportBuilder ? 'Generar reporte' : 'Ejecutar'}</button>
@@ -595,15 +644,16 @@ export default function OperationalBuilder({ kind, title, description, domain, d
 
       <div className="mt-4 grid gap-3 lg:grid-cols-3">
         <article className="rounded-md border border-[var(--tcdx-color-border)] p-3 text-sm">
-          <div className="font-semibold">{isReportBuilder ? 'Preview / generación' : 'Resultado / preview'}</div>
+          <div className="font-semibold">{isReportBuilder ? 'Configuración / generación' : 'Resultado / vista previa'}</div>
           <dl className="mt-2 space-y-1 text-xs text-[var(--tcdx-color-text-secondary)]">
             <div className="flex justify-between gap-3"><dt>{isReportBuilder ? 'Definición' : 'Entidad'}</dt><dd data-testid={`builder-${testKey}-entity`} className="text-right">{compact(entity?.id)}</dd></div>
             {!isReportBuilder && <div className="flex justify-between gap-3"><dt>Secundario</dt><dd className="text-right">{compact(secondaryEntity?.id)}</dd></div>}
-            <div className="flex justify-between gap-3"><dt>{isReportBuilder ? 'Preview' : 'Valor'}</dt><dd data-testid={`builder-${testKey}-value`} className="text-right">{isReportBuilder ? compact(preview?.status || result?.status || 'Sin generar') : compact(preview?.value ?? result?.value ?? (result?.measurement as Entity | undefined)?.value_numeric)}</dd></div>
+            <div className="flex justify-between gap-3"><dt>{isReportBuilder ? 'Revisión' : 'Valor'}</dt><dd data-testid={`builder-${testKey}-value`} className="text-right">{isReportBuilder ? compact(preview?.status || result?.status || 'Sin generar') : compact(preview?.value ?? result?.value ?? (result?.measurement as Entity | undefined)?.value_numeric)}</dd></div>
             {isReportBuilder ? (
               <>
                 <div className="flex justify-between gap-3"><dt>Formato</dt><dd className="text-right">{form.format.toUpperCase()}</dd></div>
                 <div className="flex justify-between gap-3"><dt>Resultado oficial</dt><dd className="text-right">{compact(selectedDefinition?.display_name || form.resultCode)}</dd></div>
+                <div className="flex justify-between gap-3"><dt>Generación</dt><dd className="text-right">{reportGenerationId(result)}</dd></div>
               </>
             ) : (
               <>
@@ -617,6 +667,11 @@ export default function OperationalBuilder({ kind, title, description, domain, d
           <div className="mt-3 flex flex-wrap gap-2 text-xs font-semibold text-[var(--tcdx-color-primary)]">
             {(preview?.explanation_url as string | undefined) && <Link href={preview?.explanation_url as string}>Explicación</Link>}
             {(preview?.lineage_url as string | undefined) && <Link href={preview?.lineage_url as string}>Lineage</Link>}
+            {isReportBuilder && reportDownloadHref(result) ? (
+              <button type="button" onClick={downloadReportOutput} className="font-semibold text-[var(--tcdx-color-primary)]">
+                Descargar salida
+              </button>
+            ) : null}
             {runId && <span>Run {String(runId).slice(0, 8)}</span>}
           </div>
         </article>

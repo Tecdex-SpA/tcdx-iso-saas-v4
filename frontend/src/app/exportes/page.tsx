@@ -1053,8 +1053,8 @@ export default function ExportesPage() {
             )}
           </div>
 
-          <div className="rounded-3xl border border-slate-200 bg-[#0B2F4F] p-5 text-white shadow-sm">
-            <div className="flex items-start gap-4">
+          <div className="rounded-[var(--tcdx-radius-tecdex-sm)] border border-[rgba(255,255,255,0.18)] bg-[var(--tcdx-color-primary)] p-4 text-white shadow-sm">
+            <div className="flex items-start gap-3">
               {selectedClient?.logo_url ? (
                 <Image
                   src={getAbsoluteFileUrl(selectedClient.logo_url)}
@@ -1062,36 +1062,36 @@ export default function ExportesPage() {
                   width={56}
                   height={56}
                   unoptimized
-                  className="h-14 w-14 rounded-2xl border border-white/10 bg-white/10 object-cover"
+                  className="h-12 w-12 rounded-[var(--tcdx-radius-tecdex-sm)] border border-white/20 bg-white/10 object-cover"
                 />
               ) : (
                 <EmptyLogo />
               )}
 
               <div className="min-w-0">
-                <div className="text-xs font-bold uppercase tracking-[0.16em] text-white/50">
+                <div className="text-xs font-bold uppercase tracking-[0.16em] text-white/80">
                   {t('exports.currentContext')}
                 </div>
 
-                <div className="mt-2 truncate text-lg font-bold">
+                <div className="mt-1 truncate text-base font-bold text-white">
                   {selectedClient?.name || t('exports.clientNotSelected')}
                 </div>
 
-                <div className="mt-1 text-sm text-white/65">
+                <div className="mt-1 text-sm text-white/85">
                   {t('exports.premiumDocument')}
                 </div>
 
                 <div className="mt-3 space-y-2">
-                  <div className="rounded-xl border border-white/10 bg-white/10 px-3 py-2 text-xs text-white/75">
+                  <div className="rounded-[var(--tcdx-radius-tecdex-sm)] border border-white/20 bg-white/10 px-3 py-2 text-xs text-white/90">
                     {t('common.period')}: <span className="font-semibold text-white">{period}</span>
                   </div>
 
-                  <div className="rounded-xl border border-white/10 bg-white/10 px-3 py-2 text-xs text-white/75">
+                  <div className="rounded-[var(--tcdx-radius-tecdex-sm)] border border-white/20 bg-white/10 px-3 py-2 text-xs text-white/90">
                     Norma: <span className="font-semibold text-white">{getStandardFullLabel(selectedStandard)}</span>
                   </div>
 
                   {selectedStandard && (
-                    <div className="rounded-xl border border-white/10 bg-white/10 px-3 py-2 text-xs text-white/75">
+                    <div className="rounded-[var(--tcdx-radius-tecdex-sm)] border border-white/20 bg-white/10 px-3 py-2 text-xs text-white/90">
                       Cobertura: <span className="font-semibold text-white">{selectedStandard.coverage_label}</span>
                     </div>
                   )}
