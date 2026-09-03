@@ -177,6 +177,9 @@ const aliasByScope: Record<StatusScope, Record<string, string>> = {
   },
 
   evidence: {
+    activo: 'active',
+    activa: 'active',
+    active: 'active',
     pendiente: 'pending',
     pending: 'pending',
     subida: 'uploaded',

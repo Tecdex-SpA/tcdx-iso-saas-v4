@@ -140,8 +140,26 @@ function isExcludedRow(row = {}) {
   return String(row.status || '').toLowerCase() === 'excluded' || Boolean(row.exclusion_id);
 }
 
+function mojibakeScore(value) {
+  const text = String(value || '');
+  const c1Controls = (text.match(/[\u0080-\u009f]/g) || []).length;
+  const commonMarkers = (text.match(/[ÃÂâ][\u0080-\u00bf€œ„¢šž¢£¤¥¦§¨©ª«¬®¯°±²³´µ¶·¸¹º»¼½¾¿]/g) || []).length;
+  const replacementChars = (text.match(/\uFFFD/g) || []).length;
+  return c1Controls + commonMarkers * 2 + replacementChars * 4;
+}
+
+function repairMojibakeFileName(value) {
+  const raw = String(value || '');
+  if (!raw || mojibakeScore(raw) === 0) return raw;
+
+  const repaired = Buffer.from(raw, 'latin1').toString('utf8');
+  if (!repaired || repaired.includes('\uFFFD')) return raw;
+
+  return mojibakeScore(repaired) < mojibakeScore(raw) ? repaired : raw;
+}
+
 function safeUploadFileName(value, fallback = 'documento') {
-  const base = path.basename(String(value || fallback)).replace(/[\r\n"]/g, '_');
+  const base = path.basename(repairMojibakeFileName(value || fallback)).replace(/[\r\n"]/g, '_');
   const clean = base.replace(/[^\p{L}\p{M}\p{N}.\- ()[\]_,—–]/gu, '_').replace(/_+/g, '_').slice(0, 180);
   return clean || fallback;
 }

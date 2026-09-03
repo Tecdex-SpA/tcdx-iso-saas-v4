@@ -529,7 +529,10 @@
     "workbench": "Controls Workbench",
     "workbenchHelp": "Operational status, evidence, and remediation for the selected operation.",
     "noEnabledControls": "No enabled controls match the selected filter.",
-    "needsEvidenceAttention": "This control needs stronger evidence because it is not healthy.",
+    "needsEvidenceAttention": "This control needs traceable evidence.",
+    "pendingEvidenceReviewAttention": "This control has evidence pending review.",
+    "rejectedEvidenceAttention": "This control has rejected evidence; it needs correction or replacement.",
+    "healthAttention": "This control needs attention because of its effective Health. Review findings, nonconformities, action plans, or official traceability.",
     "disabling": "Disabling...",
     "disable": "Disable",
     "compliant": "Compliant",
@@ -1988,6 +1991,7 @@
       "critical": "Critical"
     },
     "evidence": {
+      "active": "Active",
       "pending": "Pending",
       "uploaded": "Uploaded",
       "approved": "Approved",

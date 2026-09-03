@@ -354,94 +354,180 @@ const enrichedActionPlansSelect = `
     ON tc.control_id = cc.id
 
   LEFT JOIN LATERAL (
-    SELECT
-      COUNT(e.id)::int AS evidence_count,
+    WITH evidence_items AS (
+      SELECT
+        'evidence:' || e.id::text AS item_key,
+        e.id,
+        e.tenant_id,
+        e.control_id,
+        e.tenant_control_id,
+        e.description,
+        e.file_name,
+        e.file_path,
+        e.status,
+        COALESCE(e.validated, false) AS validated,
+        e.reviewed_by,
+        e.reviewed_at,
+        e.expires_at,
+        e.evidence_type,
+        e.rejection_reason,
+        e.created_at,
+        e.metadata->>'action_plan_id' AS action_plan_id,
+        CASE
+          WHEN e.metadata->>'action_plan_id' = ap.id::text THEN true
+          ELSE false
+        END AS linked_to_this_plan,
+        false AS is_document_link,
+        'evidence' AS source_type,
+        e.id AS source_id,
+        NULL::text AS evidence_usage
+      FROM evidences e
+      WHERE e.tenant_id = ap.tenant_id
+        AND (
+          e.metadata->>'action_plan_id' = ap.id::text
+          OR (
+            ap.tenant_control_id IS NOT NULL
+            AND e.tenant_control_id = ap.tenant_control_id
+          )
+        )
 
-      COUNT(e.id) FILTER (
-        WHERE e.metadata->>'action_plan_id' = ap.id::text
+      UNION ALL
+
+      SELECT DISTINCT ON (l.source_type, l.source_id, l.evidence_usage)
+        l.source_type || ':' || l.source_id::text AS item_key,
+        COALESCE(e_link.id, l.id) AS id,
+        l.tenant_id,
+        e_link.control_id,
+        e_link.tenant_control_id,
+        COALESCE(e_link.description, d.file_name, l.target_label, 'Evidencia documental') AS description,
+        COALESCE(e_link.file_name, d.file_name, l.document_key, 'Documento') AS file_name,
+        COALESCE(e_link.file_path, d.local_storage_path, d.file_url) AS file_path,
+        CASE
+          WHEN l.source_type = 'evidence' THEN COALESCE(e_link.status, l.status)
+          ELSE COALESCE(l.status, 'active')
+        END AS status,
+        CASE
+          WHEN l.source_type = 'evidence' THEN COALESCE(e_link.validated, false)
+          ELSE false
+        END AS validated,
+        e_link.reviewed_by,
+        COALESCE(e_link.reviewed_at, l.reviewed_at) AS reviewed_at,
+        e_link.expires_at,
+        COALESCE(e_link.evidence_type, l.evidence_usage) AS evidence_type,
+        e_link.rejection_reason,
+        COALESCE(e_link.created_at, l.reviewed_at, l.updated_at, l.created_at) AS created_at,
+        ap.id::text AS action_plan_id,
+        true AS linked_to_this_plan,
+        true AS is_document_link,
+        l.source_type,
+        l.source_id,
+        l.evidence_usage
+      FROM tenant_document_object_links l
+      LEFT JOIN evidences e_link
+        ON l.source_type = 'evidence'
+       AND e_link.tenant_id = l.tenant_id
+       AND e_link.id = l.source_id
+      LEFT JOIN document_index d
+        ON l.source_type = 'document_index'
+       AND d.tenant_id = l.tenant_id
+       AND d.id = l.source_id
+      WHERE l.tenant_id = ap.tenant_id
+        AND l.target_type = 'action'
+        AND l.target_id = ap.id
+        AND l.is_active = true
+        AND LOWER(COALESCE(l.status, 'active')) = 'active'
+        AND LOWER(COALESCE(l.relation_type, 'associated')) = 'associated'
+        AND l.evidence_usage IN (
+          'action_evidence',
+          'remediation_evidence',
+          'supporting_evidence',
+          'primary_evidence'
+        )
+      ORDER BY l.source_type, l.source_id, l.evidence_usage, COALESCE(l.reviewed_at, l.updated_at, l.created_at) DESC NULLS LAST
+    ),
+    deduped_evidence AS (
+      SELECT DISTINCT ON (item_key) *
+      FROM evidence_items
+      ORDER BY item_key, linked_to_this_plan DESC, is_document_link ASC, created_at DESC NULLS LAST
+    )
+    SELECT
+      COUNT(*)::int AS evidence_count,
+
+      COUNT(*) FILTER (
+        WHERE linked_to_this_plan = true
       )::int AS direct_plan_evidence_count,
 
-      COUNT(e.id) FILTER (
+      COUNT(*) FILTER (
         WHERE ap.tenant_control_id IS NOT NULL
-          AND e.tenant_control_id = ap.tenant_control_id
-          AND COALESCE(e.metadata->>'action_plan_id', '') <> ap.id::text
+          AND tenant_control_id = ap.tenant_control_id
+          AND linked_to_this_plan = false
       )::int AS control_context_evidence_count,
 
-      COUNT(e.id) FILTER (
+      COUNT(*) FILTER (
         WHERE (
-          LOWER(COALESCE(e.status, '')) IN ('aprobada', 'aprobado', 'approved')
-          OR e.validated = true
+          LOWER(COALESCE(status, '')) IN ('aprobada', 'aprobado', 'approved')
+          OR validated = true
         )
       )::int AS approved_evidence_count,
 
-      COUNT(e.id) FILTER (
-        WHERE e.metadata->>'action_plan_id' = ap.id::text
+      COUNT(*) FILTER (
+        WHERE linked_to_this_plan = true
           AND (
-            LOWER(COALESCE(e.status, '')) IN ('aprobada', 'aprobado', 'approved')
-            OR e.validated = true
+            LOWER(COALESCE(status, '')) IN ('aprobada', 'aprobado', 'approved')
+            OR validated = true
           )
       )::int AS approved_direct_plan_evidence_count,
 
-      COUNT(e.id) FILTER (
-        WHERE LOWER(COALESCE(e.status, '')) IN ('pendiente', 'pending', 'en revision', 'en revisión')
+      COUNT(*) FILTER (
+        WHERE LOWER(COALESCE(status, '')) IN ('pendiente', 'pending', 'en revision', 'en revisión')
+          OR (
+            is_document_link = true
+            AND COALESCE(validated, false) = false
+            AND LOWER(COALESCE(status, '')) NOT IN ('aprobada', 'aprobado', 'approved', 'rechazada', 'rechazado', 'rejected')
+          )
       )::int AS pending_evidence_count,
 
-      COUNT(e.id) FILTER (
-        WHERE LOWER(COALESCE(e.status, '')) IN ('rechazada', 'rechazado', 'rejected')
+      COUNT(*) FILTER (
+        WHERE LOWER(COALESCE(status, '')) IN ('rechazada', 'rechazado', 'rejected')
       )::int AS rejected_evidence_count,
 
-      MAX(e.created_at) AS latest_evidence_at,
+      MAX(created_at) AS latest_evidence_at,
 
       (
-        SELECT e2.status
-        FROM evidences e2
-        WHERE e2.tenant_id = ap.tenant_id
-          AND (
-            e2.metadata->>'action_plan_id' = ap.id::text
-            OR (
-              ap.tenant_control_id IS NOT NULL
-              AND e2.tenant_control_id = ap.tenant_control_id
-            )
-          )
-        ORDER BY e2.created_at DESC
+        SELECT latest.status
+        FROM deduped_evidence latest
+        ORDER BY latest.created_at DESC NULLS LAST
         LIMIT 1
       ) AS latest_evidence_status,
 
       jsonb_agg(
         jsonb_build_object(
-          'id', e.id,
-          'tenant_id', e.tenant_id,
-          'control_id', e.control_id,
-          'tenant_control_id', e.tenant_control_id,
-          'description', e.description,
-          'file_name', e.file_name,
-          'file_path', e.file_path,
-          'status', e.status,
-          'validated', e.validated,
-          'reviewed_by', e.reviewed_by,
-          'reviewed_at', e.reviewed_at,
-          'expires_at', e.expires_at,
-          'evidence_type', e.evidence_type,
-          'rejection_reason', e.rejection_reason,
-          'created_at', e.created_at,
-          'action_plan_id', e.metadata->>'action_plan_id',
-          'linked_to_this_plan', CASE
-            WHEN e.metadata->>'action_plan_id' = ap.id::text THEN true
-            ELSE false
-          END
+          'id', id,
+          'tenant_id', tenant_id,
+          'control_id', control_id,
+          'tenant_control_id', tenant_control_id,
+          'description', description,
+          'file_name', file_name,
+          'file_path', file_path,
+          'status', status,
+          'validated', validated,
+          'reviewed_by', reviewed_by,
+          'reviewed_at', reviewed_at,
+          'expires_at', expires_at,
+          'evidence_type', evidence_type,
+          'rejection_reason', rejection_reason,
+          'created_at', created_at,
+          'action_plan_id', action_plan_id,
+          'linked_to_this_plan', linked_to_this_plan,
+          'is_document_link', is_document_link,
+          'source_type', source_type,
+          'source_id', source_id,
+          'evidence_usage', evidence_usage
         )
-        ORDER BY e.created_at DESC
-      ) FILTER (WHERE e.id IS NOT NULL) AS evidences_json
+        ORDER BY created_at DESC
+      ) FILTER (WHERE id IS NOT NULL) AS evidences_json
 
-    FROM evidences e
-    WHERE e.tenant_id = ap.tenant_id
-      AND (
-        e.metadata->>'action_plan_id' = ap.id::text
-        OR (
-          ap.tenant_control_id IS NOT NULL
-          AND e.tenant_control_id = ap.tenant_control_id
-        )
-      )
+    FROM deduped_evidence
   ) ev ON TRUE
 
   LEFT JOIN LATERAL (

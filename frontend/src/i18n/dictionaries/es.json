@@ -529,7 +529,10 @@
     "workbench": "Workbench de controles",
     "workbenchHelp": "Estado operativo, evidencia y remediación para la operación seleccionada.",
     "noEnabledControls": "No hay controles habilitados para el filtro seleccionado.",
-    "needsEvidenceAttention": "Este control requiere refuerzo de evidencia porque no está saludable.",
+    "needsEvidenceAttention": "Este control requiere evidencia trazable.",
+    "pendingEvidenceReviewAttention": "Este control tiene evidencia pendiente de revisión.",
+    "rejectedEvidenceAttention": "Este control tiene evidencia rechazada; requiere corrección o reemplazo.",
+    "healthAttention": "Este control requiere atención por su Health efectivo. Revisa hallazgos, no conformidades, planes o trazabilidad oficial.",
     "disabling": "Deshabilitando...",
     "disable": "Deshabilitar",
     "compliant": "Cumple",
@@ -1988,6 +1991,7 @@
       "critical": "Crítico"
     },
     "evidence": {
+      "active": "Activa",
       "pending": "Pendiente",
       "uploaded": "Subida",
       "approved": "Aprobada",

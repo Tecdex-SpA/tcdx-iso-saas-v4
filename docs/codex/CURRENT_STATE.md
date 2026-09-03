@@ -285,6 +285,16 @@ Validación local PASS: `git diff --check`, `node --check backend/src/services/p
 
 Autoridades preservadas: BD/migraciones/RBAC/modelo comercial/Health formulas/AI runtime sin cambios; sin lógica tenant-specific. Handoff: `docs/codex/handoffs/UI-FUNC-05-REPORTS-AUDIT-PRODUCT-CLOSEOUT.md`.
 
+## BUGFIX-04R-05-06-07
+
+Status: `READY_FOR_HUMAN_REVIEW` local sobre `main@caba0de53e832a4a2297a26e0d290e4d5280b91c` sin commit/push/deploy.
+
+Cambios locales: Workbench de controles separa semántica de evidencia vs Health efectivo y elimina la contradicción de pedir refuerzo de evidencia cuando existen evidencias aprobadas y la atención viene de otra causa. Planes de Acción proyecta asociaciones reales de Biblioteca desde `tenant_document_object_links target_type='action'` sin duplicar documentos ni inventar aprobaciones. `safeUploadFileName` preserva Unicode corrigiendo sólo mojibake latin1/utf8 detectable antes de sanitizar. `/hallazgos` envía feedback IA al contrato backend existente `POST /api/ai-feedback`.
+
+Validación local PASS: `node -c` de backend tocado, `npm --prefix backend run check`, `npm --prefix frontend run typecheck`, `npm --prefix frontend run lint`, `npm --prefix frontend run test:phase6-sidebar-rbac`, `npm --prefix frontend run test:phase6-commercial-multitenant`, `git diff --check` y `npm --prefix frontend run build`. `frontend/tsconfig.json` fue restaurado tras el ajuste automático de Next. `RUNTIME_VALIDATION=DEFERRED_TO_POSTDEPLOY_HUMAN_REVIEW`.
+
+Autoridades preservadas: BD/migraciones/RBAC/modelo comercial/Health formulas/AI runtime sin cambios; sin lógica tenant-specific. Handoff: `docs/codex/handoffs/BUGFIX-04R-05-06-07-CLOSEOUT.md`.
+
 ## Handoff relevante
 
 - `docs/codex/handoffs/CONT-00.md`
@@ -344,6 +354,7 @@ Autoridades preservadas: BD/migraciones/RBAC/modelo comercial/Health formulas/AI
 - `docs/codex/handoffs/UI-OPT-03-REPORTING-CONTRAST-LOCALIZATION-CLOSEOUT.md`
 - `docs/codex/handoffs/UI-FUNC-04-REPORTS-AUDIT-UX-CLOSEOUT.md`
 - `docs/codex/handoffs/UI-FUNC-05-REPORTS-AUDIT-PRODUCT-CLOSEOUT.md`
+- `docs/codex/handoffs/BUGFIX-04R-05-06-07-CLOSEOUT.md`
 - `docs/codex/handoffs/RBAC-01-BRAND-01.md`
 - `docs/codex/handoffs/RBAC-02-COMMERCIAL-GATING.md`
 - `docs/codex/handoffs/AI-ADDON-01-COMMERCIAL-UI-01.md`

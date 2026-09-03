@@ -403,6 +403,31 @@ function getEffectiveHealthScore(item: WorkbenchItem): number {
   return toNumber(raw);
 }
 
+function getWorkbenchAttentionMessage(item: WorkbenchItem, t: (key: string) => string): string | null {
+  const evidenceQuality = String(item.evidence_quality_status || '').toLowerCase();
+  const evidenceCount = toNumber(item.evidence_count);
+  const pendingEvidenceCount = toNumber(item.pending_evidence_count);
+  const effectiveHealth = normalizeHealthStatus(getEffectiveHealthStatus(item));
+
+  if (evidenceCount <= 0 || evidenceQuality === 'sin_evidencia') {
+    return t('controls.needsEvidenceAttention');
+  }
+
+  if (pendingEvidenceCount > 0 || evidenceQuality === 'pendiente_revision') {
+    return t('controls.pendingEvidenceReviewAttention');
+  }
+
+  if (evidenceQuality === 'rechazada') {
+    return t('controls.rejectedEvidenceAttention');
+  }
+
+  if (effectiveHealth !== 'saludable') {
+    return t('controls.healthAttention');
+  }
+
+  return null;
+}
+
 function mapEvidenceQualityLabel(value?: string | null): string {
   const normalized = String(value || '').toLowerCase();
 
@@ -1737,9 +1762,8 @@ function ControlesPageContent() {
                               expandedEvidence[item.tenant_control_id] === true;
                             const evidenceItems =
                               evidencesByControl[item.tenant_control_id] || [];
-                            const needsEvidenceAttention =
-                              normalizeHealthStatus(getEffectiveHealthStatus(item)) !==
-                              'saludable';
+                            const workbenchAttentionMessage =
+                              getWorkbenchAttentionMessage(item, t);
 
                             return (
                               <article
@@ -1813,9 +1837,9 @@ function ControlesPageContent() {
                                       </div>
                                     )}
 
-                                    {needsEvidenceAttention && (
+                                    {workbenchAttentionMessage && (
                                       <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-                                        {t('controls.needsEvidenceAttention')}
+                                        {workbenchAttentionMessage}
                                       </div>
                                     )}
                                   </div>

@@ -1840,7 +1840,7 @@ function HallazgosPageContent() {
           },
         };
 
-        const res = await fetch(`${apiBase}/ai-feedback`, {
+        const res = await fetch(`${apiBase}/api/ai-feedback`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
