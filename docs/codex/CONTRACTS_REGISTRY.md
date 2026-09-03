@@ -582,6 +582,36 @@ CONTRACTS_VERSIONED: `[]`
 
 UNNECESSARY_VERSION_BUMPS: `0`
 
+## ACTION-TRACEABILITY Final Integrity Contract
+
+Status: READY_FOR_HUMAN_REVIEW local on `main@dabb140076f341b76058f75e3bf6c0112ac0470f`.
+
+Persistent authorities:
+
+| Link | Authority |
+|---|---|
+| NC -> Action Plan | `grc_phase2_relations source_type='nonconformity', target_type='action', relation_type='originates_action'`; direct FK/source fields remain compatibility. |
+| Finding -> Action Plan | `grc_phase2_relations source_type='finding', target_type='action', relation_type='originates_action'`; direct FK/source fields remain compatibility. |
+| Recommendation -> Action Plan | `iso_recommended_action_conversions recommendation_id -> target_type/target_id`. |
+| Suggestion -> Action Plan | `iso_operational_suggestions.created_record_type/created_record_id`. |
+| Plan -> Origins | `action_plans` enriched reader exposes `origin_relations_json` from active `grc_phase2_relations`; recommendation/suggestion inverse lookup remains by `target_id`/`created_record_id`. |
+
+Active control remediation:
+
+```text
+ACTIVE_CONTROL_REMEDIATION_STATUSES = ['abierto','en progreso','bloqueado']
+```
+
+This is equivalent to `uq_action_plans_one_active_control_remediation`:
+`action_plans(tenant_id, tenant_control_id, iso_code)` where `source_type='control'`, `tenant_control_id IS NOT NULL` and `status IN ('abierto','en progreso','bloqueado')`.
+
+Progress history:
+
+- `action_plan_updates.progress_percent` is `NOT NULL DEFAULT 0`; `NULL` is not a valid no-change marker.
+- Pure reuse writes no `action_plan_updates` row.
+- Reuse with an actual plan update writes the current progress, never a placeholder zero.
+- New plan creation keeps `0` as a valid initial progress value.
+
 ## PUI-07-HF4 Severity Index Source Ownership Closure
 
 Status: DONE_LOCAL on branch `fix/pui-07-hf4-severity-index-source-closure`; runtime validation pending by design.

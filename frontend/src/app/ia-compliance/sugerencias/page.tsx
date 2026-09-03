@@ -502,9 +502,9 @@ export default function AiSuggestionsPage() {
       }
 
       if (appliedArtifact) {
-        alert('Sugerencia aplicada y plan de acción borrador creado correctamente.');
+        setError('');
       } else {
-        alert('Sugerencia marcada como aplicada.');
+        setError('');
       }
     } catch (err) {
       console.error('ERROR APPLY AI SUGGESTION:', err);

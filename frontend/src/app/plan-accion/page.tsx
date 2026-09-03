@@ -856,17 +856,18 @@ function PlanAccionPageContent() {
     if (creating) return;
 
     if (!selectedISO) {
-      alert('Debes seleccionar una norma');
+      setErrorMessage('Debes seleccionar una norma');
       return;
     }
 
     if (!form.title.trim()) {
-      alert('El título es obligatorio');
+      setErrorMessage('El título es obligatorio');
       return;
     }
 
     try {
       setCreating(true);
+      setErrorMessage('');
 
       const res = await fetch(`${API_URL}/api/action-plans`, {
         method: 'POST',
@@ -889,7 +890,7 @@ function PlanAccionPageContent() {
       const json = await res.json();
 
       if (!res.ok) {
-        alert(json.error || 'Error creando plan');
+        setErrorMessage(json.error || 'Error creando plan');
         return;
       }
 
@@ -909,7 +910,7 @@ function PlanAccionPageContent() {
       }
     } catch (err) {
       console.error('ERROR CREATE ACTION PLAN:', err);
-      alert('Error creando plan');
+      setErrorMessage(getErrorMessage(err, 'Error creando plan'));
     } finally {
       setCreating(false);
     }
@@ -920,6 +921,7 @@ function PlanAccionPageContent() {
 
     try {
       setSavingId(row.id);
+      setErrorMessage('');
 
       const res = await fetch(`${API_URL}/api/action-plans/${row.id}`, {
         method: 'PUT',
@@ -940,7 +942,7 @@ function PlanAccionPageContent() {
       const json = await res.json();
 
       if (!res.ok) {
-        alert(json.error || 'Error actualizando plan');
+        setErrorMessage(json.error || 'Error actualizando plan');
         return;
       }
 
@@ -949,7 +951,7 @@ function PlanAccionPageContent() {
       );
     } catch (err) {
       console.error('ERROR UPDATE ACTION PLAN:', err);
-      alert('Error actualizando plan');
+      setErrorMessage(getErrorMessage(err, 'Error actualizando plan'));
     } finally {
       setSavingId('');
     }
@@ -971,7 +973,7 @@ function PlanAccionPageContent() {
     const json = await res.json();
 
     if (!res.ok) {
-      alert(json.error || 'Error eliminando plan');
+      setErrorMessage(json.error || 'Error eliminando plan');
       return;
     }
 

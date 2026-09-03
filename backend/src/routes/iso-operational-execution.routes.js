@@ -1,6 +1,5 @@
 const express = require('express');
 const router = express.Router();
-const { errorDetail } = require('../utils/errorResponse');
 const isoOperationalExecution = require('../services/isoOperationalExecution.service');
 const { requireCommercialCapability } = require('../middleware/commercialEntitlement.middleware');
 
@@ -32,7 +31,6 @@ function handleError(res, error) {
     ok: false,
     code: error.code || 'ISO_OPERATIONAL_EXECUTION_ERROR',
     error: error.message || 'Error procesando ejecucion operativa ISO',
-    ...errorDetail(error),
   });
 }
 

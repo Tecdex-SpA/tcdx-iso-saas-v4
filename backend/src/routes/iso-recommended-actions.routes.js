@@ -1,6 +1,5 @@
 const express = require('express');
 const router = express.Router();
-const { errorDetail } = require('../utils/errorResponse');
 const isoRecommendedActions = require('../services/isoRecommendedActions.service');
 const { requireCommercialCapability } = require('../middleware/commercialEntitlement.middleware');
 
@@ -33,7 +32,6 @@ function handleError(res, error) {
     ok: false,
     code: error.code || 'ISO_RECOMMENDED_ACTIONS_ERROR',
     error: error.message || 'Error procesando acciones recomendadas ISO',
-    ...errorDetail(error),
   });
 }
 

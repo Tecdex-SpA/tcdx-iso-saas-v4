@@ -706,7 +706,7 @@ function NoConformidadesPageContent() {
         confidence: result.ai?.confidence || null,
       });
 
-      alert('Borrador IA guardado correctamente');
+      setAiError('');
     } catch (err) {
       console.error('ERROR SAVE AI NC DRAFT:', err);
       setAiError(getErrorMessage(err, 'No fue posible guardar el borrador IA.'));
@@ -720,7 +720,7 @@ function NoConformidadesPageContent() {
     const aiData = draft?.ai || null;
 
     if (!aiData) {
-      alert('Primero debes generar el borrador IA.');
+      setAiError('Primero debes generar el borrador IA.');
       return;
     }
 
@@ -737,7 +737,7 @@ function NoConformidadesPageContent() {
         await refreshAll();
       }
 
-      alert('Plan de acción generado o reutilizado correctamente desde IA');
+      setAiError('');
     } catch (err) {
       console.error('ERROR APPLY AI NC DRAFT TO ACTION PLAN:', err);
       setAiError(
@@ -989,7 +989,7 @@ function NoConformidadesPageContent() {
     const json: unknown = await res.json();
 
     if (!res.ok) {
-      alert(getApiErrorMessage(json, 'Error actualizando no conformidad'));
+      setAiError(getApiErrorMessage(json, 'Error actualizando no conformidad'));
       return;
     }
 
@@ -1002,12 +1002,12 @@ function NoConformidadesPageContent() {
     const ncIso = getNcIso(nc);
 
     if (!operationalCodes.has(iso)) {
-      alert('No puedes crear acciones sobre una norma fuera del alcance operativo.');
+      setAiError('No puedes crear acciones sobre una norma fuera del alcance operativo.');
       return;
     }
 
     if (ncIso && !operationalCodes.has(ncIso)) {
-      alert('La no conformidad pertenece a una norma fuera del alcance operativo.');
+      setAiError('La no conformidad pertenece a una norma fuera del alcance operativo.');
       return;
     }
 
@@ -1024,7 +1024,7 @@ function NoConformidadesPageContent() {
         await refreshAll();
       }
 
-      alert('Plan de acción generado o reutilizado correctamente');
+      setAiError('');
     } catch (err) {
       console.error('ERROR CREATE ACTION FROM NC:', err);
       setAiError(getErrorMessage(err, 'Error creando plan de acción'));
