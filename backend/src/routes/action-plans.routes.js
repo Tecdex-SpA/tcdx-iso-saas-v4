@@ -6,6 +6,9 @@ const { requireCommercialCapability } = require('../middleware/commercialEntitle
 const aiContextBuilder = require('../services/aiContextBuilder.service');
 const { runOperationalAiReview } = require('../services/aiOperationalReview.service');
 const { resolveSoAControlReference } = require('../utils/soaControlResolver');
+const {
+  ACTIVE_CONTROL_REMEDIATION_STATUSES,
+} = require('../services/actionPlanTraceability.service');
 
 function getUserTenantId(user) {
   return (
@@ -65,7 +68,6 @@ const allowedApprovalStatuses = [
   'aprobada',
   'devuelta',
 ];
-
 const requireActionsRead = requireCommercialCapability('iso.actions', {
   requiredPermission: 'actions.view',
   mode: 'read',
@@ -250,6 +252,48 @@ function getAutoTrackingComment(currentStatus, nextStatus) {
   return 'Seguimiento actualizado.';
 }
 
+function isActiveControlRemediation({ sourceType, tenantControlId, isoCode, status }) {
+  return (
+    sourceType === 'control' &&
+    Boolean(tenantControlId) &&
+    Boolean(isoCode) &&
+    ACTIVE_CONTROL_REMEDIATION_STATUSES.includes(status)
+  );
+}
+
+async function findActiveControlRemediationPlan(
+  client,
+  { tenantId, tenantControlId, isoCode }
+) {
+  if (!tenantId || !tenantControlId || !isoCode) {
+    return null;
+  }
+
+  const result = await client.query(
+    `
+    SELECT id
+    FROM action_plans
+    WHERE tenant_id = $1
+      AND tenant_control_id = $2
+      AND iso_code = $3
+      AND source_type = 'control'
+      AND status = ANY($4::text[])
+    ORDER BY updated_at DESC NULLS LAST, created_at DESC NULLS LAST
+    LIMIT 1
+    `,
+    [tenantId, tenantControlId, isoCode, ACTIVE_CONTROL_REMEDIATION_STATUSES]
+  );
+
+  return result.rows[0] || null;
+}
+
+function isActiveControlRemediationConflict(error) {
+  return (
+    error?.code === '23505' &&
+    error?.constraint === 'uq_action_plans_one_active_control_remediation'
+  );
+}
+
 /**
  * findings.tenant_control_id apunta a controls.id (legacy).
  * action_plans.tenant_control_id apunta a tenant_controls.id (moderno).
@@ -337,7 +381,8 @@ const enrichedActionPlansSelect = `
     upd.latest_update_comment,
     upd.latest_status_after,
     upd.latest_blocked_reason,
-    COALESCE(upd.updates_json, '[]'::jsonb) AS updates_json
+    COALESCE(upd.updates_json, '[]'::jsonb) AS updates_json,
+    COALESCE(orig.origin_relations_json, '[]'::jsonb) AS origin_relations_json
 
   FROM action_plans ap
   LEFT JOIN findings f
@@ -586,6 +631,30 @@ const enrichedActionPlansSelect = `
     FROM action_plan_updates u
     WHERE u.action_plan_id = ap.id
   ) upd ON TRUE
+
+  LEFT JOIN LATERAL (
+    SELECT jsonb_agg(
+      jsonb_build_object(
+        'source_type', r.source_type,
+        'source_id', r.source_id,
+        'target_type', r.target_type,
+        'target_id', r.target_id,
+        'relation_type', r.relation_type,
+        'status', r.status,
+        'provenance', r.provenance,
+        'created_at', r.created_at,
+        'updated_at', r.updated_at
+      )
+      ORDER BY r.source_type, r.source_id
+    ) FILTER (WHERE r.id IS NOT NULL) AS origin_relations_json
+    FROM grc_phase2_relations r
+    WHERE r.tenant_id = ap.tenant_id
+      AND r.target_type = 'action'
+      AND r.target_id = ap.id
+      AND r.relation_type = 'originates_action'
+      AND r.status = 'active'
+      AND r.valid_to IS NULL
+  ) orig ON TRUE
 `;
 
 const getEnrichedActionPlanById = async (client, id) => {
@@ -1233,7 +1302,6 @@ router.get('/:tenant_id', auth, requireActionsRead, async (req, res) => {
     console.error('ERROR GET ACTION PLANS:', err);
     return res.status(500).json({
       error: 'Error obteniendo planes de acción',
-      detail: err.message,
     });
   }
 });
@@ -1243,6 +1311,7 @@ router.get('/:tenant_id', auth, requireActionsRead, async (req, res) => {
 // =============================
 router.post('/', auth, requireActionsManage, async (req, res) => {
   const client = await pool.connect();
+  let controlRemediationDedupe = null;
 
   try {
     let {
@@ -1443,7 +1512,35 @@ router.post('/', auth, requireActionsManage, async (req, res) => {
       return res.status(400).json({ error: 'source_type inválido' });
     }
 
+    controlRemediationDedupe = {
+      tenantId: tenant_id,
+      tenantControlId: tenant_control_id || null,
+      isoCode: iso_code,
+      sourceType: source.source_type,
+      status: finalStatus,
+    };
+
     await client.query('BEGIN');
+
+    if (isActiveControlRemediation(controlRemediationDedupe)) {
+      const reusablePlan = await findActiveControlRemediationPlan(
+        client,
+        controlRemediationDedupe
+      );
+
+      if (reusablePlan) {
+        const result = await getEnrichedActionPlanById(client, reusablePlan.id);
+
+        await client.query('COMMIT');
+
+        return res.json({
+          ...result.rows[0],
+          ok: true,
+          already_exists: true,
+          idempotency: 'active_control_remediation_reused',
+        });
+      }
+    }
 
     const insertResult = await client.query(
       `
@@ -1523,10 +1620,38 @@ router.post('/', auth, requireActionsManage, async (req, res) => {
     return res.json(result.rows[0]);
   } catch (err) {
     await client.query('ROLLBACK');
+
+    if (
+      isActiveControlRemediationConflict(err) &&
+      isActiveControlRemediation(controlRemediationDedupe)
+    ) {
+      const reusablePlan = await findActiveControlRemediationPlan(
+        pool,
+        controlRemediationDedupe
+      );
+
+      if (reusablePlan) {
+        const result = await getEnrichedActionPlanById(pool, reusablePlan.id);
+        return res.json({
+          ...result.rows[0],
+          ok: true,
+          already_exists: true,
+          idempotency: 'active_control_remediation_reused_after_conflict',
+        });
+      }
+
+      return res.status(409).json({
+        ok: false,
+        code: 'ACTIVE_CONTROL_REMEDIATION_CONFLICT',
+        error:
+          'Ya existe una remediación activa para este control y norma. Revisa el plan activo antes de crear otro.',
+      });
+    }
+
     console.error('ERROR CREATE ACTION PLAN:', err);
     return res
       .status(500)
-      .json({ error: 'Error creando plan de acción', detail: err.message });
+      .json({ error: 'Error creando plan de acción' });
   } finally {
     client.release();
   }
@@ -1592,8 +1717,7 @@ router.put('/:id', auth, requireActionsManage, async (req, res) => {
 
     const shouldCreateTracking =
       String(tracking_comment || '').trim() !== '' ||
-      progress_percent !== undefined ||
-      progress_percent !== null ||
+      (progress_percent !== undefined && progress_percent !== null) ||
       blockedReasonText !== null ||
       nextStatus !== row.status;
 
@@ -1717,7 +1841,6 @@ router.put('/:id', auth, requireActionsManage, async (req, res) => {
     console.error('ERROR UPDATE ACTION PLAN:', err);
     return res.status(500).json({
       error: 'Error actualizando plan de acción',
-      detail: err.message,
     });
   } finally {
     client.release();

@@ -5,6 +5,9 @@ const auth = require('../middleware/auth');
 const aiContextBuilder = require('../services/aiContextBuilder.service');
 const { runOperationalAiReview } = require('../services/aiOperationalReview.service');
 const { normalizeIsoCode } = require('../utils/isoStandards');
+const {
+  upsertActionPlanOriginRelation,
+} = require('../services/actionPlanTraceability.service');
 
 function getUserTenantId(user) {
   return (
@@ -1248,11 +1251,26 @@ router.post('/:id/create-action', auth, async (req, res) => {
       `
       SELECT *
       FROM action_plans
-      WHERE finding_id = $1
-         OR (source_type = 'finding' AND source_id = $1)
+      WHERE tenant_id = $2
+        AND (
+          finding_id = $1
+          OR (source_type = 'finding' AND source_id = $1)
+          OR EXISTS (
+            SELECT 1
+            FROM grc_phase2_relations r
+            WHERE r.tenant_id = action_plans.tenant_id
+              AND r.source_type = 'finding'
+              AND r.source_id = $1
+              AND r.target_type = 'action'
+              AND r.target_id = action_plans.id
+              AND r.relation_type = 'originates_action'
+              AND r.status = 'active'
+              AND r.valid_to IS NULL
+          )
+        )
       LIMIT 1
       `,
-      [id]
+      [id, finding.tenant_id]
     );
 
     if (existingAction.rowCount > 0) {
@@ -1269,6 +1287,18 @@ router.post('/:id/create-action', auth, async (req, res) => {
           [resolvedControl.tenant_control_id_moderno, existing.id]
         );
       }
+
+      await upsertActionPlanOriginRelation(client, {
+        tenantId: finding.tenant_id,
+        originType: 'finding',
+        originId: finding.id,
+        actionPlanId: existing.id,
+        createdBy: getUserId(req.user),
+        provenance: {
+          route: 'findings.create_action',
+          reused: true,
+        },
+      });
 
       await client.query('COMMIT');
 
@@ -1324,6 +1354,18 @@ router.post('/:id/create-action', auth, async (req, res) => {
       ]
     );
 
+    await upsertActionPlanOriginRelation(client, {
+      tenantId: finding.tenant_id,
+      originType: 'finding',
+      originId: finding.id,
+      actionPlanId: actionResult.rows[0].id,
+      createdBy: getUserId(req.user),
+      provenance: {
+        route: 'findings.create_action',
+        reused: false,
+      },
+    });
+
     await client.query(
       `
       INSERT INTO action_plan_updates (
@@ -1369,8 +1411,7 @@ router.post('/:id/create-action', auth, async (req, res) => {
     await client.query('ROLLBACK');
     console.error('ERROR CREATE ACTION FROM FINDING:', err);
     return res.status(500).json({
-      error: 'Error creando acción desde hallazgo',
-      detail: err.message
+      error: 'Error creando acción desde hallazgo'
     });
   } finally {
     client.release();

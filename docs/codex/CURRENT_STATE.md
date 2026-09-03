@@ -1,6 +1,6 @@
 # CURRENT_STATE — TCDX ISO SaaS V4
 
-Actualizado: 2026-09-02
+Actualizado: 2026-09-03
 Repositorio: `Tecdex-SpA/tcdx-iso-saas-v4`
 Remote/base `main` verificado para F6.14-A: `e6b431df521300119efaf9194d3ff4d8e56d7004`
 Fuente: repositorio `main` + handoffs runtime cerrados + evidencia runtime validada por el responsable del proyecto + cierre runtime F6.11-A + cierre runtime F6.11-B + cierre runtime F6.12-A + cierre runtime F6.13-A + cierre local UI-04 + cierre local UI-07.
@@ -295,6 +295,18 @@ Validación local PASS: `node -c` de backend tocado, `npm --prefix backend run c
 
 Autoridades preservadas: BD/migraciones/RBAC/modelo comercial/Health formulas/AI runtime sin cambios; sin lógica tenant-specific. Handoff: `docs/codex/handoffs/BUGFIX-04R-05-06-07-CLOSEOUT.md`.
 
+## ACTION TRACEABILITY SYSTEMIC CLOSEOUT
+
+Status: `READY_FOR_HUMAN_REVIEW` local sobre `main@dabb140076f341b76058f75e3bf6c0112ac0470f` sin commit/push/deploy.
+
+Cambios locales: se cerro la trazabilidad operacional Control/Hallazgo/NC/Recomendacion/Sugerencia/Plan/Evidencia de forma focal. `uq_action_plans_one_active_control_remediation` queda preservado y ahora los writers reutilizan remediacion activa compatible en vez de hacer insert ciego. Recomendaciones usan `iso_recommended_action_conversions` como autoridad de retry/target existente. NC y borradores IA persisten `source_id` trazable. Hallazgos filtra dedupe por tenant. Planes y evidencia conservan documentos asociados sin convertirlos falsamente en aprobacion. PATCH de `progress_percent` ya no modifica progreso cuando el campo esta ausente. Los flujos focales dejan de exponer SQL crudo y no usan `alert()` nativo.
+
+Final integrity verification: `ACTION_TRACEABILITY_FINAL_INTEGRITY_READY` local sobre el mismo base commit. NC/Hallazgo usan `grc_phase2_relations` como autoridad N:N persistente hacia `action_plans` y el reader enriquecido proyecta `origin_relations_json` para reconstruccion desde el plan. Recomendaciones conservan `iso_recommended_action_conversions` y sugerencias conservan `iso_operational_suggestions.created_record_*`. `ACTIVE_CONTROL_REMEDIATION_STATUSES=['abierto','en progreso','bloqueado']` queda centralizado y equivale al predicado SQL real de `uq_action_plans_one_active_control_remediation`. `action_plan_updates.progress_percent` es `NOT NULL DEFAULT 0`; reuse puro no escribe fila y reuse NC con update real conserva `CURRENT_PROGRESS`, sin falso evento 0.
+
+Validacion local PASS: paquete sistemico previo `node -c` de backend tocado, `node backend/src/services/actionTraceabilitySystemic.contract.test.js`, `npm --prefix backend run check`, frontend lint/typecheck/commercial/sidebar/build y `git diff --check`; verificacion final adicional PASS con contrato focal ampliado, `node -c backend/src/services/actionPlanTraceability.service.js`, `node -c backend/src/routes/action-plans.routes.js`, `node -c backend/src/routes/findings.routes.js`, `node -c backend/src/routes/ai-compliance.routes.js`, `node -c backend/src/services/isoOperationalExecution.service.js`, `node -c backend/src/services/actionTraceabilitySystemic.contract.test.js`, `npm --prefix backend run check` y `git diff --check`. No se ejecuto frontend en la verificacion final porque no hubo cambios frontend. Runtime productivo/autenticado pendiente: `DEFERRED_POSTDEPLOY`.
+
+Autoridades preservadas: DB schema/migraciones historicas/RBAC/modelo comercial/Health formulas/AI add-on authority sin cambios; sin logica tenant-specific. Handoff: `docs/codex/handoffs/ACTION-TRACEABILITY-SYSTEMIC-CLOSEOUT.md`.
+
 ## Handoff relevante
 
 - `docs/codex/handoffs/CONT-00.md`
@@ -355,6 +367,7 @@ Autoridades preservadas: BD/migraciones/RBAC/modelo comercial/Health formulas/AI
 - `docs/codex/handoffs/UI-FUNC-04-REPORTS-AUDIT-UX-CLOSEOUT.md`
 - `docs/codex/handoffs/UI-FUNC-05-REPORTS-AUDIT-PRODUCT-CLOSEOUT.md`
 - `docs/codex/handoffs/BUGFIX-04R-05-06-07-CLOSEOUT.md`
+- `docs/codex/handoffs/ACTION-TRACEABILITY-SYSTEMIC-CLOSEOUT.md`
 - `docs/codex/handoffs/RBAC-01-BRAND-01.md`
 - `docs/codex/handoffs/RBAC-02-COMMERCIAL-GATING.md`
 - `docs/codex/handoffs/AI-ADDON-01-COMMERCIAL-UI-01.md`

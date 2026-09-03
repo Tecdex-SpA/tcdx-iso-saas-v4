@@ -1185,7 +1185,7 @@ function HallazgosPageContent() {
 
         const apiBase = (
           process.env.NEXT_PUBLIC_API_URL || ''
-        ).replace(/\/$/, '');
+        ).replace(/\/api\/?$/, '').replace(/\/$/, '');
 
         const payload = {
           ...buildExternalLookupPayload(),
@@ -1970,7 +1970,7 @@ function HallazgosPageContent() {
         confidence: confidence || null,
       });
 
-      alert('Borrador IA guardado correctamente');
+      setAiError('');
     } catch (err) {
       console.error('ERROR SAVE AI SUGGESTION FINDINGS:', err);
       setAiError(getErrorMessage(err, 'No fue posible guardar la sugerencia IA.'));
@@ -1984,7 +1984,7 @@ function HallazgosPageContent() {
     const aiData = analysis?.ai || null;
 
     if (!aiData) {
-      alert('Primero debes generar el análisis IA.');
+      setAiError('Primero debes generar el análisis IA.');
       return;
     }
 
@@ -2005,7 +2005,7 @@ function HallazgosPageContent() {
         setData((prev) => prev.map((p) => (p.id === row.id ? updatedFinding : p)));
       }
 
-      alert('Análisis IA aplicado correctamente al hallazgo');
+      setAiError('');
     } catch (err) {
       console.error('ERROR APPLY AI ANALYSIS TO FINDING:', err);
       setAiError(getErrorMessage(err, 'No fue posible aplicar el análisis IA al hallazgo.'));
@@ -2070,12 +2070,12 @@ function HallazgosPageContent() {
     const aiData = suggestedPlan?.ai || null;
 
     if (!aiData) {
-      alert('Primero debes generar el plan sugerido IA.');
+      setAiError('Primero debes generar el plan sugerido IA.');
       return;
     }
 
     if (!linkedAction?.id) {
-      alert('Primero debes crear o disponer de un plan de acción vinculado.');
+      setAiError('Primero debes crear o disponer de un plan de acción vinculado.');
       return;
     }
 
@@ -2096,7 +2096,7 @@ function HallazgosPageContent() {
         await refreshFindings();
       }
 
-      alert('Plan IA aplicado correctamente al plan de acción');
+      setAiError('');
     } catch (err) {
       console.error('ERROR APPLY AI PLAN TO ACTION:', err);
       setAiError(getErrorMessage(err, 'No fue posible aplicar el plan IA al plan de acción.'));
@@ -2364,17 +2364,17 @@ function HallazgosPageContent() {
     if (creatingFinding) return;
 
     if (!selectedISO) {
-      alert('Debes seleccionar una norma');
+      setAiError('Debes seleccionar una norma');
       return;
     }
 
     if (!form.title.trim()) {
-      alert('El título es obligatorio');
+      setAiError('El título es obligatorio');
       return;
     }
 
     if (!form.tenant_control_id) {
-      alert('Debes asociar un control al hallazgo');
+      setAiError('Debes asociar un control al hallazgo');
       return;
     }
 
@@ -2405,7 +2405,7 @@ function HallazgosPageContent() {
       const json: unknown = await res.json();
 
       if (!res.ok) {
-        alert(getApiErrorMessage(json, 'Error creando hallazgo'));
+        setAiError(getApiErrorMessage(json, 'Error creando hallazgo'));
         return;
       }
 
@@ -2431,13 +2431,10 @@ function HallazgosPageContent() {
         setFocusMessage(
           'Se evitó un doble guardado y se reutilizó el hallazgo ya existente.'
         );
-        alert(
-          'Ya existía un hallazgo idéntico recién creado. No se volvió a duplicar.'
-        );
       }
     } catch (err) {
       console.error('ERROR CREATE FINDING:', err);
-      alert('Error creando hallazgo');
+      setAiError('Error creando hallazgo');
     } finally {
       setCreatingFinding(false);
     }
@@ -2476,7 +2473,7 @@ function HallazgosPageContent() {
       const json: unknown = await res.json();
 
       if (!res.ok) {
-        alert(getApiErrorMessage(json, 'Error actualizando hallazgo'));
+        setAiError(getApiErrorMessage(json, 'Error actualizando hallazgo'));
         return;
       }
 
@@ -2485,7 +2482,7 @@ function HallazgosPageContent() {
       }
     } catch (err) {
       console.error('ERROR UPDATE FINDING:', err);
-      alert('Error actualizando hallazgo');
+      setAiError('Error actualizando hallazgo');
     } finally {
       setSavingId('');
     }
@@ -2507,7 +2504,7 @@ function HallazgosPageContent() {
     const json: unknown = await res.json();
 
     if (!res.ok) {
-      alert(getApiErrorMessage(json, 'Error eliminando hallazgo'));
+      setAiError(getApiErrorMessage(json, 'Error eliminando hallazgo'));
       return;
     }
 
@@ -2518,7 +2515,7 @@ function HallazgosPageContent() {
     if (!token) return;
 
     if (!row.control_description && !row.control_clause && !row.tenant_control_modern_id) {
-      alert(
+      setAiError(
         'Este hallazgo no tiene un control válido asociado. Asocia un control antes de crear la acción.'
       );
       return;
@@ -2537,15 +2534,15 @@ function HallazgosPageContent() {
       const json: unknown = await res.json();
 
       if (!res.ok) {
-        alert(getApiErrorMessage(json, 'Error creando acción'));
+        setAiError(getApiErrorMessage(json, 'Error creando acción'));
         return;
       }
 
       await refreshFindings();
-      alert(asRecord(json).already_exists ? 'La acción ya existía' : 'Acción creada correctamente');
+      setAiError('');
     } catch (err) {
       console.error('ERROR CREATE ACTION FROM FINDING:', err);
-      alert('Error creando acción');
+      setAiError('Error creando acción');
     } finally {
       setActionLoading('');
     }

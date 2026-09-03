@@ -205,6 +205,9 @@ const intelligenceService = require('../services/intelligence/intelligence.servi
 const {
   buildReducedIntelligenceBriefForAiCompliance,
 } = require('../services/intelligence/intelligence.prompt-builder');
+const {
+  upsertActionPlanOriginRelation,
+} = require('../services/actionPlanTraceability.service');
 
 const AI_ENGINE_URL = String(process.env.AI_ENGINE_URL || '').replace(/\/+$/, '');
 
@@ -1615,8 +1618,24 @@ async function getReusableNonconformityActionPlan(
       updated_at
     FROM action_plans
     WHERE tenant_id = $1::uuid
-      AND nonconformity_id = $2::uuid
-      AND source_type = 'nonconformity'
+      AND (
+        (
+          nonconformity_id = $2::uuid
+          AND source_type = 'nonconformity'
+        )
+        OR EXISTS (
+          SELECT 1
+          FROM grc_phase2_relations r
+          WHERE r.tenant_id = action_plans.tenant_id
+            AND r.source_type = 'nonconformity'
+            AND r.source_id = $2::uuid
+            AND r.target_type = 'action'
+            AND r.target_id = action_plans.id
+            AND r.relation_type = 'originates_action'
+            AND r.status = 'active'
+            AND r.valid_to IS NULL
+        )
+      )
       AND (
         $3::uuid IS NULL
         OR tenant_control_id = $3::uuid
@@ -1858,9 +1877,9 @@ async function createDraftActionPlanFromSuggestion(tenantId, suggestion) {
     .filter(Boolean)
     .join('\n\n');
 
-  const sourceType = 'ai_suggestion';
+  const sourceType = 'ia';
   const priority = normalizePriority(payload.priority || input.priority);
-  const status = 'draft';
+  const status = 'abierto';
 
   const result = await pool.query(
     `
@@ -1870,6 +1889,7 @@ async function createDraftActionPlanFromSuggestion(tenantId, suggestion) {
       title,
       description,
       source_type,
+      source_id,
       priority,
       status,
       owner,
@@ -1883,10 +1903,11 @@ async function createDraftActionPlanFromSuggestion(tenantId, suggestion) {
       $3,
       $4,
       $5,
+      $8::uuid,
       $6,
       $7,
       NULL,
-      $8::uuid,
+      $9::uuid,
       NOW(),
       NOW()
     )
@@ -1900,6 +1921,7 @@ async function createDraftActionPlanFromSuggestion(tenantId, suggestion) {
       sourceType,
       priority,
       status,
+      suggestion.id,
       input.finding_id || null,
     ]
   );
@@ -2773,7 +2795,6 @@ router.post('/suggestions/:id/apply', auth, async (req, res) => {
     return res.status(500).json({
       ok: false,
       error: 'Error aplicando sugerencia IA',
-      ...errorDetail(error),
     });
   }
 });
@@ -3412,6 +3433,18 @@ router.post('/apply/nonconformity-draft-to-action-plan', auth, async (req, res) 
         blockedReason: null,
         createdBy: userId,
       });
+
+      await upsertActionPlanOriginRelation(client, {
+        tenantId,
+        originType: 'nonconformity',
+        originId: nonconformity_id || null,
+        actionPlanId: reusablePlan.id,
+        createdBy: userId,
+        provenance: {
+          route: 'ai_compliance.nonconformity_draft_to_action_plan',
+          reused: true,
+        },
+      });
     } else {
       const insertRes = await client.query(
         `
@@ -3421,6 +3454,7 @@ router.post('/apply/nonconformity-draft-to-action-plan', auth, async (req, res) 
           title,
           description,
           source_type,
+          source_id,
           priority,
           status,
           owner,
@@ -3443,6 +3477,7 @@ router.post('/apply/nonconformity-draft-to-action-plan', auth, async (req, res) 
           $3,
           $4,
           'nonconformity',
+          $8::uuid,
           $5,
           'abierto',
           $6,
@@ -3492,6 +3527,18 @@ router.post('/apply/nonconformity-draft-to-action-plan', auth, async (req, res) 
         blockedReason: null,
         createdBy: userId,
       });
+
+      await upsertActionPlanOriginRelation(client, {
+        tenantId,
+        originType: 'nonconformity',
+        originId: nonconformity_id || null,
+        actionPlanId: savedRow.id,
+        createdBy: userId,
+        provenance: {
+          route: 'ai_compliance.nonconformity_draft_to_action_plan',
+          reused: false,
+        },
+      });
     }
 
     await client.query('COMMIT');
@@ -3520,7 +3567,6 @@ router.post('/apply/nonconformity-draft-to-action-plan', auth, async (req, res) 
     return res.status(500).json({
       ok: false,
       error: 'Error creando acción desde borrador IA de no conformidad',
-      ...errorDetail(error),
     });
   } finally {
     client.release();

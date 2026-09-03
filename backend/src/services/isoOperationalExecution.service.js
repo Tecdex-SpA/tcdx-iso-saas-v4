@@ -1,4 +1,7 @@
 const pool = require('../config/db');
+const {
+  ACTIVE_CONTROL_REMEDIATION_STATUSES,
+} = require('./actionPlanTraceability.service');
 
 const PLATFORM_ROLES = new Set([
   'superadmin',
@@ -17,7 +20,6 @@ const ALLOWED_TARGETS = new Set([
 ]);
 
 const ALLOWED_REJECT_STATUSES = new Set(['rejected', 'archived']);
-
 function publicError(status, code, message) {
   const error = new Error(message);
   error.status = status;
@@ -237,6 +239,53 @@ async function resolveTenantControlContext(client, tenantId, tenantControlId) {
   );
 
   return result.rows[0] || null;
+}
+
+async function findReusableActionPlan(client, {
+  tenantId,
+  sourceType,
+  sourceId,
+  tenantControlId,
+  standardCode,
+}) {
+  if (sourceType === 'control' && tenantControlId && standardCode) {
+    const existing = await client.query(
+      `
+      SELECT id, status
+      FROM action_plans
+      WHERE tenant_id = $1::uuid
+        AND tenant_control_id = $2::uuid
+        AND iso_code = $3
+        AND source_type = 'control'
+        AND status = ANY($4::text[])
+      ORDER BY updated_at DESC NULLS LAST, created_at DESC NULLS LAST
+      LIMIT 1
+      `,
+      [tenantId, tenantControlId, standardCode, ACTIVE_CONTROL_REMEDIATION_STATUSES]
+    );
+
+    if (existing.rowCount > 0) return existing.rows[0];
+  }
+
+  if (!sourceType || !sourceId) {
+    return null;
+  }
+
+  const exactSource = await client.query(
+    `
+    SELECT id, status
+    FROM action_plans
+    WHERE tenant_id = $1::uuid
+      AND source_type = $2
+      AND source_id = $3::uuid
+      AND LOWER(COALESCE(status, 'abierto')) NOT IN ('completado', 'cancelado')
+    ORDER BY updated_at DESC NULLS LAST, created_at DESC NULLS LAST
+    LIMIT 1
+    `,
+    [tenantId, sourceType, sourceId]
+  );
+
+  return exactSource.rows[0] || null;
 }
 
 async function fetchExpressGapSuggestions(tenantId, createdBy) {
@@ -1074,6 +1123,18 @@ async function createActionPlan(client, suggestionRow, user, override = {}) {
     suggestionRow.source_entity_id ||
     suggestionRow.id;
 
+  const reusablePlan = await findReusableActionPlan(client, {
+    tenantId,
+    sourceType,
+    sourceId,
+    tenantControlId: tenantControl?.tenant_control_id || null,
+    standardCode: standardCode || tenantControl?.iso || null,
+  });
+
+  if (reusablePlan) {
+    return reusablePlan.id;
+  }
+
   const insert = await client.query(
     `
     INSERT INTO action_plans (
@@ -1242,10 +1303,6 @@ async function approveSuggestion(user, id, payload = {}) {
     await client.query('BEGIN');
     const row = await getSuggestionOrThrow(client, id, tenantId);
 
-    if (!['pending', 'error'].includes(row.status)) {
-      throw publicError(400, 'SUGGESTION_NOT_PENDING', 'La sugerencia no esta pendiente');
-    }
-
     const targetRecordType = payload.target_record_type || row.target_record_type;
     if (!ALLOWED_TARGETS.has(targetRecordType)) {
       throw publicError(400, 'INVALID_TARGET_RECORD_TYPE', 'Tipo de destino invalido');
@@ -1258,6 +1315,19 @@ async function approveSuggestion(user, id, payload = {}) {
         would_create: targetRecordType,
         suggestion: row,
       };
+    }
+
+    if (
+      row.status === 'applied' &&
+      row.created_record_id &&
+      row.created_record_type === targetRecordType
+    ) {
+      await client.query('ROLLBACK');
+      return row;
+    }
+
+    if (!['pending', 'error'].includes(row.status)) {
+      throw publicError(400, 'SUGGESTION_NOT_PENDING', 'La sugerencia no esta pendiente');
     }
 
     let createdRecordId = null;

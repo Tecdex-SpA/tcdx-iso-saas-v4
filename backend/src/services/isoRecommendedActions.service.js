@@ -219,6 +219,40 @@ async function tenantStandardActive(tenantId, standardCode) {
   return result.rowCount > 0;
 }
 
+async function getExistingConversion(tenantId, recommendationId, targetType = null) {
+  const result = await pool.query(
+    `
+    SELECT
+      c.id AS conversion_id,
+      c.tenant_id,
+      c.recommendation_id,
+      c.target_type,
+      c.target_table,
+      c.target_id,
+      c.conversion_status,
+      c.result_payload,
+      c.converted_at,
+      s.created_record_type,
+      s.created_record_id,
+      s.status AS suggestion_status
+    FROM iso_recommended_action_conversions c
+    JOIN iso_operational_suggestions s
+      ON s.id = c.recommendation_id
+     AND s.tenant_id = c.tenant_id
+    WHERE c.tenant_id = $1::uuid
+      AND c.recommendation_id = $2::uuid
+      AND c.conversion_status = 'converted'
+      AND c.target_id IS NOT NULL
+      AND ($3::text IS NULL OR c.target_type = $3)
+    ORDER BY c.converted_at DESC NULLS LAST, c.created_at DESC NULLS LAST
+    LIMIT 1
+    `,
+    [tenantId, recommendationId, targetType]
+  );
+
+  return result.rows[0] || null;
+}
+
 async function workflowTableExists() {
   const result = await pool.query(
     `
@@ -281,11 +315,19 @@ async function buildConversionPreview(user, recommendationId, payload = {}) {
     tenantId,
     payload.options?.tenant_control_id || suggestion.tenant_control_id
   );
+  const existingConversion = await getExistingConversion(tenantId, recommendationId, targetType);
+  const operationalTarget = operationalTargetForType(targetType);
+  const targetTable = targetTableForType(targetType);
+  const suggestionCreatedRecordMatches =
+    suggestion.created_record_id &&
+    suggestion.created_record_type === operationalTarget;
 
   const blockedReasons = [];
   const warnings = conversionWarnings(targetType);
 
-  if (!['pending', 'error'].includes(String(suggestion.status || ''))) {
+  if (existingConversion || suggestionCreatedRecordMatches) {
+    warnings.push('La recomendacion ya tiene una conversion registrada; se reutilizara el destino existente.');
+  } else if (!['pending', 'error'].includes(String(suggestion.status || ''))) {
     blockedReasons.push('La recomendacion ya no esta pendiente de conversion.');
   }
 
@@ -324,8 +366,6 @@ async function buildConversionPreview(user, recommendationId, payload = {}) {
     }
   }
 
-  const operationalTarget = operationalTargetForType(targetType);
-  const targetTable = targetTableForType(targetType);
   const canConvert = blockedReasons.length === 0;
 
   return {
@@ -353,6 +393,18 @@ async function buildConversionPreview(user, recommendationId, payload = {}) {
     },
     warnings,
     blocked_reasons: blockedReasons,
+    existing_conversion: existingConversion || (
+      suggestionCreatedRecordMatches
+        ? {
+            target_type: targetType,
+            target_table: targetTableForType(targetType),
+            target_id: suggestion.created_record_id,
+            suggestion_status: suggestion.status,
+            created_record_type: suggestion.created_record_type,
+            created_record_id: suggestion.created_record_id,
+          }
+        : null
+    ),
     suggestion,
   };
 }
@@ -399,6 +451,7 @@ async function dryRunConvertRecommendation(user, recommendationId, payload = {})
     preview: preview.preview,
     warnings: preview.warnings,
     blocked_reasons: preview.blocked_reasons,
+    existing_conversion: preview.existing_conversion,
   };
 }
 
@@ -414,6 +467,35 @@ async function convertRecommendation(user, recommendationId, payload = {}) {
 
   const targetType = preview.target_type;
   const operationalTargetType = preview.operational_target_type;
+  const targetTable = preview.preview.table;
+
+  if (preview.existing_conversion?.target_id) {
+    return {
+      mode: 'converted',
+      already_exists: true,
+      idempotency: 'existing_conversion_reused',
+      target_type: targetType,
+      operational_target_type: operationalTargetType,
+      created_object: {
+        id: preview.existing_conversion.target_id,
+        type: targetType,
+        table: preview.existing_conversion.target_table || targetTable,
+        title: preview.suggestion.title || preview.preview.title,
+        route: routeForTarget(targetType, preview.existing_conversion.target_id),
+      },
+      recommendation: {
+        id: recommendationId,
+        status: 'converted',
+        stored_status: preview.existing_conversion.suggestion_status || preview.suggestion.status,
+        created_record_type:
+          preview.existing_conversion.created_record_type || operationalTargetType,
+        created_record_id:
+          preview.existing_conversion.created_record_id || preview.existing_conversion.target_id,
+      },
+      warnings: preview.warnings,
+    };
+  }
+
   const approvePayload = {
     ...(payload.options || {}),
     tenant_id: preview.preview.linked_entities.tenant_id,
@@ -440,8 +522,6 @@ async function convertRecommendation(user, recommendationId, payload = {}) {
   const createdId = updatedSuggestion.created_record_id || (
     operationalTargetType === 'evidence_request' ? updatedSuggestion.id : null
   );
-  const targetTable = preview.preview.table;
-
   return {
     mode: 'converted',
     target_type: targetType,
