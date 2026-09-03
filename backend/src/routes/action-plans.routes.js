@@ -438,57 +438,59 @@ const enrichedActionPlansSelect = `
 
       UNION ALL
 
-      SELECT DISTINCT ON (l.source_type, l.source_id, l.evidence_usage)
-        l.source_type || ':' || l.source_id::text AS item_key,
-        COALESCE(e_link.id, l.id) AS id,
-        l.tenant_id,
-        e_link.control_id,
-        e_link.tenant_control_id,
-        COALESCE(e_link.description, d.file_name, l.target_label, 'Evidencia documental') AS description,
-        COALESCE(e_link.file_name, d.file_name, l.document_key, 'Documento') AS file_name,
-        COALESCE(e_link.file_path, d.local_storage_path, d.file_url) AS file_path,
-        CASE
-          WHEN l.source_type = 'evidence' THEN COALESCE(e_link.status, l.status)
-          ELSE COALESCE(l.status, 'active')
-        END AS status,
-        CASE
-          WHEN l.source_type = 'evidence' THEN COALESCE(e_link.validated, false)
-          ELSE false
-        END AS validated,
-        e_link.reviewed_by,
-        COALESCE(e_link.reviewed_at, l.reviewed_at) AS reviewed_at,
-        e_link.expires_at,
-        COALESCE(e_link.evidence_type, l.evidence_usage) AS evidence_type,
-        e_link.rejection_reason,
-        COALESCE(e_link.created_at, l.reviewed_at, l.updated_at, l.created_at) AS created_at,
-        ap.id::text AS action_plan_id,
-        true AS linked_to_this_plan,
-        true AS is_document_link,
-        l.source_type,
-        l.source_id,
-        l.evidence_usage
-      FROM tenant_document_object_links l
-      LEFT JOIN evidences e_link
-        ON l.source_type = 'evidence'
-       AND e_link.tenant_id = l.tenant_id
-       AND e_link.id = l.source_id
-      LEFT JOIN document_index d
-        ON l.source_type = 'document_index'
-       AND d.tenant_id = l.tenant_id
-       AND d.id = l.source_id
-      WHERE l.tenant_id = ap.tenant_id
-        AND l.target_type = 'action'
-        AND l.target_id = ap.id
-        AND l.is_active = true
-        AND LOWER(COALESCE(l.status, 'active')) = 'active'
-        AND LOWER(COALESCE(l.relation_type, 'associated')) = 'associated'
-        AND l.evidence_usage IN (
-          'action_evidence',
-          'remediation_evidence',
-          'supporting_evidence',
-          'primary_evidence'
-        )
-      ORDER BY l.source_type, l.source_id, l.evidence_usage, COALESCE(l.reviewed_at, l.updated_at, l.created_at) DESC NULLS LAST
+      (
+        SELECT DISTINCT ON (l.source_type, l.source_id, l.evidence_usage)
+          l.source_type || ':' || l.source_id::text AS item_key,
+          COALESCE(e_link.id, l.id) AS id,
+          l.tenant_id,
+          e_link.control_id,
+          e_link.tenant_control_id,
+          COALESCE(e_link.description, d.file_name, l.target_label, 'Evidencia documental') AS description,
+          COALESCE(e_link.file_name, d.file_name, l.document_key, 'Documento') AS file_name,
+          COALESCE(e_link.file_path, d.local_storage_path, d.file_url) AS file_path,
+          CASE
+            WHEN l.source_type = 'evidence' THEN COALESCE(e_link.status, l.status)
+            ELSE COALESCE(l.status, 'active')
+          END AS status,
+          CASE
+            WHEN l.source_type = 'evidence' THEN COALESCE(e_link.validated, false)
+            ELSE false
+          END AS validated,
+          e_link.reviewed_by,
+          COALESCE(e_link.reviewed_at, l.reviewed_at) AS reviewed_at,
+          e_link.expires_at,
+          COALESCE(e_link.evidence_type, l.evidence_usage) AS evidence_type,
+          e_link.rejection_reason,
+          COALESCE(e_link.created_at, l.reviewed_at, l.updated_at, l.created_at) AS created_at,
+          ap.id::text AS action_plan_id,
+          true AS linked_to_this_plan,
+          true AS is_document_link,
+          l.source_type,
+          l.source_id,
+          l.evidence_usage
+        FROM tenant_document_object_links l
+        LEFT JOIN evidences e_link
+          ON l.source_type = 'evidence'
+         AND e_link.tenant_id = l.tenant_id
+         AND e_link.id = l.source_id
+        LEFT JOIN document_index d
+          ON l.source_type = 'document_index'
+         AND d.tenant_id = l.tenant_id
+         AND d.id = l.source_id
+        WHERE l.tenant_id = ap.tenant_id
+          AND l.target_type = 'action'
+          AND l.target_id = ap.id
+          AND l.is_active = true
+          AND LOWER(COALESCE(l.status, 'active')) = 'active'
+          AND LOWER(COALESCE(l.relation_type, 'associated')) = 'associated'
+          AND l.evidence_usage IN (
+            'action_evidence',
+            'remediation_evidence',
+            'supporting_evidence',
+            'primary_evidence'
+          )
+        ORDER BY l.source_type, l.source_id, l.evidence_usage, COALESCE(l.reviewed_at, l.updated_at, l.created_at) DESC NULLS LAST
+      )
     ),
     deduped_evidence AS (
       SELECT DISTINCT ON (item_key) *
