@@ -39,10 +39,24 @@ function getErrorMessage(error: unknown, fallback: string) {
   return fallback;
 }
 
+function getApiErrorMessage(payload: unknown, fallback: string) {
+  const record = isRecord(payload) ? payload : {};
+  const message =
+    (typeof record.detail === 'string' && record.detail) ||
+    (typeof record.error === 'string' && record.error) ||
+    (typeof record.message === 'string' && record.message) ||
+    fallback;
+  const requestId =
+    (typeof record.request_id === 'string' && record.request_id) ||
+    (typeof record.requestId === 'string' && record.requestId) ||
+    '';
+
+  return requestId ? `${message}\nrequest_id: ${requestId}` : message;
+}
+
 async function openAuthorizedFile(url: string, token: string | null) {
   if (!token) {
-    alert('Sesión no disponible. Inicia sesión nuevamente.');
-    return;
+    throw new Error('Sesión no disponible. Inicia sesión nuevamente.');
   }
 
   const res = await fetch(url, {
@@ -50,8 +64,7 @@ async function openAuthorizedFile(url: string, token: string | null) {
   });
 
   if (!res.ok) {
-    alert('No fue posible abrir el archivo.');
-    return;
+    throw new Error('No fue posible abrir el archivo.');
   }
 
   const blobUrl = URL.createObjectURL(await res.blob());
@@ -548,7 +561,7 @@ function ControlesPageContent() {
       if (!res.ok) {
         console.error('ERROR LOAD CONTROLS SCOPE:', json);
         setScope({ operations: [], standards: [] });
-        setErrorMessage(json?.detail || json?.error || 'Error cargando alcance');
+        setErrorMessage(getApiErrorMessage(json, 'Error cargando alcance'));
         return;
       }
 
@@ -652,7 +665,7 @@ function ControlesPageContent() {
       if (!res.ok) {
         console.error('ERROR LOAD CONTROL CATALOG:', json);
         setCatalog(null);
-        setErrorMessage(json?.detail || json?.error || 'Error cargando catálogo');
+        setErrorMessage(getApiErrorMessage(json, 'Error cargando catálogo'));
         return;
       }
 
@@ -690,7 +703,7 @@ function ControlesPageContent() {
       if (!res.ok) {
         console.error('ERROR LOAD CONTROL WORKBENCH:', json);
         setWorkbench(null);
-        setErrorMessage(json?.detail || json?.error || 'Error cargando workbench');
+        setErrorMessage(getApiErrorMessage(json, 'Error cargando workbench'));
         return;
       }
 
@@ -737,7 +750,7 @@ function ControlesPageContent() {
       const json = await res.json();
 
       if (!res.ok) {
-        alert(json?.detail || json?.error || 'Error cargando evidencias');
+        setErrorMessage(getApiErrorMessage(json, 'Error cargando evidencias'));
         return;
       }
 
@@ -747,7 +760,7 @@ function ControlesPageContent() {
       }));
     } catch (err) {
       console.error('ERROR LOAD EVIDENCES BY CONTROL:', err);
-      alert('Error cargando evidencias');
+      setErrorMessage(getErrorMessage(err, 'Error cargando evidencias'));
     }
   };
 
@@ -897,6 +910,7 @@ function ControlesPageContent() {
 
     try {
       setActionLoading(loadingKey);
+      setErrorMessage('');
 
       const res = await fetch(
         `${API_URL}/api/controls/workbench/${item.tenant_control_id}`,
@@ -922,7 +936,7 @@ function ControlesPageContent() {
       const json = await res.json();
 
       if (!res.ok) {
-        alert(json?.detail || json?.error || 'Error guardando control');
+        setErrorMessage(getApiErrorMessage(json, 'Error guardando control'));
         return;
       }
 
@@ -930,7 +944,7 @@ function ControlesPageContent() {
       await loadCatalog(tenantId, token, selectedISO, selectedOperationId);
     } catch (err) {
       console.error('ERROR SAVE CONTROL:', err);
-      alert('Error guardando control');
+      setErrorMessage(getErrorMessage(err, 'Error guardando control'));
     } finally {
       setActionLoading('');
     }
@@ -943,6 +957,7 @@ function ControlesPageContent() {
 
     try {
       setActionLoading(loadingKey);
+      setErrorMessage('');
 
       const res = await fetch(`${API_URL}/api/controls/catalog/${controlId}/enable`, {
         method: 'POST',
@@ -960,7 +975,7 @@ function ControlesPageContent() {
       const json = await res.json();
 
       if (!res.ok) {
-        alert(json?.detail || json?.error || 'Error habilitando control');
+        setErrorMessage(getApiErrorMessage(json, 'Error habilitando control'));
         return;
       }
 
@@ -968,7 +983,7 @@ function ControlesPageContent() {
       await loadCatalog(tenantId, token, selectedISO, selectedOperationId);
     } catch (err) {
       console.error('ERROR ENABLE CONTROL:', err);
-      alert('Error habilitando control');
+      setErrorMessage(getErrorMessage(err, 'Error habilitando control'));
     } finally {
       setActionLoading('');
     }
@@ -981,6 +996,7 @@ function ControlesPageContent() {
 
     try {
       setActionLoading(loadingKey);
+      setErrorMessage('');
 
       const res = await fetch(`${API_URL}/api/controls/catalog/${controlId}/disable`, {
         method: 'POST',
@@ -999,11 +1015,11 @@ function ControlesPageContent() {
       if (!res.ok) {
         const dep = json?.dependencies;
         if (dep) {
-          alert(
-            `${json?.error || 'No se puede deshabilitar'}\n\nEvidencias: ${dep.evidences}\nHallazgos: ${dep.findings}\nNo conformidades: ${dep.nonconformities}\nPlanes: ${dep.action_plans}`
+          setErrorMessage(
+            `${getApiErrorMessage(json, 'No se puede deshabilitar')}\n\nEvidencias: ${dep.evidences}\nHallazgos: ${dep.findings}\nNo conformidades: ${dep.nonconformities}\nPlanes: ${dep.action_plans}`
           );
         } else {
-          alert(json?.detail || json?.error || 'Error deshabilitando control');
+          setErrorMessage(getApiErrorMessage(json, 'Error deshabilitando control'));
         }
         return;
       }
@@ -1012,7 +1028,7 @@ function ControlesPageContent() {
       await loadCatalog(tenantId, token, selectedISO, selectedOperationId);
     } catch (err) {
       console.error('ERROR DISABLE CONTROL:', err);
-      alert('Error deshabilitando control');
+      setErrorMessage(getErrorMessage(err, 'Error deshabilitando control'));
     } finally {
       setActionLoading('');
     }
@@ -1023,7 +1039,7 @@ function ControlesPageContent() {
 
     const file = uploadFiles[item.tenant_control_id];
     if (!file) {
-      alert('Debes seleccionar un archivo');
+      setErrorMessage('Debes seleccionar un archivo');
       return;
     }
 
@@ -1031,6 +1047,7 @@ function ControlesPageContent() {
 
     try {
       setActionLoading(loadingKey);
+      setErrorMessage('');
 
       const formData = new FormData();
       formData.append('file', file);
@@ -1055,7 +1072,7 @@ function ControlesPageContent() {
       const json = await res.json();
 
       if (!res.ok) {
-        alert(json?.detail || json?.error || 'Error subiendo evidencia');
+        setErrorMessage(getApiErrorMessage(json, 'Error subiendo evidencia'));
         return;
       }
 
@@ -1066,7 +1083,7 @@ function ControlesPageContent() {
       await loadWorkbench(tenantId, token, selectedISO, selectedOperationId);
     } catch (err) {
       console.error('ERROR UPLOAD EVIDENCE:', err);
-      alert('Error subiendo evidencia');
+      setErrorMessage(getErrorMessage(err, 'Error subiendo evidencia'));
     } finally {
       setActionLoading('');
     }
@@ -1115,7 +1132,7 @@ function ControlesPageContent() {
       const json = await res.json().catch(() => ({}))
 
       if (!res.ok) {
-        throw new Error(json?.error || json?.detail || 'No fue posible establecer la evidencia como oficial')
+        throw new Error(getApiErrorMessage(json, 'No fue posible establecer la evidencia como oficial'))
       }
 
       await refreshTenantHealth();
@@ -1141,6 +1158,7 @@ function ControlesPageContent() {
 
     try {
       setActionLoading(loadingKey);
+      setErrorMessage('');
 
       const res = await fetch(`${API_URL}/api/evidences/approve/${evidence.id}`, {
         method: 'PUT',
@@ -1160,7 +1178,7 @@ function ControlesPageContent() {
       const json = await res.json();
 
       if (!res.ok) {
-        alert(json?.detail || json?.error || 'Error revisando evidencia');
+        setErrorMessage(getApiErrorMessage(json, 'Error revisando evidencia'));
         return;
       }
 
@@ -1169,7 +1187,7 @@ function ControlesPageContent() {
       await loadWorkbench(tenantId, token, selectedISO, selectedOperationId);
     } catch (err) {
       console.error('ERROR REVIEW EVIDENCE:', err);
-      alert('Error revisando evidencia');
+      setErrorMessage(getErrorMessage(err, 'Error revisando evidencia'));
     } finally {
       setActionLoading('');
     }
@@ -1182,6 +1200,7 @@ function ControlesPageContent() {
 
     try {
       setActionLoading(loadingKey);
+      setErrorMessage('');
 
       const res = await fetch(
         `${API_URL}/api/controls/workbench/${item.tenant_control_id}/quick-nonconformity`,
@@ -1200,14 +1219,14 @@ function ControlesPageContent() {
       const json = await res.json();
 
       if (!res.ok) {
-        alert(json?.detail || json?.error || 'Error creando no conformidad');
+        setErrorMessage(getApiErrorMessage(json, 'Error creando no conformidad'));
         return;
       }
 
       router.push(`/no-conformidades?iso=${encodeURIComponent(selectedISO)}`);
     } catch (err) {
       console.error('ERROR QUICK NC:', err);
-      alert('Error creando no conformidad');
+      setErrorMessage(getErrorMessage(err, 'Error creando no conformidad'));
     } finally {
       setActionLoading('');
     }
@@ -1220,6 +1239,7 @@ function ControlesPageContent() {
 
     try {
       setActionLoading(loadingKey);
+      setErrorMessage('');
 
       const res = await fetch(
         `${API_URL}/api/controls/workbench/${item.tenant_control_id}/quick-finding`,
@@ -1239,14 +1259,14 @@ function ControlesPageContent() {
       const json = await res.json();
 
       if (!res.ok) {
-        alert(json?.detail || json?.error || 'Error creando hallazgo');
+        setErrorMessage(getApiErrorMessage(json, 'Error creando hallazgo'));
         return;
       }
 
       router.push(`/hallazgos?iso=${encodeURIComponent(selectedISO)}`);
     } catch (err) {
       console.error('ERROR QUICK FINDING:', err);
-      alert('Error creando hallazgo');
+      setErrorMessage(getErrorMessage(err, 'Error creando hallazgo'));
     } finally {
       setActionLoading('');
     }
@@ -1259,6 +1279,7 @@ function ControlesPageContent() {
 
     try {
       setActionLoading(loadingKey);
+      setErrorMessage('');
 
       const res = await fetch(
         `${API_URL}/api/controls/workbench/${item.tenant_control_id}/quick-action-plan`,
@@ -1278,7 +1299,7 @@ function ControlesPageContent() {
       const json = await res.json();
 
       if (!res.ok) {
-        alert(json?.detail || json?.error || 'Error abriendo plan de acción');
+        setErrorMessage(getApiErrorMessage(json, 'Error abriendo plan de acción'));
         return;
       }
 
@@ -1297,7 +1318,7 @@ function ControlesPageContent() {
       router.push(`/plan-accion?iso=${encodeURIComponent(selectedISO)}`);
     } catch (err) {
       console.error('ERROR QUICK ACTION PLAN:', err);
-      alert('Error abriendo plan de acción');
+      setErrorMessage(getErrorMessage(err, 'Error abriendo plan de acción'));
     } finally {
       setActionLoading('');
     }
@@ -1308,6 +1329,7 @@ function ControlesPageContent() {
 
     try {
       setActionLoading(`mode-${nextMode}`);
+      setErrorMessage('');
 
       const res = await fetch(
         `${API_URL}/api/controls/catalog-mode/${tenantId}/${encodeURIComponent(
@@ -1328,7 +1350,7 @@ function ControlesPageContent() {
       const json = await res.json();
 
       if (!res.ok) {
-        alert(json?.detail || json?.error || 'Error cambiando modo catálogo');
+        setErrorMessage(getApiErrorMessage(json, 'Error cambiando modo catálogo'));
         return;
       }
 
@@ -1336,7 +1358,7 @@ function ControlesPageContent() {
       await loadCatalog(tenantId, token, selectedISO, selectedOperationId);
     } catch (err) {
       console.error('ERROR UPDATE CATALOG MODE:', err);
-      alert('Error cambiando modo catálogo');
+      setErrorMessage(getErrorMessage(err, 'Error cambiando modo catálogo'));
     } finally {
       setActionLoading('');
     }
@@ -1560,7 +1582,7 @@ function ControlesPageContent() {
         )}
 
         {errorMessage && (
-          <div className="rounded-[24px] border border-red-200 bg-red-50 px-5 py-4 text-red-700 shadow-sm">
+          <div className="whitespace-pre-line rounded-[24px] border border-red-200 bg-red-50 px-5 py-4 text-red-700 shadow-sm">
             {errorMessage}
           </div>
         )}
@@ -2158,12 +2180,17 @@ function ControlesPageContent() {
                                               {evidence.file_path && (
                                                 <button
                                                   type="button"
-                                                  onClick={() =>
-                                                    openAuthorizedFile(
+                                                  onClick={() => {
+                                                    setErrorMessage('');
+                                                    void openAuthorizedFile(
                                                       `${API_URL}/api/evidences/file/${evidence.id}`,
                                                       token
                                                     )
-                                                  }
+                                                      .catch((err) => {
+                                                        console.error('ERROR OPEN EVIDENCE FILE:', err);
+                                                        setErrorMessage(getErrorMessage(err, 'No fue posible abrir el archivo.'));
+                                                      })
+                                                  }}
                                                   className="rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700"
                                                 >
                                                   {t('controls.viewFile')}

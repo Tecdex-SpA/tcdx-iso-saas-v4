@@ -787,12 +787,20 @@ router.get('/workbench/:tenant_id/:iso', auth, async (req, res) => {
       evidence_stats AS (
         SELECT
           tc.id AS tenant_control_id,
-          COUNT(e.id)::int AS evidence_count,
-          COUNT(*) FILTER (
+          (
+            COUNT(DISTINCT e.id) +
+            COUNT(DISTINCT (tdol.source_type, tdol.source_id, tdol.evidence_usage)) FILTER (
+              WHERE tdol.id IS NOT NULL
+            )
+          )::int AS evidence_count,
+          COUNT(DISTINCT e.id) FILTER (
             WHERE e.id IS NOT NULL
               AND LOWER(COALESCE(e.status, '')) IN ('pending', 'pendiente', 'uploaded', 'subida')
           )::int AS pending_evidence_count,
-          MAX(e.created_at) AS last_evidence_at
+          GREATEST(
+            MAX(e.created_at),
+            MAX(COALESCE(tdol.reviewed_at, tdol.updated_at, tdol.created_at))
+          ) AS last_evidence_at
         FROM tenant_controls tc
         LEFT JOIN evidences e
           ON e.tenant_id = tc.tenant_id
@@ -807,6 +815,18 @@ router.get('/workbench/:tenant_id/:iso', auth, async (req, res) => {
                   OR e.metadata->>'operation_id' = tc.operation_id::text
                 )
               )
+         )
+        LEFT JOIN tenant_document_object_links tdol
+          ON tdol.tenant_id = tc.tenant_id
+         AND tdol.target_type = 'control'
+         AND tdol.target_id = tc.id
+         AND tdol.is_active = true
+         AND LOWER(COALESCE(tdol.status, 'active')) = 'active'
+         AND LOWER(COALESCE(tdol.relation_type, 'associated')) = 'associated'
+         AND tdol.evidence_usage IN (
+              'primary_evidence',
+              'supporting_evidence',
+              'remediation_evidence'
          )
         WHERE tc.tenant_id = $1
           AND tc.operation_id = $2
@@ -1076,7 +1096,14 @@ router.get('/workbench/:tenant_id/:iso', auth, async (req, res) => {
         // Campos nuevos para salud efectiva / auditoría / KPI.
         effective_health_score: effectiveHealthScore,
         effective_health_status: effectiveHealthStatus,
-        evidence_quality_status: row.effective_evidence_quality_status || row.evidence_quality_status || 'sin_evidencia',
+        evidence_quality_status:
+          String(
+            row.effective_evidence_quality_status ||
+            row.evidence_quality_status ||
+            'sin_evidencia'
+          ).toLowerCase() === 'sin_evidencia' && Number(row.evidence_count || 0) > 0
+            ? 'pendiente_revision'
+            : row.effective_evidence_quality_status || row.evidence_quality_status || 'sin_evidencia',
         approved_evidence_count: Number(row.effective_approved_evidence_count ?? row.approved_evidence_count ?? 0),
         official_evidence_count: Number(row.effective_official_evidence_count ?? row.official_evidence_count ?? 0),
         open_action_plans_count: Number(row.effective_open_action_plans_count ?? row.open_action_plans_count ?? 0),

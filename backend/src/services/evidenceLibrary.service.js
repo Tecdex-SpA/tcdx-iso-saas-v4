@@ -142,7 +142,7 @@ function isExcludedRow(row = {}) {
 
 function safeUploadFileName(value, fallback = 'documento') {
   const base = path.basename(String(value || fallback)).replace(/[\r\n"]/g, '_');
-  const clean = base.replace(/[^\w.\- ()\[\]áéíóúÁÉÍÓÚñÑ]/g, '_').replace(/_+/g, '_').slice(0, 180);
+  const clean = base.replace(/[^\p{L}\p{M}\p{N}.\- ()[\]_,—–]/gu, '_').replace(/_+/g, '_').slice(0, 180);
   return clean || fallback;
 }
 
@@ -1941,12 +1941,63 @@ async function listTargetCandidates({ user, targetType, search = '' }) {
 
   const queries = {
     control: `
-      SELECT tc.id, 'control' AS target_type, COALESCE(cc.description, 'Control') AS label, COALESCE(op.name, tc.status, '') AS subtitle
+      SELECT
+        tc.id,
+        'control' AS target_type,
+        COALESCE(cc.description, 'Control') AS label,
+        concat_ws(
+          ' · ',
+          NULLIF(
+            COALESCE(
+              cc.iso,
+              array_to_string(
+                COALESCE(
+                  std.valid_for_standards,
+                  ARRAY[]::text[]
+                ),
+                ', '
+              )
+            ),
+            ''
+          ),
+          NULLIF(
+            CASE
+              WHEN cc.iso IS NOT NULL
+                AND std.valid_for_standards IS NOT NULL
+                AND cardinality(std.valid_for_standards) > 1
+                THEN array_to_string(std.valid_for_standards, ', ')
+              ELSE NULL
+            END,
+            ''
+          ),
+          NULLIF(COALESCE(std.display_clause, cc.clause), ''),
+          NULLIF(COALESCE(op.name, tc.status, ''), '')
+        ) AS subtitle
       FROM tenant_controls tc
       LEFT JOIN controls_catalog cc ON cc.id = tc.control_id
       LEFT JOIN tenant_operations op ON op.id = tc.operation_id AND op.tenant_id = tc.tenant_id
-      WHERE tc.tenant_id = $1::uuid AND ($2 = '%%' OR cc.description ILIKE $2 OR op.name ILIKE $2)
-      ORDER BY cc.description ASC NULLS LAST LIMIT 80
+      LEFT JOIN LATERAL (
+        SELECT
+          array_agg(DISTINCT ccs.standard_code ORDER BY ccs.standard_code) AS valid_for_standards,
+          MAX(NULLIF(ccs.clause, '')) AS display_clause
+        FROM controls_catalog_standards ccs
+        WHERE ccs.control_id = cc.id
+      ) std ON true
+      WHERE tc.tenant_id = $1::uuid
+        AND (
+          $2 = '%%'
+          OR cc.description ILIKE $2
+          OR cc.iso ILIKE $2
+          OR cc.clause ILIKE $2
+          OR op.name ILIKE $2
+          OR EXISTS (
+            SELECT 1
+            FROM controls_catalog_standards ccs_search
+            WHERE ccs_search.control_id = cc.id
+              AND (ccs_search.standard_code ILIKE $2 OR ccs_search.clause ILIKE $2)
+          )
+        )
+      ORDER BY cc.description ASC NULLS LAST, subtitle ASC NULLS LAST LIMIT 80
     `,
     process: `
       SELECT id, 'process' AS target_type, COALESCE(name, code, 'Proceso') AS label, COALESCE(area, criticality, '') AS subtitle
