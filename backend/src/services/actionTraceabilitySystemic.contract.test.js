@@ -93,6 +93,16 @@ assert.match(actionPlansRoute, /l\.tenant_id = ap\.tenant_id/, 'plan evidence li
 assert.match(actionPlansRoute, /l\.is_active = true/, 'inactive evidence links must not count');
 assert.match(actionPlansRoute, /LOWER\(COALESCE\(l\.relation_type, 'associated'\)\) = 'associated'/, 'reference links must not count as plan evidence');
 assert.match(actionPlansRoute, /is_document_link = true[\s\S]*COALESCE\(validated, false\) = false/, 'document links must be pending unless formally approved');
+assert.match(
+  actionPlansRoute,
+  /UNION ALL\s*\(\s*SELECT DISTINCT ON \(l\.source_type, l\.source_id, l\.evidence_usage\)[\s\S]*?FROM tenant_document_object_links l[\s\S]*?ORDER BY l\.source_type, l\.source_id, l\.evidence_usage, COALESCE\(l\.reviewed_at, l\.updated_at, l\.created_at\) DESC NULLS LAST\s*\)/,
+  'document-link DISTINCT ON branch must be parenthesized so ORDER BY can reference alias l'
+);
+assert.doesNotMatch(
+  actionPlansRoute,
+  /UNION ALL\s+SELECT DISTINCT ON \(l\.source_type, l\.source_id, l\.evidence_usage\)[\s\S]*?ORDER BY l\.source_type/,
+  'document-link ORDER BY must not be scoped to the UNION result where alias l is unavailable'
+);
 assert.match(actionPlansRoute, /SELECT DISTINCT ON \(item_key\)/, 'plan evidence projection must dedupe formal evidence and document links');
 
 assert.match(controlsRoute, /tenant_document_object_links tdol/, 'control evidence reader must include document links');
