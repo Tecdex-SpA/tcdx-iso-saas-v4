@@ -1,6 +1,6 @@
 const { calculateReadiness, nextOccurrence, scoreEvidence, validateWorkflowDraft } = require('./grcRules');
 const { APPROVAL_DECISIONS, assertApprovalActor, evaluateApproval } = require('./grcApprovalRules');
-const { readRuntimeEntity } = require('./grcRuntimeAdapters');
+const { ADAPTERS, readRuntimeEntity } = require('./grcRuntimeAdapters');
 const { buildGrcExport, FORMATS } = require('./grcExport.service');
 const { escalationStages, occurrenceKey, retryBackoffSeconds, schedulerWindow } = require('./grcSchedulerRules');
 const { observe, snapshot: observabilitySnapshot } = require('./grcObservability');
@@ -11,6 +11,12 @@ const { createImpactGraphService } = require('./impactGraph.service');
 const { createPriorityEngineService } = require('./priorityEngine.service');
 
 const PLATFORM_ROLES = new Set(['superadmin', 'super_admin', 'platform_admin', 'admin_global', 'global_admin', 'owner']);
+const ESCALATION_ENTITY_TYPES = Object.freeze({
+  evidence_request: { code: 'evidence-default', name: 'Política de evidencias' },
+  action: { code: 'action-default', name: 'Política de acciones' },
+  audit_followup: { code: 'audit-followup-default', name: 'Política de seguimientos de auditoría' },
+  audit: { code: 'audit-default', name: 'Política de auditorías' },
+});
 
 class GrcError extends Error {
   constructor(code, message, status = 400, details = null) {
@@ -33,9 +39,181 @@ function assertUuid(value, code = 'GRC_ID_REQUIRED') {
   return text;
 }
 
+function optionalText(value, max = 500) {
+  const text = String(value || '').trim();
+  if (!text) return null;
+  if (text.length > max) throw new GrcError('GRC_TEXT_TOO_LONG', 'El texto ingresado supera el largo permitido.', 422);
+  return text;
+}
+
+function normalizeEscalationEntityType(value) {
+  const entityType = String(value || '').trim();
+  if (!ESCALATION_ENTITY_TYPES[entityType]) {
+    throw new GrcError('GRC_ESCALATION_ENTITY_INVALID', 'Selecciona un tipo de aplicación válido para la política.', 422);
+  }
+  return entityType;
+}
+
+function policyHours(value, fallback, label) {
+  const raw = value === undefined || value === null || value === '' ? fallback : value;
+  const hours = Number(raw);
+  if (!Number.isFinite(hours) || hours < 0 || hours > 8760) {
+    throw new GrcError('GRC_ESCALATION_HOURS_INVALID', `${label} debe ser un número de horas entre 0 y 8760.`, 422);
+  }
+  return Math.round(hours);
+}
+
+function escalationPolicyCode(entityType, value) {
+  const explicit = optionalText(value, 100);
+  if (explicit) return explicit;
+  return ESCALATION_ENTITY_TYPES[entityType].code;
+}
+
 function clampLimit(value) {
   return Math.max(1, Math.min(Number(value) || 50, 100));
 }
+
+function clampWorkflowOptionLimit(value) {
+  return Math.max(1, Math.min(Number(value) || 25, 50));
+}
+
+function isUuidText(value) {
+  return /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(String(value || '').trim());
+}
+
+function entitySearchPattern(value) {
+  const text = String(value || '').trim().slice(0, 160);
+  return text ? `%${text}%` : null;
+}
+
+function optionField(alias, fields) {
+  return `COALESCE(${fields.map(field => `NULLIF(TRIM(to_jsonb(${alias})->>'${field}'),'')`).join(',')})`;
+}
+
+const WORKFLOW_ENTITY_OPTION_SOURCES = Object.freeze({
+  document: {
+    query: `SELECT d.id,
+              ${optionField('d', ['title', 'document_name', 'file_name', 'template_code'])} AS title,
+              ${optionField('d', ['document_code', 'template_code', 'standard_code'])} AS code,
+              ${optionField('d', ['document_type', 'standard_code'])} AS context,
+              NULL::text AS owner,
+              ${optionField('d', ['status', 'publication_status'])} AS status
+            FROM iso_generated_documents d
+            WHERE d.tenant_id = $1::uuid
+              AND ($2::text IS NULL OR (
+                ${optionField('d', ['title', 'document_name', 'file_name', 'template_code', 'document_code', 'standard_code'])} ILIKE $2
+              ))
+            ORDER BY title NULLS LAST, code NULLS LAST
+            LIMIT $3 OFFSET $4`,
+  },
+  evidence: {
+    query: `SELECT e.id,
+              ${optionField('e', ['title', 'name', 'file_name', 'original_name'])} AS title,
+              ${optionField('e', ['code', 'title', 'file_name', 'original_name'])} AS code,
+              ${optionField('e', ['evidence_type', 'provider', 'source_type'])} AS context,
+              ${optionField('e', ['owner_email', 'uploaded_by_email'])} AS owner,
+              ${optionField('e', ['status', 'processing_status', 'analysis_status'])} AS status
+            FROM evidences e
+            WHERE e.tenant_id = $1::uuid
+              AND ($2::text IS NULL OR (
+                ${optionField('e', ['title', 'name', 'file_name', 'original_name', 'code'])} ILIKE $2
+              ))
+            ORDER BY title NULLS LAST, code NULLS LAST
+            LIMIT $3 OFFSET $4`,
+  },
+  control: {
+    query: `SELECT c.id,
+              ${optionField('c', ['control_name', 'name', 'title', 'control_code', 'code'])} AS title,
+              ${optionField('c', ['control_code', 'code'])} AS code,
+              ${optionField('c', ['iso_code', 'clause', 'category'])} AS context,
+              ${optionField('c', ['owner_email', 'responsible_email'])} AS owner,
+              ${optionField('c', ['status', 'implementation_status'])} AS status
+            FROM tenant_controls c
+            WHERE c.tenant_id = $1::uuid
+              AND ($2::text IS NULL OR (
+                ${optionField('c', ['control_name', 'name', 'title', 'control_code', 'code', 'iso_code', 'clause'])} ILIKE $2
+              ))
+            ORDER BY code NULLS LAST, title NULLS LAST
+            LIMIT $3 OFFSET $4`,
+  },
+  risk: {
+    query: `SELECT ar.id,
+              COALESCE(NULLIF(TRIM(ar.risk),''), NULLIF(TRIM(ar.impact),''), NULLIF(TRIM(a.name),'')) AS title,
+              NULLIF(TRIM(a.name),'') AS code,
+              COALESCE(NULLIF(TRIM(ar.level),''), NULLIF(TRIM(a.type),''), NULLIF(TRIM(a.criticality),'')) AS context,
+              NULLIF(TRIM(a.owner),'') AS owner,
+              NULLIF(TRIM(ar.level),'') AS status
+            FROM asset_risks ar
+            JOIN assets a ON a.id = ar.asset_id
+            WHERE a.tenant_id = $1::uuid
+              AND ($2::text IS NULL OR (
+                COALESCE(NULLIF(TRIM(ar.risk),''), NULLIF(TRIM(ar.impact),''), NULLIF(TRIM(a.name),'')) ILIKE $2
+                OR NULLIF(TRIM(a.name),'') ILIKE $2
+              ))
+            ORDER BY title NULLS LAST, code NULLS LAST
+            LIMIT $3 OFFSET $4`,
+  },
+  audit: {
+    query: `SELECT a.id,
+              ${optionField('a', ['title', 'name', 'audit_code', 'code'])} AS title,
+              ${optionField('a', ['audit_code', 'code', 'iso'])} AS code,
+              ${optionField('a', ['iso', 'audit_type', 'scope'])} AS context,
+              ${optionField('a', ['auditor_name', 'requester_name', 'owner_email'])} AS owner,
+              ${optionField('a', ['status'])} AS status
+            FROM audits a
+            WHERE a.tenant_id = $1::uuid
+              AND ($2::text IS NULL OR (
+                ${optionField('a', ['title', 'name', 'audit_code', 'code', 'iso', 'scope'])} ILIKE $2
+              ))
+            ORDER BY title NULLS LAST, code NULLS LAST
+            LIMIT $3 OFFSET $4`,
+  },
+  finding: {
+    query: `SELECT f.id,
+              ${optionField('f', ['title', 'description', 'finding_number', 'code'])} AS title,
+              ${optionField('f', ['finding_number', 'code'])} AS code,
+              ${optionField('f', ['severity', 'iso_code', 'category'])} AS context,
+              ${optionField('f', ['owner_email', 'responsible_email'])} AS owner,
+              ${optionField('f', ['status'])} AS status
+            FROM findings f
+            WHERE f.tenant_id = $1::uuid
+              AND ($2::text IS NULL OR (
+                ${optionField('f', ['title', 'description', 'finding_number', 'code', 'iso_code'])} ILIKE $2
+              ))
+            ORDER BY title NULLS LAST, code NULLS LAST
+            LIMIT $3 OFFSET $4`,
+  },
+  nonconformity: {
+    query: `SELECT n.id,
+              ${optionField('n', ['title', 'description', 'nonconformity_number', 'code'])} AS title,
+              ${optionField('n', ['nonconformity_number', 'code'])} AS code,
+              ${optionField('n', ['severity', 'iso_code', 'category'])} AS context,
+              ${optionField('n', ['owner_email', 'responsible_email'])} AS owner,
+              ${optionField('n', ['status'])} AS status
+            FROM tenant_nonconformities n
+            WHERE n.tenant_id = $1::uuid
+              AND ($2::text IS NULL OR (
+                ${optionField('n', ['title', 'description', 'nonconformity_number', 'code', 'iso_code'])} ILIKE $2
+              ))
+            ORDER BY title NULLS LAST, code NULLS LAST
+            LIMIT $3 OFFSET $4`,
+  },
+  action: {
+    query: `SELECT a.id,
+              ${optionField('a', ['title', 'description', 'action_number', 'code'])} AS title,
+              ${optionField('a', ['action_number', 'code', 'iso_code'])} AS code,
+              ${optionField('a', ['iso_code', 'source_type', 'priority'])} AS context,
+              ${optionField('a', ['owner_email', 'responsible_email', 'assigned_to_email'])} AS owner,
+              ${optionField('a', ['status'])} AS status
+            FROM action_plans a
+            WHERE a.tenant_id = $1::uuid
+              AND ($2::text IS NULL OR (
+                ${optionField('a', ['title', 'description', 'action_number', 'code', 'iso_code'])} ILIKE $2
+              ))
+            ORDER BY title NULLS LAST, code NULLS LAST
+            LIMIT $3 OFFSET $4`,
+  },
+});
 
 function createGrcService(pool, asyncJobs) {
   const bootstrapService = createGrcBootstrapService(pool, { GrcError, observe });
@@ -135,7 +313,7 @@ function createGrcService(pool, asyncJobs) {
     const limit = clampLimit(filters.limit);
     const result = await pool.query(
       `SELECT d.*, v.version AS active_version, v.status AS active_version_status,
-              (SELECT COUNT(*)::int FROM grc_workflow_instances i WHERE i.definition_id = d.id) AS instance_count
+              (SELECT COUNT(*)::int FROM grc_workflow_instances i WHERE i.tenant_id = d.tenant_id AND i.definition_id = d.id) AS instance_count
        FROM grc_workflow_definitions d
        LEFT JOIN grc_workflow_versions v ON v.id = d.active_version_id
        WHERE d.tenant_id = $1::uuid
@@ -441,6 +619,95 @@ function createGrcService(pool, asyncJobs) {
     });
   }
 
+  function projectWorkflowEntityOption(row, entityType) {
+    const code = isUuidText(row.code) ? null : row.code;
+    const title = isUuidText(row.title) ? null : row.title;
+    return {
+      id: row.id,
+      entity_type: entityType,
+      code,
+      title: title || code || 'Registro sin nombre',
+      context: row.context || null,
+      owner: row.owner || null,
+      status: row.status || null,
+    };
+  }
+
+  async function listWorkflowEntityOptions(tenantId, filters = {}) {
+    await assertModuleEnabled(tenantId);
+    const definition = (await pool.query(
+      `SELECT id, name, entity_type, status
+       FROM grc_workflow_definitions
+       WHERE tenant_id = $1::uuid
+         AND id = $2::uuid
+         AND status = 'active'
+         AND active_version_id IS NOT NULL`,
+      [tenantId, assertUuid(filters.definition_id)]
+    )).rows[0];
+    if (!definition) throw new GrcError('WORKFLOW_DEFINITION_NOT_ACTIVE', 'Proceso no disponible.', 404);
+    const source = WORKFLOW_ENTITY_OPTION_SOURCES[definition.entity_type];
+    if (!source || !ADAPTERS[definition.entity_type]) {
+      throw new GrcError('WORKFLOW_ENTITY_OPTIONS_UNSUPPORTED', 'No existe catálogo compatible para este proceso.', 422);
+    }
+    const limit = clampWorkflowOptionLimit(filters.limit);
+    const offset = Math.max(0, Number(filters.offset) || 0);
+    const result = await pool.query(source.query, [
+      tenantId,
+      entitySearchPattern(filters.search),
+      limit,
+      offset,
+    ]);
+    return {
+      definition_id: definition.id,
+      definition_name: definition.name,
+      entity_type: definition.entity_type,
+      limit,
+      offset,
+      items: result.rows.map(row => projectWorkflowEntityOption(row, definition.entity_type)),
+    };
+  }
+
+  async function listWorkflowInstances(tenantId, filters = {}) {
+    await assertModuleEnabled(tenantId);
+    const values = [tenantId];
+    const clauses = ['i.tenant_id = $1::uuid'];
+    if (filters.definition_id) {
+      values.push(assertUuid(filters.definition_id));
+      clauses.push(`i.definition_id = $${values.length}::uuid`);
+    }
+    if (filters.status) {
+      values.push(String(filters.status).trim());
+      clauses.push(`i.status = $${values.length}`);
+    }
+    const search = entitySearchPattern(filters.search);
+    if (search) {
+      values.push(search);
+      clauses.push(`(
+        d.name ILIKE $${values.length}
+        OR COALESCE(i.context->>'entity_label','') ILIKE $${values.length}
+        OR COALESCE(i.context->>'entity_code','') ILIKE $${values.length}
+      )`);
+    }
+    const limit = clampWorkflowOptionLimit(filters.limit);
+    const offset = Math.max(0, Number(filters.offset) || 0);
+    values.push(limit, offset);
+    const result = await pool.query(
+      `SELECT i.id, i.definition_id, i.entity_type, i.entity_id, i.status, i.created_at, i.updated_at,
+              COALESCE(i.context->>'entity_label', i.context->>'entity_code') AS entity_label,
+              i.context->>'entity_code' AS entity_code,
+              d.name AS definition_name,
+              s.name AS current_state_name
+       FROM grc_workflow_instances i
+       JOIN grc_workflow_definitions d ON d.tenant_id = i.tenant_id AND d.id = i.definition_id
+       JOIN grc_workflow_states s ON s.id = i.current_state_id
+       WHERE ${clauses.join(' AND ')}
+       ORDER BY i.updated_at DESC
+       LIMIT $${values.length - 1} OFFSET $${values.length}`,
+      values
+    );
+    return { items: result.rows, limit, offset };
+  }
+
   async function getWorkflowInstance(tenantId, instanceId) {
     const result = await pool.query(
       `SELECT i.*, s.code AS current_state_code, s.name AS current_state_name,
@@ -458,8 +725,15 @@ function createGrcService(pool, asyncJobs) {
     );
     if (!result.rows[0]) throw new GrcError('WORKFLOW_INSTANCE_NOT_FOUND', 'Instancia no encontrada.', 404);
     const history = (await pool.query(
-      `SELECT * FROM grc_workflow_history
-       WHERE tenant_id = $1::uuid AND instance_id = $2::uuid ORDER BY created_at`,
+      `SELECT h.*, t.code AS transition_code, t.name AS transition_name,
+              source.name AS from_state_name, target.name AS to_state_name,
+              COALESCE(u.email, h.actor_role) AS actor_label
+       FROM grc_workflow_history h
+       LEFT JOIN grc_workflow_transitions t ON t.tenant_id = h.tenant_id AND t.id = h.transition_id
+       LEFT JOIN grc_workflow_states source ON source.id = h.from_state_id
+       LEFT JOIN grc_workflow_states target ON target.id = h.to_state_id
+       LEFT JOIN users u ON u.tenant_id = h.tenant_id AND u.id = h.actor_id
+       WHERE h.tenant_id = $1::uuid AND h.instance_id = $2::uuid ORDER BY h.created_at`,
       [tenantId, instanceId]
     )).rows;
     const approvals = (await pool.query(
@@ -1390,8 +1664,21 @@ function createGrcService(pool, asyncJobs) {
     });
   }
 
-  async function createEscalationPolicy({ tenantId, userId, body, correlationId }) {
-    if (!body.code || !body.entity_type) throw new GrcError('GRC_ESCALATION_POLICY_INVALID', 'Código y entidad son obligatorios.', 422);
+  async function createEscalationPolicy({ tenantId, userId, body = {}, correlationId }) {
+    const entityType = normalizeEscalationEntityType(body.entity_type);
+    const code = escalationPolicyCode(entityType, body.code);
+    if (!/^[A-Za-z0-9._:-]{3,100}$/.test(code)) {
+      throw new GrcError('GRC_ESCALATION_POLICY_INVALID', 'La política no pudo guardarse con la configuración indicada.', 422);
+    }
+    const displayName = optionalText(body.name || body.display_name || body.recipient_config?.display_name, 180)
+      || ESCALATION_ENTITY_TYPES[entityType].name;
+    const priorNoticeHours = policyHours(body.prior_notice_hours, 24, 'Avisar antes de vencer');
+    const firstEscalationHours = policyHours(body.first_escalation_hours, 0, 'Primer escalamiento');
+    const secondEscalationHours = policyHours(body.second_escalation_hours, 24, 'Escalar nuevamente después de');
+    const recipientConfig = {
+      ...(body.recipient_config && typeof body.recipient_config === 'object' ? body.recipient_config : {}),
+      display_name: displayName,
+    };
     const policy = (await pool.query(
       `INSERT INTO grc_escalation_policies (
          tenant_id, code, entity_type, criticality, sla_hours, prior_notice_hours,
@@ -1406,20 +1693,24 @@ function createGrcService(pool, asyncJobs) {
          responsible_id = EXCLUDED.responsible_id, supervisor_id = EXCLUDED.supervisor_id,
          role_keys = EXCLUDED.role_keys, recipient_config = EXCLUDED.recipient_config,
          is_active = TRUE, updated_at = now() RETURNING *`,
-      [tenantId, body.code, body.entity_type, body.criticality || null, body.sla_hours || null,
-        body.prior_notice_hours ?? 24, body.first_escalation_hours ?? 0, body.second_escalation_hours ?? 24,
+      [tenantId, code, entityType, body.criticality || null, body.sla_hours || null,
+        priorNoticeHours, firstEscalationHours, secondEscalationHours,
         body.responsible_id || null, body.supervisor_id || null, json(Array.isArray(body.role_keys) ? body.role_keys : []),
-        json(body.recipient_config && typeof body.recipient_config === 'object' ? body.recipient_config : {}), userId]
+        json(recipientConfig), userId]
     )).rows[0];
     observe('escalation_policy', { tenantId, correlationId });
     return policy;
   }
 
   async function listEscalationPolicies(tenantId) {
-    return (await pool.query(
+    const policies = (await pool.query(
       'SELECT * FROM grc_escalation_policies WHERE tenant_id = $1::uuid ORDER BY code',
       [tenantId]
     )).rows;
+    return policies.map(policy => ({
+      ...policy,
+      display_name: policy.recipient_config?.display_name || ESCALATION_ENTITY_TYPES[policy.entity_type]?.name || policy.code,
+    }));
   }
 
   const ESCALATION_SOURCES = Object.freeze({
@@ -2000,6 +2291,8 @@ function createGrcService(pool, asyncJobs) {
     listFrameworkRequirements,
     listFrameworks,
     listMappings,
+    listWorkflowEntityOptions,
+    listWorkflowInstances,
     listWorkpaperReviews,
     listWorkflowDefinitions,
     linkAuditEvidence,

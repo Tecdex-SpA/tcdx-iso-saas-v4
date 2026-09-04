@@ -582,6 +582,63 @@ CONTRACTS_VERSIONED: `[]`
 
 UNNECESSARY_VERSION_BUMPS: `0`
 
+## MARKET READINESS PART 1 — GRC Workflow Runtime UX Projections
+
+Status: READY_FOR_PART_2 local on branch `main`; commit/push/deploy `NO`.
+
+Runtime projection contract:
+
+- `GET /api/grc/workflow-entity-options`: tenant-scoped selector options for the active workflow definition selected by the user. It reuses `grcRuntimeAdapters` compatible entity types and existing domain tables; it does not create a catalog/source of truth.
+- `GET /api/grc/workflow-instances`: tenant-scoped recent/searchable workflow instances by process and persisted human entity label. It avoids requiring instance UUID paste in the UI.
+- `POST /api/grc/workflow-instances` and `/workflow-instances/:id/transitions` remain the mutation authority and still require the internal UUID resolved by the backend-backed selector.
+
+Authority preserved:
+
+- Workflow definitions/states/transitions/history/approvals remain in `grc_workflow_*`.
+- Read access remains `workflow.read`; mutations remain `workflow.transition`.
+- No schema, migration, RBAC, Health, commercial authority or AI authority change.
+
+## MARKET READINESS PART 2 — Phase 2 Scheduler and Escalation Policy UX
+
+Status: READY_FOR_PART_3 local on branch `main`; commit/push/deploy `NO`.
+
+Scheduler contract:
+
+- `backend/src/services/grc/phase2SchedulerRunner.js` is an internal worker and calls `runConnector` with role `platform_admin`.
+- Due connector discovery remains tenant-scoped through `grc_connector_instances.tenant_id` and enabled `tenant_module_settings`.
+- Connector execution is classified per connector as `success`, `disabled`, `misconfiguration`, `dependency_unavailable` or `failure`.
+- `CONNECTOR_NOT_AVAILABLE` from the feature-gated connector authority maps to connector status `disabled`, is observed as `phase2_scheduler_connector`, and does not emit repetitive global `PHASE2_SCHEDULER_ERROR`.
+- Real configuration/provider/failure states remain visible through per-connector result status, `last_error_code`, retry scheduling and `partial_failure`.
+- Idempotency key is derived from normalized worker id, connector id and minute bucket.
+
+Escalation policy contract:
+
+- UI does not require or send escalation policy technical `code`.
+- Backend generates tenant-scoped internal policy codes from validated `entity_type`.
+- Visible policy name is persisted as `recipient_config.display_name` and exposed as `display_name`.
+- Valid entity types for this UX are `evidence_request`, `action`, `audit_followup` and `audit`.
+- Hour fields remain bounded to `0..8760`; `0` is valid and empty input is rejected in UI.
+- RBAC remains `workflow.read` for listing policies, `grc.escalation.manage` for create/update, and `grc.scheduler.run` for manual scheduler execution.
+
+## MARKET READINESS PART 3 — Intelligence Brief Non-Blocking AI Enrichment
+
+Status: READY_FOR_HUMAN_REVIEW local on branch `main`; commit/push/deploy `NO`.
+
+Intelligence Brief contract:
+
+- `buildTenantIntelligenceBrief` returns the deterministic base brief without waiting for `/api/ai/intelligence/narrative` when AI enrichment is enabled.
+- AI narrative generation runs as background refresh and updates the existing in-memory brief cache when it succeeds or falls back.
+- Cache/dedupe key is tenant-scoped by `tenantId`, `locale` and AI mode; no cross-tenant reuse is permitted.
+- `ai_used=true` only when valid AI content is present; fallback responses keep `ai_used=false`.
+- `fallback_used=true` marks timeout/unavailable/invalid AI output fallback and preserves internal `fallback_reason` without exposing technical errors to the UI.
+- `ai_pending=true` means deterministic content is available and enrichment is still in progress.
+- `cache_status` continues to report `miss`, `hit`, `bypass` and background refresh events for observability.
+
+Authority preserved:
+
+- No schema, migration, RBAC, Health, commercial authority or AI authority change.
+- Existing Intelligence services and AI orchestrator are extended; no second orchestrator, AI truth store, KB, RAG or cache service is introduced.
+
 ## ACTION-TRACEABILITY Final Integrity Contract
 
 Status: READY_FOR_HUMAN_REVIEW local on `main@dabb140076f341b76058f75e3bf6c0112ac0470f`.

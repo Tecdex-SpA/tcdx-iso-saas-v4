@@ -26,6 +26,40 @@ function promptSize(value) {
   return Buffer.byteLength(JSON.stringify(value || {}), 'utf8');
 }
 
+function engineFallbackReason(raw = {}) {
+  if (!raw || typeof raw !== 'object') return null;
+  if (
+    raw.ok === false ||
+    raw.fallback_used === true ||
+    raw.disabled_by_plan === true ||
+    raw.ai_disabled_by_plan === true ||
+    raw.engine?.fallback_used === true ||
+    raw.trace?.fallback_used === true ||
+    raw.metrics?.fallback_used === true ||
+    raw.structured_result?.fallback === true
+  ) {
+    return raw.engine?.error_type ||
+      raw.trace?.error_type ||
+      raw.metrics?.error_type ||
+      raw.structured_result?.fallback_reason ||
+      raw.code ||
+      'AI_ENGINE_UNAVAILABLE';
+  }
+  return null;
+}
+
+function engineUsedAiContent(raw = {}) {
+  if (!raw || typeof raw !== 'object') return false;
+  if (engineFallbackReason(raw)) return false;
+  if (!raw.engine && !raw.trace && !raw.metrics) return true;
+  return raw.engine?.llm_used === true ||
+    raw.engine?.used_llm === true ||
+    raw.trace?.llm_used === true ||
+    raw.trace?.used_llm === true ||
+    raw.metrics?.llm_used === true ||
+    raw.metrics?.used_llm === true;
+}
+
 function governanceForTrace({
   context,
   promptContext,
@@ -122,12 +156,18 @@ async function generateStructuredNarrative(context = {}, {
     }
 
     const raw = await invokeAi(promptContext, { requestId });
-    aiUsed = true;
+    const fallbackReasonFromEngine = engineFallbackReason(raw);
+    if (fallbackReasonFromEngine) {
+      const fallbackError = new Error(fallbackReasonFromEngine);
+      fallbackError.code = fallbackReasonFromEngine;
+      throw fallbackError;
+    }
     model = raw?.model || raw?.engine?.model || raw?.metadata?.model || null;
     const structured = ensureKnowledgeBasisOrDegrade(
       validateStructuredAiOutput(raw),
       promptContext
     );
+    aiUsed = engineUsedAiContent(raw);
     const latencyMs = Date.now() - started;
     const governance = governanceForTrace({
       context,
@@ -235,6 +275,8 @@ async function generateNarratives(context, options = {}) {
 
 module.exports = {
   answerContextualQuestion,
+  engineFallbackReason,
+  engineUsedAiContent,
   generateAuditNarrative,
   generateExecutiveNarrative,
   generateNarratives,

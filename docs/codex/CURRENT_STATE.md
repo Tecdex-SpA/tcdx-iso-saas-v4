@@ -378,5 +378,40 @@ Autoridades preservadas: DB schema/migraciones historicas/RBAC/modelo comercial/
 - `docs/codex/handoffs/RELEASE-CLOSEOUT-NORMALIZATION.md`
 - `docs/codex/handoffs/AI-ADDON-MIGRATION-ORDER-RECONCILIATION.md`
 - `docs/codex/handoffs/HOTFIX-POSTDEPLOY-01-ISOHEALTH-AI-GRC.md`
+- `docs/codex/handoffs/MARKET-READINESS-PART-1-UX-WORKFLOWS.md`
+- `docs/codex/handoffs/MARKET-READINESS-PART-2-SCHEDULER.md`
+- `docs/codex/handoffs/UX-WORKFLOW-SCHEDULER-AI-MARKET-READINESS-CLOSEOUT.md`
 - `docs/codex/PHASE6_EXPANDED_CLOSURE.md`
 - `docs/architecture/grc_relationship_inventory.md`
+
+## MARKET READINESS PART 1 — UX Riesgos + Procesos Automatizados
+
+Estado local: `READY_FOR_PART_2` sobre `main@3e0fdfc609d6ca67cedfe86614110452b2044bdc`, sin commit/push/merge/deploy.
+
+Alcance cerrado: `/riesgos` mantiene drawer contextual derecho con backdrop sutil, foco/Esc/clic exterior y sin exponer `stableKey`; la sección IA del detalle queda visible sólo para riesgo cuantitativo con autoridad real. "Instancias y transiciones" en `/configuracion` deja de pedir IDs técnicos al usuario y usa selector tenant-scoped de entidades compatibles, listado reciente de instancias y detalle con acciones disponibles e historial persistido.
+
+Backend agregado: `GET /api/grc/workflow-entity-options` y `GET /api/grc/workflow-instances` como proyecciones de lectura de la fachada GRC bajo `workflow.read`, reutilizando tipos compatibles de `grcRuntimeAdapters` y sin crear tablas/fuentes de verdad. `POST /api/grc/workflow-instances` y transiciones conservan `workflow.transition`, UUID interno, tenant scope y reglas existentes.
+
+Validaciones locales PASS: `node -c backend/src/services/grc/grc.service.js`, `node -c backend/src/routes/grc.routes.js`, `npm --prefix backend run check`, `node backend/src/services/grc/grc.service.test.js`, `node backend/src/services/grc/grcPhase1Core.test.js`, `npm --prefix frontend run typecheck`, `npm --prefix frontend run lint`, `node scripts/check-market-readiness-part1-ux-workflows-contract.mjs` desde `frontend/`. `git diff --check` se registra en el cierre final de la parte.
+
+## MARKET READINESS PART 2 — Scheduler Phase 2 + Politicas de Avisos y Escalamiento
+
+Estado local: `READY_FOR_PART_3` sobre `main@3e0fdfc609d6ca67cedfe86614110452b2044bdc`, sin commit/push/merge/deploy.
+
+Alcance cerrado: el runner programado de conectores Phase 2 corre como worker interno `platform_admin`, procesa conectores por tenant/conector sin derribar el ciclo global por `CONNECTOR_NOT_AVAILABLE`, clasifica resultados operativos (`success`, `disabled`, `misconfiguration`, `dependency_unavailable`, `failure`), reprograma cada instancia y observa `phase2_scheduler_connector` con `status` y `errorCode`.
+
+Root cause confirmado: el runner programado ejecutaba conectores tenant-scoped sin rol interno de plataforma, mientras `runConnector` exige disponibilidad segun rol/feature; eso convertia conectores no disponibles en `CONNECTOR_NOT_AVAILABLE` repetitivo y error global.
+
+UX cerrada: "Politica de avisos y escalamiento" usa nombre funcional, aplicacion funcional, horas validas y confirmacion antes de ejecutar manualmente; la UI no solicita ni envia codigo tecnico, y backend genera el codigo interno tenant-scoped conservando RBAC.
+
+Validaciones locales PASS: `node -c backend/src/services/grc/phase2SchedulerRunner.js`, `node -c backend/src/services/grc/grc.service.js`, `node -c backend/src/services/grc/marketReadinessPart2SchedulerPolicies.test.js`, `node backend/src/services/grc/marketReadinessPart2SchedulerPolicies.test.js`, `node scripts/check-market-readiness-part1-ux-workflows-contract.mjs` desde `frontend/`, `npm --prefix backend run check`, `npm --prefix frontend run typecheck`, `npm --prefix frontend run lint`, `git diff --check`.
+
+## MARKET READINESS CLOSEOUT — UX + Workflow + Scheduler + AI
+
+Estado local: `READY_FOR_HUMAN_REVIEW` sobre `main@3e0fdfc609d6ca67cedfe86614110452b2044bdc`, sin commit/push/merge/deploy.
+
+Alcance cerrado: Partes 1 y 2 preservadas; Intelligence Brief ya no bloquea contenido base deterministico esperando el timeout del AI Engine. La narrativa asistida se ejecuta como refresh en background, con cache y dedupe tenant-scoped, fallback deterministico no etiquetado como IA y observabilidad de fallos reales.
+
+Validaciones locales PASS: tests focales de Partes 1, 2 y 3, regresiones GRC/workflow/RBAC/multitenant/intelligence/RAG, `npm --prefix backend run check`, `npm --prefix frontend run typecheck`, `npm --prefix frontend run lint`, `npm --prefix frontend run build`, `git diff --check`.
+
+Human Review micro-closeout: scheduler success limpia `health_status='healthy'` y `last_error_code=NULL`; estados desconocidos de conector caen en `failure`; polling AI resetea timer/attempts/request al cambiar contexto `tenantId:locale:ai`. Estado local: `READY_FOR_FINAL_HUMAN_APPROVAL`, sin commit/push/merge/deploy.

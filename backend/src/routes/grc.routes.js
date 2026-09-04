@@ -76,10 +76,12 @@ router.post('/bootstrap/validate', route(async (req) => authorized(req, 'workflo
 router.get('/workflows', route(async (req) => authorized(req, 'workflow.read', ({ tenantId }) => service.listWorkflowDefinitions(tenantId, req.query))));
 router.post('/workflows', route(async (req) => authorized(req, 'workflow.manage', (context) => service.createWorkflowDefinition({ ...context, body: req.body }))));
 router.post('/workflows/validate', route(async (req) => authorized(req, 'workflow.manage', () => service.validateWorkflow(req.body))));
+router.get('/workflow-entity-options', route(async (req) => authorized(req, 'workflow.read', ({ tenantId }) => service.listWorkflowEntityOptions(tenantId, req.query))));
 router.get('/workflows/:id', route(async (req) => authorized(req, 'workflow.read', ({ tenantId }) => service.getWorkflowDefinition(tenantId, req.params.id))));
 router.put('/workflows/:id/draft', route(async (req) => authorized(req, 'workflow.manage', (context) => service.saveWorkflowDraft({ ...context, definitionId: req.params.id, body: req.body }))));
 router.post('/workflows/:id/publish', route(async (req) => authorized(req, 'workflow.manage', (context) => service.publishWorkflow({ ...context, definitionId: req.params.id }))));
 router.post('/workflows/:id/archive', route(async (req) => authorized(req, 'workflow.manage', (context) => service.archiveWorkflow({ ...context, definitionId: req.params.id }))));
+router.get('/workflow-instances', route(async (req) => authorized(req, 'workflow.read', ({ tenantId }) => service.listWorkflowInstances(tenantId, req.query))));
 router.post('/workflow-instances', route(async (req) => authorized(req, 'workflow.transition', (context) => service.startWorkflow({ ...context, body: req.body }))));
 router.get('/workflow-instances/:id', route(async (req) => authorized(req, 'workflow.read', ({ tenantId }) => service.getWorkflowInstance(tenantId, req.params.id))));
 router.post('/workflow-instances/:id/transitions', route(async (req) => authorized(req, 'workflow.transition', (context) => service.executeTransition({ ...context, instanceId: req.params.id, body: req.body }))));

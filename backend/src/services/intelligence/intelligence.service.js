@@ -26,6 +26,7 @@ const scoring = require('./intelligence.scoring');
 const INTELLIGENCE_CACHE_TTL_MS = Math.max(60000, Number(process.env.INTELLIGENCE_BRIEF_CACHE_TTL_MS || 5 * 60 * 1000));
 const INTELLIGENCE_CACHE_MAX_ENTRIES = Math.max(10, Number(process.env.INTELLIGENCE_BRIEF_CACHE_MAX_ENTRIES || 250));
 const briefCache = new Map();
+const aiNarrativeRefreshes = new Map();
 
 function getUserId(user) {
   return user?.user_id || user?.userId || user?.id || null;
@@ -54,6 +55,10 @@ function setCachedBrief(key, value) {
     expiresAt: Date.now() + INTELLIGENCE_CACHE_TTL_MS,
     value,
   });
+}
+
+function clearIntelligenceBriefCache() {
+  briefCache.clear();
 }
 
 function cloneBrief(value) {
@@ -119,6 +124,132 @@ function finalizeBriefResponse(response, {
   });
 
   return finalized;
+}
+
+function buildAiPendingBrief(baseBrief) {
+  return {
+    ...baseBrief,
+    metadata: {
+      ...baseBrief.metadata,
+      ai_used: false,
+      fallback_used: false,
+      fallback_reason: null,
+      ai_status: 'pending',
+      ai_pending: true,
+    },
+  };
+}
+
+function mergeAiNarratives(baseBrief, narratives, aiStartedAt) {
+  const aiStructured = narratives.structured || {};
+  const fallbackUsed = aiStructured.fallback === true;
+  return {
+    ...baseBrief,
+    narratives,
+    knowledge_basis: aiStructured.knowledge_basis || baseBrief.knowledge_context?.knowledge_items_used || [],
+    metadata: {
+      ...baseBrief.metadata,
+      ai_used: fallbackUsed ? false : true,
+      fallback_used: fallbackUsed,
+      fallback_reason: fallbackUsed ? aiStructured.fallback_reason || 'AI_FALLBACK' : null,
+      ai_confidence: aiStructured.confidence || null,
+      ai_should_escalate_to_human: aiStructured.should_escalate_to_human === true,
+      ai_status: fallbackUsed ? 'fallback' : 'ready',
+      ai_pending: false,
+      ai_latency_ms: Date.now() - aiStartedAt,
+      knowledge_items_count: Array.isArray(aiStructured.knowledge_basis)
+        ? aiStructured.knowledge_basis.length
+        : Array.isArray(baseBrief.knowledge_context?.knowledge_items_used)
+          ? baseBrief.knowledge_context.knowledge_items_used.length
+          : 0,
+    },
+    brief: {
+      ...baseBrief.brief,
+      ai_inferences: fallbackUsed
+        ? []
+        : [
+            aiStructured.executive_summary,
+            aiStructured.technical_summary,
+            aiStructured.audit_summary,
+          ].filter(Boolean),
+      recommendations: Array.isArray(aiStructured.recommendations) && aiStructured.recommendations.length
+        ? aiStructured.recommendations
+        : baseBrief.brief.recommendations,
+      limitations: Array.from(new Set([
+        ...baseBrief.brief.limitations,
+        ...(Array.isArray(aiStructured.limitations) ? aiStructured.limitations : []),
+      ])),
+    },
+  };
+}
+
+async function buildAiNarrativeRefresh({ key, baseBrief, user, requestId, tenantId }) {
+  const aiStartedAt = Date.now();
+  const narratives = await generateNarratives(baseBrief, {
+    narrativeType: 'intelligence_brief',
+    user,
+    requestId,
+  });
+  const finalBrief = mergeAiNarratives(baseBrief, narratives, aiStartedAt);
+  if (key) {
+    setCachedBrief(key, cloneBrief(finalBrief));
+  }
+  logIntelligenceEvent({
+    request_id: requestId,
+    tenant_id: tenantId,
+    user_id: getUserId(user),
+    intelligence_version: finalBrief.version,
+    knowledge_seed_version: finalBrief.knowledge_context?.seed_version || finalBrief.metadata?.knowledge_seed_version || null,
+    rules_version: finalBrief.metadata?.rules_version || null,
+    ai_used: finalBrief.metadata?.ai_used === true,
+    fallback_used: finalBrief.metadata?.fallback_used === true,
+    latency_ms: finalBrief.metadata?.ai_latency_ms || 0,
+    cache_status: 'background_refresh',
+    confidence: finalBrief.confidence?.level || finalBrief.confidence || null,
+    knowledge_coverage_score: finalBrief.knowledge_context?.coverage_score ?? null,
+    error_code: finalBrief.metadata?.fallback_reason || null,
+  });
+  return finalBrief;
+}
+
+function startAiNarrativeRefresh({ key, baseBrief, user, requestId, tenantId }) {
+  if (!key || aiNarrativeRefreshes.has(key)) return aiNarrativeRefreshes.get(key) || null;
+  const task = buildAiNarrativeRefresh({ key, baseBrief: cloneBrief(baseBrief), user, requestId, tenantId })
+    .catch((error) => {
+      const fallbackReason = error?.code || error?.name || 'AI_BACKGROUND_REFRESH_FAILED';
+      setCachedBrief(key, cloneBrief({
+        ...baseBrief,
+        metadata: {
+          ...baseBrief.metadata,
+          ai_used: false,
+          fallback_used: true,
+          fallback_reason: fallbackReason,
+          ai_status: 'fallback',
+          ai_pending: false,
+        },
+      }));
+      logIntelligenceEvent({
+        request_id: requestId,
+        tenant_id: tenantId,
+        user_id: getUserId(user),
+        intelligence_version: baseBrief.version,
+        knowledge_seed_version: baseBrief.knowledge_context?.seed_version || baseBrief.metadata?.knowledge_seed_version || null,
+        rules_version: baseBrief.metadata?.rules_version || null,
+        ai_used: false,
+        fallback_used: true,
+        latency_ms: 0,
+        cache_status: 'background_refresh',
+        confidence: baseBrief.confidence?.level || baseBrief.confidence || null,
+        knowledge_coverage_score: baseBrief.knowledge_context?.coverage_score ?? null,
+        error_code: fallbackReason,
+      });
+      return null;
+    })
+    .finally(() => {
+      aiNarrativeRefreshes.delete(key);
+    });
+  aiNarrativeRefreshes.set(key, task);
+  return task;
 }
 
 
@@ -390,7 +521,9 @@ async function buildTenantIntelligenceBrief({
       intelligence_version: INTELLIGENCE_BRIEF_VERSION,
       ai_used: false,
       fallback_used: false,
-      fallback_reason: enableAiNarrative ? 'ai_not_started' : 'ai_narrative_disabled_by_caller',
+      fallback_reason: enableAiNarrative ? null : 'ai_narrative_disabled_by_caller',
+      ai_status: enableAiNarrative ? 'pending' : 'disabled',
+      ai_pending: enableAiNarrative,
       latency_ms: Date.now() - startedAt,
       cache_status: bypassCache ? 'bypass' : 'miss',
     },
@@ -416,50 +549,8 @@ async function buildTenantIntelligenceBrief({
     });
   }
 
-  const narratives = await generateNarratives(baseBrief, {
-    narrativeType: 'intelligence_brief',
-    user,
-    requestId,
-  });
-  const aiStructured = narratives.structured || {};
-
-  const finalBrief = {
-    ...baseBrief,
-    narratives,
-    knowledge_basis: aiStructured.knowledge_basis || knowledgeContext.knowledge_items_used || [],
-    metadata: {
-      ...baseBrief.metadata,
-      ai_used: aiStructured.fallback !== true,
-      fallback_used: aiStructured.fallback === true,
-      fallback_reason: aiStructured.fallback ? aiStructured.fallback_reason || 'AI_FALLBACK' : null,
-      ai_confidence: aiStructured.confidence || null,
-      ai_should_escalate_to_human: aiStructured.should_escalate_to_human === true,
-      knowledge_items_count: Array.isArray(aiStructured.knowledge_basis)
-        ? aiStructured.knowledge_basis.length
-        : Array.isArray(knowledgeContext.knowledge_items_used)
-          ? knowledgeContext.knowledge_items_used.length
-          : 0,
-    },
-    brief: {
-      ...baseBrief.brief,
-      ai_inferences: aiStructured.fallback
-        ? []
-        : [
-            aiStructured.executive_summary,
-            aiStructured.technical_summary,
-            aiStructured.audit_summary,
-          ].filter(Boolean),
-      recommendations: Array.isArray(aiStructured.recommendations) && aiStructured.recommendations.length
-        ? aiStructured.recommendations
-        : baseBrief.brief.recommendations,
-      limitations: Array.from(new Set([
-        ...baseBrief.brief.limitations,
-        ...(Array.isArray(aiStructured.limitations) ? aiStructured.limitations : []),
-      ])),
-    },
-  };
-
-  return finalizeBriefResponse(finalBrief, {
+  const pendingBrief = buildAiPendingBrief(baseBrief);
+  const response = finalizeBriefResponse(pendingBrief, {
     key,
     startedAt,
     requestId,
@@ -468,6 +559,12 @@ async function buildTenantIntelligenceBrief({
     bypassCache,
     cacheStatus: bypassCache ? 'bypass' : 'miss',
   });
+  startAiNarrativeRefresh({ key, baseBrief, user, requestId, tenantId });
+  return response;
+}
+
+function pendingAiNarrativeCount() {
+  return aiNarrativeRefreshes.size;
 }
 
 module.exports = {
@@ -478,5 +575,6 @@ module.exports = {
   enrichDatasetWithKnowledge,
   getTenantIntelligenceDataset,
   normalizeTenantDataset,
-  _clearIntelligenceBriefCache: () => briefCache.clear(),
+  _clearIntelligenceBriefCache: clearIntelligenceBriefCache,
+  _pendingAiNarrativeCount: pendingAiNarrativeCount,
 };
