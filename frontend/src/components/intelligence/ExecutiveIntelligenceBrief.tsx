@@ -81,7 +81,7 @@ export default function ExecutiveIntelligenceBrief({
     ? 'mt-3 text-sm leading-6 text-slate-50'
     : 'mt-3 text-sm leading-6 text-[var(--tcdx-color-text-secondary)]';
 
-  if (loading) {
+  if (loading && !brief) {
     return (
       <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
         <div className="h-4 w-44 animate-pulse rounded bg-slate-200" />
@@ -168,11 +168,19 @@ export default function ExecutiveIntelligenceBrief({
             <div className="mt-3">
               <IntelligenceConfidenceBadge brief={brief} />
             </div>
-            {brief.metadata?.ai_used === false && (
+            {brief.metadata?.ai_pending === true ? (
               <p className={secondaryTextClass}>
-                IA narrativa desactivada o en fallback. La lectura se mantiene con reglas determinísticas.
+                Lectura base disponible. El enriquecimiento asistido se actualizara cuando este listo.
               </p>
-            )}
+            ) : brief.metadata?.fallback_used === true ? (
+              <p className={secondaryTextClass}>
+                La lectura se mantiene con reglas deterministicas mientras el enriquecimiento asistido no esta disponible.
+              </p>
+            ) : brief.metadata?.ai_used === false ? (
+              <p className={secondaryTextClass}>
+                Lectura basada en datos confirmados y reglas deterministicas.
+              </p>
+            ) : null}
           </div>
           <DataQualityWarnings brief={brief} maxItems={3} />
         </div>

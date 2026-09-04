@@ -33,7 +33,28 @@ async function run() {
     if (sql.includes('FROM saas_modules')) return { rows: [{ is_enabled: true }], rowCount: 1 };
     if (sql.includes('user_has_permission')) return { rows: [{ allowed: values[1] !== 'framework.manage' }], rowCount: 1 };
     if (sql.includes('active_workflows')) return { rows: [{ active_workflows: 2, readiness_score: 75 }], rowCount: 1 };
+    if (sql.includes('SELECT id, name, entity_type, status') && sql.includes('FROM grc_workflow_definitions')) {
+      return { rows: [{ id: tenantA, name: 'Evidencia continua', entity_type: 'evidence', status: 'active' }], rowCount: 1 };
+    }
     if (sql.includes('FROM grc_workflow_definitions d')) return { rows: [{ id: 'workflow-a' }], rowCount: 1 };
+    if (sql.includes('FROM evidences e')) {
+      return { rows: [{ id: tenantA, title: 'Evidencia de control', code: 'EVI-01', status: 'approved' }], rowCount: 1 };
+    }
+    if (sql.includes('FROM grc_workflow_instances i')) {
+      return {
+        rows: [{
+          id: tenantA,
+          definition_id: tenantA,
+          definition_name: 'Evidencia continua',
+          entity_type: 'evidence',
+          entity_id: tenantA,
+          entity_label: 'EVI-01 · Evidencia de control',
+          status: 'active',
+          current_state_name: 'Borrador',
+        }],
+        rowCount: 1,
+      };
+    }
     return { rows: [], rowCount: 0 };
   });
   const service = createGrcService(pool, { createJob: async () => ({ id: 'job' }) });
@@ -49,6 +70,18 @@ async function run() {
   assert.equal(summary.active_workflows, 2);
   const definitions = await service.listWorkflowDefinitions(tenantA, { limit: 500 });
   assert.equal(definitions.length, 1);
+  const options = await service.listWorkflowEntityOptions(tenantA, { definition_id: tenantA, search: 'control', limit: 500 });
+  assert.equal(options.entity_type, 'evidence');
+  assert.equal(options.items[0].title, 'Evidencia de control');
+  const optionQuery = pool.calls.find(call => call.sql.includes('FROM evidences e'));
+  assert.equal(optionQuery.values[0], tenantA);
+  assert.equal(optionQuery.values[1], '%control%');
+  assert.ok(optionQuery.values[2] <= 50);
+  const instances = await service.listWorkflowInstances(tenantA, { search: 'EVI-01', limit: 500 });
+  assert.equal(instances.items[0].entity_label, 'EVI-01 · Evidencia de control');
+  const instanceQuery = pool.calls.find(call => call.sql.includes('FROM grc_workflow_instances i'));
+  assert.equal(instanceQuery.values[0], tenantA);
+  assert.ok(!/i\.entity_id::text\s+ILIKE/i.test(instanceQuery.sql));
 
   const scopedCalls = pool.calls.filter(call => call.sql.includes('grc_'));
   assert.ok(scopedCalls.length >= 2);

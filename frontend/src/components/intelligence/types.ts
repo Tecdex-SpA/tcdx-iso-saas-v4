@@ -97,8 +97,14 @@ export type IntelligenceBrief = {
   scoring?: Record<string, number>;
   metadata?: {
     ai_used?: boolean;
+    fallback_used?: boolean;
     fallback_reason?: string | null;
     ai_confidence?: string | null;
+    ai_status?: 'pending' | 'ready' | 'fallback' | 'disabled' | string;
+    ai_pending?: boolean;
+    ai_latency_ms?: number;
+    latency_ms?: number;
+    cache_status?: string;
     knowledge_items_count?: number;
     rules_version?: string;
     scoring_version?: string;

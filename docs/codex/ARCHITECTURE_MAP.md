@@ -73,6 +73,8 @@ Backend Node/Express
         |      + GRC relationship inventory foundation for Impact Graph (`docs/architecture/grc_relationship_inventory.md`)
         |      + Impact Graph 2.0 projection/adapters (`impactGraph.service.js`) over existing relation truth
         |      + Priority Engine 2.0 projection (`priorityEngine.service.js`) over Gap + Impact Graph truth
+        |      + Phase 2 connector scheduler runs as internal `platform_admin` worker, classifies each tenant connector result, preserves per-connector retry/health/error state, and observes `phase2_scheduler_connector` without turning feature-gated `CONNECTOR_NOT_AVAILABLE` into global scheduler spam
+        |      + Escalation policy facade generates internal tenant-scoped policy codes and exposes user-facing `display_name`; UI manages functional names/application/hours under existing RBAC
         |      + tenant-scoped source validation, RBAC and audit log integration
         |
         +--> Semantic Layer
@@ -107,6 +109,7 @@ Backend Node/Express
                + AI Governance (`ai-governance-contract-v1`, `ai-capability-registry-v1`, `ai-policy-boundaries-v1`)
                + AI Evaluation Suite (`ai-evaluation-suite-v1`)
                + deterministic fallback/audit traces
+               + non-blocking Intelligence Brief: deterministic base response first, tenant-scoped cache/dedupe, background AI narrative refresh, safe fallback observability
                     |
                     v
               AI Engine Python/FastAPI
@@ -127,6 +130,7 @@ Backend Node/Express
 - `backend/src/services/knowledge-base/*`: extender a RAG; no nueva KB.
 - `backend/src/services/intelligence/*`: extender; no segundo orchestrator.
 - `backend/src/services/grc/*`: reutilizar rules/workflows/approvals.
+- `backend/src/routes/grc.routes.js` / `backend/src/services/grc/grc.service.js`: las proyecciones `workflow-entity-options` y `workflow-instances` son UX/read-models tenant-scoped sobre `grc_workflow_*` y `grcRuntimeAdapters`; no son nuevo source of truth.
 - `ai-engine/app/*`: preservar flujos especializados que funcionan.
 - `frontend/src/*`: remodelación visual sin romper contratos/RBAC.
 

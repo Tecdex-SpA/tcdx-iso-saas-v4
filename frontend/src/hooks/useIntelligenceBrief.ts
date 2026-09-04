@@ -27,8 +27,15 @@ type UseIntelligenceBriefResult = {
   refresh: (options?: RefreshOptions) => Promise<void>;
 };
 
+const INTELLIGENCE_BRIEF_LOCALE = 'es';
+const INTELLIGENCE_BRIEF_AI_MODE = 'ai';
+
 function briefCacheKey(tenantId: string) {
-  return `tcdx:intelligence-brief:last:${tenantId}:es`;
+  return `tcdx:intelligence-brief:last:${tenantId}:${INTELLIGENCE_BRIEF_LOCALE}`;
+}
+
+function pollingContextKey(tenantId: string) {
+  return `${tenantId}:${INTELLIGENCE_BRIEF_LOCALE}:${INTELLIGENCE_BRIEF_AI_MODE}`;
 }
 
 function readSessionBrief(tenantId: string): IntelligenceBrief | null {
@@ -69,6 +76,9 @@ export default function useIntelligenceBrief({
   const [status, setStatus] = useState<IntelligenceStatus>('idle');
   const [error, setError] = useState('');
   const requestRef = useRef<AbortController | null>(null);
+  const aiRefreshTimerRef = useRef<number | null>(null);
+  const aiRefreshAttemptsRef = useRef(0);
+  const aiRefreshContextRef = useRef<string | null>(null);
 
   const refresh = useCallback(async (options: RefreshOptions = {}) => {
     if (!enabled) {
@@ -82,12 +92,34 @@ export default function useIntelligenceBrief({
     setTenantId(safeTenantId || null);
 
     if (!token || !safeTenantId) {
+      if (aiRefreshTimerRef.current !== null) {
+        window.clearTimeout(aiRefreshTimerRef.current);
+        aiRefreshTimerRef.current = null;
+      }
+      requestRef.current?.abort();
+      aiRefreshAttemptsRef.current = 0;
+      aiRefreshContextRef.current = null;
       setData(null);
       setError('Sin sesión o tenant asociado para consultar Intelligence Layer.');
       setStatus('no_session');
       return;
     }
 
+    const nextAiRefreshContext = pollingContextKey(safeTenantId);
+    if (aiRefreshContextRef.current !== nextAiRefreshContext) {
+      if (aiRefreshTimerRef.current !== null) {
+        window.clearTimeout(aiRefreshTimerRef.current);
+        aiRefreshTimerRef.current = null;
+      }
+      requestRef.current?.abort();
+      aiRefreshAttemptsRef.current = 0;
+      aiRefreshContextRef.current = nextAiRefreshContext;
+    }
+
+    if (aiRefreshTimerRef.current !== null) {
+      window.clearTimeout(aiRefreshTimerRef.current);
+      aiRefreshTimerRef.current = null;
+    }
     requestRef.current?.abort();
     const controller = new AbortController();
     requestRef.current = controller;
@@ -101,14 +133,14 @@ export default function useIntelligenceBrief({
       setStatus('loading');
       setError('');
       const baseUrl = getApiBaseUrl();
-      const query = new URLSearchParams({ locale: 'es' });
+      const query = new URLSearchParams({ locale: INTELLIGENCE_BRIEF_LOCALE });
       if (options.bypassCache) query.set('refresh', '1');
       const response = await fetch(
         `${baseUrl}/api/intelligence/brief/${encodeURIComponent(safeTenantId)}?${query.toString()}`,
         {
           headers: {
             Authorization: `Bearer ${token}`,
-            'x-tcdx-locale': 'es',
+            'x-tcdx-locale': INTELLIGENCE_BRIEF_LOCALE,
           },
           signal: controller.signal,
         }
@@ -135,10 +167,20 @@ export default function useIntelligenceBrief({
       writeSessionBrief(safeTenantId, brief);
       if (!hasUsefulBrief(brief)) {
         setStatus('empty');
-      } else if (brief.metadata?.fallback_reason || brief.metadata?.ai_used === false || brief.data_quality?.confidence === 'low') {
+      } else if (brief.metadata?.ai_pending === true || brief.metadata?.fallback_used === true || brief.metadata?.ai_used === false || brief.data_quality?.confidence === 'low') {
         setStatus('partial');
       } else {
         setStatus('ready');
+      }
+      if (brief.metadata?.ai_pending === true && aiRefreshAttemptsRef.current < 5) {
+        aiRefreshAttemptsRef.current += 1;
+        const delayMs = aiRefreshAttemptsRef.current <= 2 ? 2000 : 4000;
+        aiRefreshTimerRef.current = window.setTimeout(() => {
+          aiRefreshTimerRef.current = null;
+          void refresh();
+        }, delayMs);
+      } else if (brief.metadata?.ai_pending !== true) {
+        aiRefreshAttemptsRef.current = 0;
       }
     } catch (err) {
       const aborted = err instanceof DOMException && err.name === 'AbortError';
@@ -164,7 +206,13 @@ export default function useIntelligenceBrief({
   useEffect(() => {
     refresh();
     return () => {
+      if (aiRefreshTimerRef.current !== null) {
+        window.clearTimeout(aiRefreshTimerRef.current);
+        aiRefreshTimerRef.current = null;
+      }
       requestRef.current?.abort();
+      aiRefreshAttemptsRef.current = 0;
+      aiRefreshContextRef.current = null;
     };
   }, [refresh]);
 

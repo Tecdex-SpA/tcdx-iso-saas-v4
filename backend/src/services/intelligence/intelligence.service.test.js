@@ -143,6 +143,7 @@ async function runBriefFallbackTest() {
   const brief = await intelligence.buildTenantIntelligenceBrief({
     tenantId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
     user: { role: 'admin', tenant_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' },
+    enableAiNarrative: false,
   });
 
   assert.equal(brief.ok, true);
@@ -245,15 +246,28 @@ function baseTenantDataset(overrides = {}) {
   };
 }
 
-async function buildBriefForDataset(dataset, { hasKnowledge = true } = {}) {
+function intelligenceForDataset(dataset, { hasKnowledge = true } = {}) {
   installKnowledgeStubs({ hasKnowledge });
-  intelligenceRepository.getTenantIntelligenceDataset = async () => dataset;
+  intelligenceRepository.getTenantIntelligenceDataset = async ({ tenantId }) => ({
+    ...dataset,
+    tenant: {
+      ...(dataset.tenant || {}),
+      tenant_id: tenantId,
+    },
+  });
   delete require.cache[require.resolve('./intelligence.service')];
   const intelligence = require('./intelligence.service');
   intelligence._clearIntelligenceBriefCache();
+  return intelligence;
+}
+
+async function buildBriefForDataset(dataset, { hasKnowledge = true, enableAiNarrative = false, tenantId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', requestId = null } = {}) {
+  const intelligence = intelligenceForDataset(dataset, { hasKnowledge });
   return intelligence.buildTenantIntelligenceBrief({
-    tenantId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
-    user: { role: 'admin', tenant_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' },
+    tenantId,
+    user: { role: 'admin', tenant_id: tenantId },
+    enableAiNarrative,
+    requestId,
   });
 }
 
@@ -381,6 +395,16 @@ async function runPhase3AiOrchestratorTests() {
   const originalEnabled = process.env.INTELLIGENCE_AI_ENABLED;
   const originalGenerate = aiEngineClient.generateIntelligenceNarrative;
 
+  async function waitForRefresh(intelligence, timeoutMs = 1000) {
+    const started = Date.now();
+    while (intelligence._pendingAiNarrativeCount() > 0) {
+      if (Date.now() - started > timeoutMs) {
+        throw new Error('Timed out waiting for background AI narrative refresh');
+      }
+      await new Promise(resolve => setTimeout(resolve, 5));
+    }
+  }
+
   try {
     const dataset = baseTenantDataset({
       priority_controls: [{
@@ -401,42 +425,192 @@ async function runPhase3AiOrchestratorTests() {
       }],
     });
 
-    process.env.AI_DISABLED = 'true';
-    let brief = await buildBriefForDataset(dataset);
-    assert.equal(brief.metadata.ai_used, false);
-    assert.equal(brief.metadata.fallback_reason, 'AI_DISABLED');
-    assert.ok(brief.narratives.executive.what_happens);
-
     process.env.AI_DISABLED = 'false';
     process.env.INTELLIGENCE_AI_ENABLED = 'true';
+    let releaseAi;
+    let aiCalls = 0;
+    aiEngineClient.generateIntelligenceNarrative = async () => {
+      aiCalls += 1;
+      await new Promise(resolve => { releaseAi = resolve; });
+      return validAiOutput();
+    };
+    let intelligence = intelligenceForDataset(dataset);
+    const started = Date.now();
+    let brief = await intelligence.buildTenantIntelligenceBrief({
+      tenantId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      user: { role: 'admin', tenant_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' },
+      requestId: 'ai-success-1',
+      enableAiNarrative: true,
+    });
+    assert.ok(Date.now() - started < 250, 'base brief should not wait for delayed AI narrative');
+    assert.equal(brief.metadata.ai_pending, true);
+    assert.equal(brief.metadata.ai_used, false);
+    assert.equal(brief.metadata.fallback_used, false);
+    assert.ok(brief.brief.confirmed_data.length > 0);
+
+    const duplicate = await intelligence.buildTenantIntelligenceBrief({
+      tenantId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      user: { role: 'admin', tenant_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' },
+      requestId: 'ai-success-2',
+      enableAiNarrative: true,
+    });
+    assert.equal(duplicate.metadata.cache_status, 'hit');
+    assert.equal(duplicate.metadata.ai_pending, true);
+    assert.equal(aiCalls, 1);
+    assert.strictEqual(typeof releaseAi, 'function');
+    releaseAi();
+    await waitForRefresh(intelligence);
+
+    const enriched = await intelligence.buildTenantIntelligenceBrief({
+      tenantId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      user: { role: 'admin', tenant_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' },
+      requestId: 'ai-success-3',
+      enableAiNarrative: true,
+    });
+    assert.equal(enriched.metadata.cache_status, 'hit');
+    assert.equal(enriched.metadata.ai_pending, false);
+    assert.equal(enriched.metadata.ai_used, true);
+    assert.equal(enriched.metadata.fallback_used, false);
+    assert.equal(enriched.metadata.fallback_reason, null);
+    assert.ok(enriched.brief.ai_inferences.length > 0);
+    assert.ok(enriched.knowledge_basis.length > 0);
+
     let timeoutOptions = null;
     aiEngineClient.generateIntelligenceNarrative = async (_payload, options) => {
+      aiCalls += 1;
       timeoutOptions = options;
       const error = new Error('timeout');
       error.code = 'AI_ENGINE_TIMEOUT';
       throw error;
     };
-    brief = await buildBriefForDataset(dataset);
+    intelligence = intelligenceForDataset(dataset);
+    brief = await intelligence.buildTenantIntelligenceBrief({
+      tenantId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      user: { role: 'admin', tenant_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' },
+      requestId: 'ai-timeout-1',
+      enableAiNarrative: true,
+    });
+    assert.equal(brief.metadata.ai_pending, true);
     assert.equal(brief.metadata.ai_used, false);
-    assert.equal(brief.metadata.fallback_reason, 'AI_ENGINE_TIMEOUT');
+    assert.equal(brief.metadata.fallback_used, false);
+    assert.ok(brief.brief.confirmed_data.length > 0);
+    await waitForRefresh(intelligence);
+    const timeoutBrief = await intelligence.buildTenantIntelligenceBrief({
+      tenantId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      user: { role: 'admin', tenant_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' },
+      requestId: 'ai-timeout-2',
+      enableAiNarrative: true,
+    });
+    assert.equal(timeoutBrief.metadata.ai_pending, false);
+    assert.equal(timeoutBrief.metadata.ai_used, false);
+    assert.equal(timeoutBrief.metadata.fallback_used, true);
+    assert.equal(timeoutBrief.metadata.fallback_reason, 'AI_ENGINE_TIMEOUT');
+    assert.deepEqual(timeoutBrief.brief.ai_inferences, []);
+    assert.equal(brief.metadata.ai_used, false);
     assert.equal(timeoutOptions.timeoutMs, 12000);
 
+    aiEngineClient.generateIntelligenceNarrative = async (payload) => {
+      const error = new Error('engine unavailable');
+      error.code = 'AI_ENGINE_UNAVAILABLE';
+      return aiEngineClient.buildFallback(payload, error);
+    };
+    intelligence = intelligenceForDataset(dataset);
+    brief = await intelligence.buildTenantIntelligenceBrief({
+      tenantId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      user: { role: 'admin', tenant_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' },
+      requestId: 'ai-unavailable-1',
+      enableAiNarrative: true,
+    });
+    assert.equal(brief.metadata.ai_pending, true);
+    await waitForRefresh(intelligence);
+    const unavailableBrief = await intelligence.buildTenantIntelligenceBrief({
+      tenantId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      user: { role: 'admin', tenant_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' },
+      requestId: 'ai-unavailable-2',
+      enableAiNarrative: true,
+    });
+    assert.equal(unavailableBrief.metadata.ai_used, false);
+    assert.equal(unavailableBrief.metadata.fallback_used, true);
+    assert.equal(unavailableBrief.metadata.fallback_reason, 'AI_ENGINE_UNAVAILABLE');
+    assert.deepEqual(unavailableBrief.brief.ai_inferences, []);
+
     aiEngineClient.generateIntelligenceNarrative = async () => ({ unexpected: true });
-    brief = await buildBriefForDataset(dataset);
+    intelligence = intelligenceForDataset(dataset);
+    await intelligence.buildTenantIntelligenceBrief({
+      tenantId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      user: { role: 'admin', tenant_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' },
+      requestId: 'ai-invalid-1',
+      enableAiNarrative: true,
+    });
+    await waitForRefresh(intelligence);
+    brief = await intelligence.buildTenantIntelligenceBrief({
+      tenantId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      user: { role: 'admin', tenant_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' },
+      requestId: 'ai-invalid-2',
+      enableAiNarrative: true,
+    });
     assert.equal(brief.metadata.ai_used, false);
+    assert.equal(brief.metadata.fallback_used, true);
     assert.equal(brief.metadata.fallback_reason, 'AI_INVALID_OUTPUT');
 
     aiEngineClient.generateIntelligenceNarrative = async () => validAiOutput({ knowledge_basis: [] });
-    brief = await buildBriefForDataset(dataset);
+    intelligence = intelligenceForDataset(dataset);
+    await intelligence.buildTenantIntelligenceBrief({
+      tenantId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      user: { role: 'admin', tenant_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' },
+      requestId: 'ai-degraded-1',
+      enableAiNarrative: true,
+    });
+    await waitForRefresh(intelligence);
+    brief = await intelligence.buildTenantIntelligenceBrief({
+      tenantId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      user: { role: 'admin', tenant_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' },
+      requestId: 'ai-degraded-2',
+      enableAiNarrative: true,
+    });
     assert.equal(brief.metadata.ai_used, true);
+    assert.equal(brief.metadata.fallback_used, false);
     assert.equal(brief.narratives.structured.confidence, 'baja');
     assert.equal(brief.narratives.structured.degraded_reason, 'missing_knowledge_basis');
 
-    aiEngineClient.generateIntelligenceNarrative = async () => validAiOutput();
-    brief = await buildBriefForDataset(dataset);
-    assert.equal(brief.metadata.ai_used, true);
-    assert.equal(brief.metadata.fallback_reason, null);
-    assert.ok(brief.knowledge_basis.length > 0);
+    aiEngineClient.generateIntelligenceNarrative = async (payload) => {
+      const tenantId = payload.context.tenant_summary.tenant_id;
+      return validAiOutput({
+        executive_summary: `Resumen ejecutivo IA para ${tenantId}.`,
+        knowledge_basis: [{ ...kbBasis, source_record_id: tenantId }],
+      });
+    };
+    intelligence = intelligenceForDataset(dataset);
+    await intelligence.buildTenantIntelligenceBrief({
+      tenantId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      user: { role: 'admin', tenant_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' },
+      requestId: 'tenant-a-1',
+      enableAiNarrative: true,
+    });
+    await intelligence.buildTenantIntelligenceBrief({
+      tenantId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+      user: { role: 'admin', tenant_id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb' },
+      requestId: 'tenant-b-1',
+      enableAiNarrative: true,
+    });
+    await waitForRefresh(intelligence);
+    const tenantA = await intelligence.buildTenantIntelligenceBrief({
+      tenantId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      user: { role: 'admin', tenant_id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' },
+      requestId: 'tenant-a-2',
+      enableAiNarrative: true,
+    });
+    const tenantB = await intelligence.buildTenantIntelligenceBrief({
+      tenantId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+      user: { role: 'admin', tenant_id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb' },
+      requestId: 'tenant-b-2',
+      enableAiNarrative: true,
+    });
+    assert.equal(tenantA.tenant_id, 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa');
+    assert.equal(tenantB.tenant_id, 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb');
+    assert.notEqual(tenantA.brief.ai_inferences[0], tenantB.brief.ai_inferences[0]);
+    assert.equal(tenantA.knowledge_basis[0].source_record_id, 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa');
+    assert.equal(tenantB.knowledge_basis[0].source_record_id, 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb');
   } finally {
     if (originalAiDisabled === undefined) delete process.env.AI_DISABLED;
     else process.env.AI_DISABLED = originalAiDisabled;

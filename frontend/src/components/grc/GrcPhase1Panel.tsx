@@ -66,11 +66,72 @@ type WorkflowInstance = {
   id: string;
   entity_type: string;
   entity_id: string;
+  context?: Record<string, unknown> | null;
   status: string;
   current_state_name: string;
   available_transitions: Array<{ code: string; name: string; approval_mode: string }>;
-  history: Array<{ id: string; comment?: string; created_at: string }>;
+  created_at?: string | null;
+  history: Array<{
+    id: string;
+    transition_code?: string | null;
+    transition_name?: string | null;
+    actor_label?: string | null;
+    from_state_name?: string | null;
+    to_state_name?: string | null;
+    comment?: string;
+    created_at: string;
+    result?: Record<string, unknown> | null;
+  }>;
   approvals: Array<{ id: string; decision: string; comment?: string }>;
+};
+
+type WorkflowEntityOption = {
+  id: string;
+  entity_type: string;
+  code?: string | null;
+  title: string;
+  context?: string | null;
+  owner?: string | null;
+  status?: string | null;
+};
+
+type WorkflowEntityOptionsResponse = {
+  definition_id: string;
+  definition_name: string;
+  entity_type: string;
+  items: WorkflowEntityOption[];
+  limit: number;
+  offset: number;
+};
+
+type WorkflowInstanceListItem = {
+  id: string;
+  definition_id: string;
+  definition_name: string;
+  entity_type: string;
+  entity_id: string;
+  entity_label?: string | null;
+  entity_code?: string | null;
+  status: string;
+  current_state_name: string;
+  created_at?: string | null;
+  updated_at?: string | null;
+};
+
+type WorkflowInstanceListResponse = {
+  items: WorkflowInstanceListItem[];
+  limit: number;
+  offset: number;
+};
+
+type EscalationPolicy = {
+  id: string;
+  code: string;
+  display_name?: string | null;
+  entity_type: string;
+  prior_notice_hours: number | string;
+  second_escalation_hours: number | string;
+  is_active?: boolean;
 };
 
 type Framework = {
@@ -194,7 +255,10 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
   });
   const envelope = (await response.json().catch(() => ({}))) as ApiEnvelope<T>;
   if (!response.ok || envelope.ok === false) {
-    throw new Error(envelope.error || 'No fue posible completar la operación.');
+    const rawMessage = String(envelope.error || '');
+    const technical = Boolean(envelope.code)
+      || /(^|[^a-z])(GRC_|PHASE3_|SQL|HTTP|FROM-clause|uuid|workflow\.)/i.test(rawMessage);
+    throw new Error(technical ? 'No fue posible completar la operación con los datos seleccionados.' : rawMessage || 'No fue posible completar la operación.');
   }
   return envelope.data as T;
 }
@@ -247,6 +311,77 @@ function statusTone(status: string): 'success' | 'warning' | 'danger' | 'info' |
   return 'neutral';
 }
 
+function workflowStatusLabel(status?: string | null) {
+  const labels: Record<string, string> = {
+    active: 'Activo',
+    approved: 'Aprobado',
+    archived: 'Archivado',
+    changes_requested: 'Cambios solicitados',
+    completed: 'Completado',
+    draft: 'Borrador',
+    expired: 'Vencido',
+    planned: 'Planificado',
+    published: 'Publicado',
+    rejected: 'Rechazado',
+    requested: 'Solicitado',
+    returned: 'Devuelto',
+    submitted: 'Enviado',
+    under_review: 'En revisión',
+  };
+  return labels[String(status || '').toLowerCase()] || 'Sin estado';
+}
+
+function entityTypeLabel(entityType?: string | null) {
+  const labels: Record<string, string> = {
+    action: 'Acción',
+    audit: 'Auditoría',
+    control: 'Control',
+    document: 'Documento',
+    evidence: 'Evidencia',
+    evidence_request: 'Solicitud de evidencia',
+    finding: 'Hallazgo',
+    nonconformity: 'No conformidad',
+    risk: 'Riesgo',
+    audit_followup: 'Seguimiento de auditoría',
+  };
+  return labels[String(entityType || '').toLowerCase()] || 'Entidad';
+}
+
+function approvalModeLabel(mode?: string | null) {
+  const labels: Record<string, string> = {
+    none: 'Sin aprobación adicional',
+    simple: 'Aprobación simple',
+    parallel: 'Aprobación paralela',
+    quorum: 'Quórum',
+    sequential: 'Aprobación secuencial',
+    unanimous: 'Unánime',
+  };
+  return labels[String(mode || '').toLowerCase()] || 'Aprobación configurada';
+}
+
+function workflowEntityLabel(option?: WorkflowEntityOption | null) {
+  if (!option) return 'Seleccionar';
+  return [
+    option.code,
+    option.title,
+    option.context ? workflowStatusLabel(option.context) === 'Sin estado' ? option.context : workflowStatusLabel(option.context) : '',
+    option.owner ? `Responsable: ${option.owner}` : '',
+    option.status ? `Estado: ${workflowStatusLabel(option.status)}` : '',
+  ].filter(Boolean).join(' · ');
+}
+
+function instanceEntityLabel(instance: WorkflowInstance | WorkflowInstanceListItem) {
+  const context = 'context' in instance && isRecord(instance.context) ? instance.context : {};
+  const label = String(
+    ('entity_label' in instance ? instance.entity_label : null)
+    || context.entity_label
+    || ('entity_code' in instance ? instance.entity_code : null)
+    || context.entity_code
+    || entityTypeLabel(instance.entity_type)
+  );
+  return isUuidLike(label) ? entityTypeLabel(instance.entity_type) : label;
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
@@ -294,6 +429,7 @@ export default function GrcPhase1Panel({ mode }: { mode: PanelMode }) {
   const [data, setData] = useState<unknown>(null);
   const [readiness, setReadiness] = useState<Readiness | null>(null);
   const [bootstrapStatus, setBootstrapStatus] = useState<BootstrapStatus | null>(null);
+  const [escalationPolicies, setEscalationPolicies] = useState<EscalationPolicy[]>([]);
   const [frameworkRequirements, setFrameworkRequirements] = useState<FrameworkRequirement[]>([]);
   const [frameworkMappings, setFrameworkMappings] = useState<FrameworkMapping[]>([]);
   const [loading, setLoading] = useState(true);
@@ -320,14 +456,18 @@ export default function GrcPhase1Panel({ mode }: { mode: PanelMode }) {
       }
       if (mode === 'evidence') setData(await api<EvidenceRequest[]>('/api/grc/evidence/requests'));
       if (mode === 'workflow') {
-        const [workflows, bootstrap] = await Promise.all([
+        const [workflows, bootstrap, policies] = await Promise.all([
           api<WorkflowDefinition[]>('/api/grc/workflows'),
           can(nextMeta.permissions || {}, 'workflow.manage')
             ? api<BootstrapStatus>('/api/grc/bootstrap/status')
             : Promise.resolve(null),
+          can(nextMeta.permissions || {}, 'workflow.read')
+            ? api<EscalationPolicy[]>('/api/grc/escalations/policies')
+            : Promise.resolve([]),
         ]);
         setData(workflows);
         setBootstrapStatus(bootstrap);
+        setEscalationPolicies(policies);
       }
       if (mode === 'framework') {
         const [frameworks, requirements, mappings] = await Promise.all([
@@ -464,25 +604,33 @@ export default function GrcPhase1Panel({ mode }: { mode: PanelMode }) {
           rows={(data || []) as WorkflowDefinition[]}
           canManage={can(permissions, 'workflow.manage')}
           disabled={actionLoading}
-          onCreate={(body) => perform(() => api('/api/grc/workflows', { method: 'POST', body: JSON.stringify(body) }), 'Borrador de workflow creado.')}
+          onCreate={(body) => perform(() => api('/api/grc/workflows', { method: 'POST', body: JSON.stringify(body) }), 'Borrador de proceso creado.')}
           onSave={(id, body) => perform(() => api(`/api/grc/workflows/${id}/draft`, { method: 'PUT', body: JSON.stringify(body) }), 'Borrador validado y guardado.')}
           onValidate={(body) => performWithoutReload(
             () => api('/api/grc/workflows/validate', {
               method: 'POST',
               body: JSON.stringify(body),
             }),
-            'Configuración de workflow válida.'
+            'Configuración de proceso válida.'
           )}
-          onPublish={(id) => perform(() => api(`/api/grc/workflows/${id}/publish`, { method: 'POST', body: '{}' }), 'Versión de workflow publicada.')}
-          onArchive={(id) => perform(() => api(`/api/grc/workflows/${id}/archive`, { method: 'POST', body: '{}' }), 'Workflow archivado.')}
+          onPublish={(id) => perform(() => api(`/api/grc/workflows/${id}/publish`, { method: 'POST', body: '{}' }), 'Versión de proceso publicada.')}
+          onArchive={(id) => perform(() => api(`/api/grc/workflows/${id}/archive`, { method: 'POST', body: '{}' }), 'Proceso archivado.')}
         /><WorkflowRuntimePanel
           definitions={(data || []) as WorkflowDefinition[]}
+          canRead={can(permissions, 'workflow.read')}
           canTransition={can(permissions, 'workflow.transition')}
         /><AutomationPanel
+          policies={escalationPolicies}
           disabled={actionLoading}
           canRun={can(permissions, 'grc.scheduler.run')}
           canManage={can(permissions, 'grc.escalation.manage')}
-          onRun={() => perform(() => api('/api/grc/scheduler/run', { method: 'POST', body: JSON.stringify({ run_type: 'manual_controlled' }) }), 'Scheduler ejecutado; revisa el resumen actualizado.')}
+          onRun={() => perform(() => api('/api/grc/scheduler/run', {
+            method: 'POST',
+            body: JSON.stringify({
+              run_type: 'manual_controlled',
+              tasks: ['evidence_requests', 'reminders_expirations', 'escalations', 'action_followup'],
+            }),
+          }), 'Ejecución de avisos y escalamiento completada; revisa el resumen actualizado.')}
           onCreatePolicy={(body) => perform(() => api('/api/grc/escalations/policies', { method: 'POST', body: JSON.stringify(body) }), 'Política de escalamiento guardada.')}
         /></>
       ) : null}
@@ -549,7 +697,7 @@ function BootstrapPanel({
           </div>
           <p className="mt-3 text-sm text-slate-600">
             {status?.ready
-              ? `${status.counts.workflows} workflows, ${status.counts.readiness_rules} reglas y ${status.counts.escalation_policies} políticas verificadas.`
+              ? `${status.counts.workflows} procesos, ${status.counts.readiness_rules} reglas y ${status.counts.escalation_policies} políticas verificadas.`
               : status?.missing?.length
                 ? `Faltan: ${status.missing.join(', ')}.`
                 : 'Comprueba el estado y ejecuta la inicialización controlada.'}
@@ -602,7 +750,7 @@ function DashboardPanel({
 }) {
   const stats = [
     ['Readiness', `${number(readiness?.score ?? summary.readiness_score).toFixed(1)}%`],
-    ['Workflows activos', number(summary.active_workflows)],
+    ['Procesos activos', number(summary.active_workflows)],
     ['Solicitudes abiertas', number(summary.open_evidence_requests)],
     ['Solicitudes vencidas', number(summary.overdue_evidence_requests)],
     ['Revisiones pendientes', number(summary.pending_workpaper_reviews)],
@@ -858,12 +1006,12 @@ function WorkflowPanel({ rows, canManage, disabled, onCreate, onSave, onValidate
   return (
     <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
       <EnterpriseCard title="Definiciones versionadas" subtitle="Las versiones publicadas son inmutables; las instancias conservan su versión." bodyClassName="p-5">
-        {!rows.length ? <EnterpriseEmptyState title="Sin workflows" description="No existen definiciones configuradas para esta empresa." /> : (
+        {!rows.length ? <EnterpriseEmptyState title="Sin procesos" description="No existen procesos automatizados configurados para esta empresa." /> : (
           <div className="space-y-3">{rows.map((row) => (
             <div key={row.id} className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-slate-200 p-4">
-              <div className="min-w-0"><p className="truncate font-semibold text-slate-900" title={row.name}>{row.name}</p><p className="mt-1 text-xs text-slate-500">{row.entity_type} · versión {row.active_version || 'borrador'} · {number(row.instance_count)} instancias</p></div>
+              <div className="min-w-0"><p className="truncate font-semibold text-slate-900" title={row.name}>{row.name}</p><p className="mt-1 text-xs text-slate-500">{entityTypeLabel(row.entity_type)} · versión {row.active_version || 'borrador'} · {number(row.instance_count)} instancias</p></div>
               <div className="flex flex-wrap items-center gap-2">
-                <EnterpriseBadge tone={statusTone(row.status)}>{row.status}</EnterpriseBadge>
+                <EnterpriseBadge tone={statusTone(row.status)}>{workflowStatusLabel(row.status)}</EnterpriseBadge>
                 {canManage && row.status !== 'archived' ? <EnterpriseButton type="button" variant="secondary" onClick={() => { setSelectedId(row.id); setName(row.name); setEntityType(row.entity_type); }} disabled={disabled}>Editar borrador</EnterpriseButton> : null}
                 {canManage && row.status === 'draft' ? <EnterpriseButton type="button" variant="secondary" onClick={() => onPublish(row.id)} disabled={disabled}>Publicar</EnterpriseButton> : null}
                 <EnterpriseButton type="button" variant="secondary" onClick={() => {
@@ -877,7 +1025,7 @@ function WorkflowPanel({ rows, canManage, disabled, onCreate, onSave, onValidate
             </div>
           ))}</div>
         )}
-        {history ? <div className="mt-4 rounded-md border border-slate-200 bg-slate-50 p-4"><p className="font-semibold text-slate-900">Historial de versiones</p><ul className="mt-2 space-y-1 text-sm text-slate-600">{history.versions.map(version => <li key={version.id}>v{version.version} · {version.status}{version.published_at ? ` · ${formatDate(version.published_at)}` : ''}</li>)}</ul></div> : null}
+        {history ? <div className="mt-4 rounded-md border border-slate-200 bg-slate-50 p-4"><p className="font-semibold text-slate-900">Historial de versiones</p><ul className="mt-2 space-y-1 text-sm text-slate-600">{history.versions.map(version => <li key={version.id}>v{version.version} · {workflowStatusLabel(version.status)}{version.published_at ? ` · ${formatDate(version.published_at)}` : ''}</li>)}</ul></div> : null}
         {historyError ? <p role="alert" className="mt-4 rounded-md bg-red-50 p-3 text-sm text-red-800">{historyError}</p> : null}
       </EnterpriseCard>
       {canManage ? (
@@ -897,14 +1045,22 @@ function WorkflowPanel({ rows, canManage, disabled, onCreate, onSave, onValidate
   );
 }
 
-function WorkflowRuntimePanel({ definitions, canTransition }: {
+function WorkflowRuntimePanel({ definitions, canRead, canTransition }: {
   definitions: WorkflowDefinition[];
+  canRead: boolean;
   canTransition: boolean;
 }) {
   const active = definitions.filter(item => item.active_version);
   const [definitionId, setDefinitionId] = useState('');
-  const [entityId, setEntityId] = useState('');
-  const [instanceId, setInstanceId] = useState('');
+  const [entitySearch, setEntitySearch] = useState('');
+  const [entityOptions, setEntityOptions] = useState<WorkflowEntityOption[]>([]);
+  const [entityLoading, setEntityLoading] = useState(false);
+  const [entityError, setEntityError] = useState('');
+  const [selectedEntityId, setSelectedEntityId] = useState('');
+  const [instances, setInstances] = useState<WorkflowInstanceListItem[]>([]);
+  const [instanceSearch, setInstanceSearch] = useState('');
+  const [instancesLoading, setInstancesLoading] = useState(false);
+  const [instancesError, setInstancesError] = useState('');
   const [instance, setInstance] = useState<WorkflowInstance | null>(null);
   const [transitionCode, setTransitionCode] = useState('');
   const [decision, setDecision] = useState('approved');
@@ -912,65 +1068,178 @@ function WorkflowRuntimePanel({ definitions, canTransition }: {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
-  if (!canTransition) return null;
   const selected = active.find(item => item.id === definitionId);
+  const selectedEntity = entityOptions.find(item => item.id === selectedEntityId) || null;
+
+  useEffect(() => {
+    setSelectedEntityId('');
+    setInstance(null);
+    setTransitionCode('');
+  }, [definitionId]);
+
+  useEffect(() => {
+    if (!canRead || !selected) {
+      setEntityOptions([]);
+      setEntityError('');
+      setEntityLoading(false);
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      setEntityLoading(true);
+      setEntityError('');
+      const params = new URLSearchParams({ definition_id: selected.id, limit: '25' });
+      if (entitySearch.trim()) params.set('search', entitySearch.trim());
+      void api<WorkflowEntityOptionsResponse>(`/api/grc/workflow-entity-options?${params.toString()}`)
+        .then(payload => setEntityOptions(payload.items || []))
+        .catch(caught => {
+          setEntityOptions([]);
+          setEntityError(caught instanceof Error ? caught.message : 'No fue posible cargar entidades compatibles.');
+        })
+        .finally(() => setEntityLoading(false));
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [canRead, entitySearch, selected]);
+
+  useEffect(() => {
+    if (!canRead) {
+      setInstances([]);
+      setInstancesError('');
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      setInstancesLoading(true);
+      setInstancesError('');
+      const params = new URLSearchParams({ limit: '10' });
+      if (definitionId) params.set('definition_id', definitionId);
+      if (instanceSearch.trim()) params.set('search', instanceSearch.trim());
+      void api<WorkflowInstanceListResponse>(`/api/grc/workflow-instances?${params.toString()}`)
+        .then(payload => setInstances(payload.items || []))
+        .catch(caught => {
+          setInstances([]);
+          setInstancesError(caught instanceof Error ? caught.message : 'No fue posible cargar instancias recientes.');
+        })
+        .finally(() => setInstancesLoading(false));
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [canRead, definitionId, instanceSearch]);
+
   async function run(work: () => Promise<WorkflowInstance>, success: string) {
     setBusy(true);
     setError('');
     setMessage('');
     try {
       const result = await work();
-      const refreshed = await api<WorkflowInstance>(`/api/grc/workflow-instances/${result.id || instanceId}`);
+      const nextInstanceId = result.id || instance?.id;
+      if (!nextInstanceId) throw new Error('No fue posible localizar la instancia actualizada.');
+      const refreshed = await api<WorkflowInstance>(`/api/grc/workflow-instances/${nextInstanceId}`);
       setInstance(refreshed);
-      setInstanceId(refreshed.id);
       setTransitionCode('');
       setComment('');
       setMessage(success);
+      const params = new URLSearchParams({ limit: '10' });
+      if (definitionId) params.set('definition_id', definitionId);
+      if (instanceSearch.trim()) params.set('search', instanceSearch.trim());
+      const refreshedList = await api<WorkflowInstanceListResponse>(`/api/grc/workflow-instances?${params.toString()}`);
+      setInstances(refreshedList.items || []);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'No fue posible operar la instancia.');
     } finally {
       setBusy(false);
     }
   }
+  if (!canRead) {
+    return (
+      <EnterpriseCard title="Instancias y transiciones" subtitle="Operación real de procesos automatizados con alcance por empresa." bodyClassName="p-5">
+        <EnterpriseEmptyState title="Sin permisos suficientes" description="Tu rol no tiene permisos para consultar procesos automatizados." />
+      </EnterpriseCard>
+    );
+  }
   return (
     <EnterpriseCard title="Instancias y transiciones" subtitle="Crea una instancia real, aplica decisiones autorizadas y consulta su historial persistido." bodyClassName="p-5">
       {message ? <p role="status" aria-live="polite" className="mb-4 rounded-md bg-emerald-50 p-3 text-sm text-emerald-800">{message}</p> : null}
       {error ? <p role="alert" className="mb-4 rounded-md bg-red-50 p-3 text-sm text-red-800">{error}</p> : null}
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,440px)_minmax(0,1fr)]">
         <form className="space-y-3" onSubmit={(event) => {
           event.preventDefault();
-          if (!selected) return;
+          if (!selected || !selectedEntity) {
+            setError('Selecciona una entidad compatible antes de crear la instancia.');
+            return;
+          }
           void run(
             () => api<WorkflowInstance>('/api/grc/workflow-instances', {
               method: 'POST',
-              body: JSON.stringify({ definition_id: selected.id, entity_type: selected.entity_type, entity_id: entityId }),
+              body: JSON.stringify({
+                definition_id: selected.id,
+                entity_type: selected.entity_type,
+                entity_id: selectedEntity.id,
+                context: {
+                  entity_label: workflowEntityLabel(selectedEntity),
+                  entity_code: selectedEntity.code || null,
+                  entity_owner: selectedEntity.owner || null,
+                  entity_status: selectedEntity.status || null,
+                },
+              }),
             }),
             'Instancia creada y persistida.'
           );
         }}>
-          <label className="block text-sm font-semibold text-slate-700">Workflow
+          <label className="block text-sm font-semibold text-slate-700">Proceso
             <select value={definitionId} onChange={event => setDefinitionId(event.target.value)} required className="mt-2 min-h-11 w-full rounded-md border border-slate-300 px-3">
               <option value="">Seleccionar</option>
-              {active.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
+              {active.map(item => <option key={item.id} value={item.id}>{item.name} · {entityTypeLabel(item.entity_type)}</option>)}
             </select>
           </label>
-          <label className="block text-sm font-semibold text-slate-700">ID de entidad
-            <input value={entityId} onChange={event => setEntityId(event.target.value)} required pattern="[0-9a-fA-F-]{36}" className="mt-2 min-h-11 w-full rounded-md border border-slate-300 px-3" />
+          <label className="block text-sm font-semibold text-slate-700">Aplicar a
+            <input value={entitySearch} onChange={event => setEntitySearch(event.target.value)} placeholder="Buscar por nombre, código o responsable" disabled={!selected || entityLoading} className="mt-2 min-h-11 w-full rounded-md border border-slate-300 px-3" />
+            <select value={selectedEntityId} onChange={event => setSelectedEntityId(event.target.value)} required disabled={!selected || entityLoading} className="mt-2 min-h-11 w-full rounded-md border border-slate-300 px-3">
+              <option value="">{entityLoading ? 'Cargando...' : 'Buscar o seleccionar...'}</option>
+              {entityOptions.map(item => <option key={item.id} value={item.id}>{workflowEntityLabel(item)}</option>)}
+            </select>
           </label>
-          <EnterpriseButton type="submit" disabled={busy || !definitionId || !entityId}>Crear instancia</EnterpriseButton>
-          <div className="flex gap-2">
-            <input aria-label="ID de instancia existente" value={instanceId} onChange={event => setInstanceId(event.target.value)} className="min-h-11 min-w-0 flex-1 rounded-md border border-slate-300 px-3" />
-            <EnterpriseButton type="button" variant="secondary" disabled={busy || !instanceId} onClick={() => void run(() => api<WorkflowInstance>(`/api/grc/workflow-instances/${instanceId}`), 'Instancia actualizada.')}>Consultar</EnterpriseButton>
-          </div>
+          {entityError ? <p role="alert" className="rounded-md bg-red-50 p-3 text-sm text-red-800">{entityError}</p> : null}
+          {selected && !entityLoading && !entityError && entityOptions.length === 0 ? (
+            <p className="rounded-md bg-slate-50 p-3 text-sm text-slate-600">No hay entidades compatibles para los filtros actuales.</p>
+          ) : null}
+          <EnterpriseButton type="submit" disabled={busy || !canTransition || !definitionId || !selectedEntityId}>
+            {busy ? 'Creando...' : 'Crear instancia'}
+          </EnterpriseButton>
+          {!canTransition ? <p className="text-xs text-slate-500">Tu rol permite consultar, pero no ejecutar transiciones.</p> : null}
         </form>
-        <div className="rounded-md border border-slate-200 p-4">
+        <div className="space-y-4">
+          <div className="rounded-md border border-slate-200 p-4">
+            <div className="flex flex-wrap items-end justify-between gap-3">
+              <label className="min-w-0 flex-1 text-sm font-semibold text-slate-700">Consultar instancias
+                <input value={instanceSearch} onChange={event => setInstanceSearch(event.target.value)} placeholder="Buscar por proceso, entidad o estado" className="mt-2 min-h-11 w-full rounded-md border border-slate-300 px-3" />
+              </label>
+              {instancesLoading ? <span className="pb-3 text-xs font-semibold text-slate-500">Cargando...</span> : null}
+            </div>
+            {instancesError ? <p role="alert" className="mt-3 rounded-md bg-red-50 p-3 text-sm text-red-800">{instancesError}</p> : null}
+            {!instances.length && !instancesLoading && !instancesError ? (
+              <EnterpriseEmptyState title="Sin instancias recientes" description="Crea una instancia o ajusta la búsqueda." />
+            ) : (
+              <div className="mt-3 space-y-2">
+                {instances.map(item => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => void run(() => api<WorkflowInstance>(`/api/grc/workflow-instances/${item.id}`), 'Instancia actualizada.')}
+                    className="w-full rounded-md border border-slate-200 p-3 text-left hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                  >
+                    <span className="block truncate text-sm font-semibold text-slate-900">{item.definition_name}</span>
+                    <span className="mt-1 block text-xs text-slate-600">{instanceEntityLabel(item)} · {item.current_state_name || workflowStatusLabel(item.status)} · {formatDate(item.updated_at || item.created_at)}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          <div className="rounded-md border border-slate-200 p-4">
           {!instance ? <EnterpriseEmptyState title="Sin instancia seleccionada" description="Crea o consulta una instancia para operar sus transiciones." /> : (
             <div className="space-y-3">
-              <div className="flex justify-between gap-3"><div><p className="font-semibold text-slate-900">{instance.current_state_name}</p><p className="text-xs text-slate-500">{instance.entity_type} · {instance.entity_id}</p></div><EnterpriseBadge tone={statusTone(instance.status)}>{instance.status}</EnterpriseBadge></div>
-              <label className="block text-sm font-semibold text-slate-700">Transición
+              <div className="flex justify-between gap-3"><div><p className="font-semibold text-slate-900">{instance.current_state_name}</p><p className="text-xs text-slate-500">{instanceEntityLabel(instance)} · {formatDate(instance.created_at)}</p></div><EnterpriseBadge tone={statusTone(instance.status)}>{workflowStatusLabel(instance.status)}</EnterpriseBadge></div>
+              <label className="block text-sm font-semibold text-slate-700">Acciones disponibles
                 <select value={transitionCode} onChange={event => setTransitionCode(event.target.value)} className="mt-2 min-h-11 w-full rounded-md border border-slate-300 px-3">
                   <option value="">Seleccionar</option>
-                  {instance.available_transitions.map(item => <option key={item.code} value={item.code}>{item.name} ({item.approval_mode})</option>)}
+                  {instance.available_transitions.map(item => <option key={item.code} value={item.code}>{item.name} · {approvalModeLabel(item.approval_mode)}</option>)}
                 </select>
               </label>
               <label className="block text-sm font-semibold text-slate-700">Decisión
@@ -986,9 +1255,31 @@ function WorkflowRuntimePanel({ definitions, canTransition }: {
                 }),
                 'Transición registrada y vista actualizada.'
               )}>Ejecutar transición</EnterpriseButton>
-              <p className="text-xs text-slate-500">Historial: {instance.history.length} · Aprobaciones: {instance.approvals.length}</p>
+              <div className="border-t border-slate-200 pt-3">
+                <p className="text-sm font-semibold text-slate-900">Historial</p>
+                {!instance.history.length ? <p className="mt-2 text-sm text-slate-500">Sin movimientos persistidos.</p> : (
+                  <ol className="mt-2 space-y-2">
+                    {instance.history.map(item => {
+                      const result = isRecord(item.result) ? item.result : {};
+                      const event = item.transition_name || (result.event === 'started' ? 'Inicio' : 'Cambio de estado');
+                      const state = item.to_state_name || workflowStatusLabel(String(result.status || ''));
+                      return (
+                        <li key={item.id} className="rounded-md bg-slate-50 p-3 text-sm">
+                          <div className="flex flex-wrap justify-between gap-2">
+                            <span className="font-semibold text-slate-900">{event}</span>
+                            <span className="text-xs text-slate-500">{formatDate(item.created_at)}</span>
+                          </div>
+                          <p className="mt-1 text-xs text-slate-600">Usuario: {item.actor_label || 'Sistema'} · Estado resultante: {state}</p>
+                          {item.comment ? <p className="mt-2 text-slate-700">{item.comment}</p> : null}
+                        </li>
+                      );
+                    })}
+                  </ol>
+                )}
+              </div>
             </div>
           )}
+          </div>
         </div>
       </div>
     </EnterpriseCard>
@@ -1057,31 +1348,85 @@ function FrameworkPanel({ rows, requirements, mappings, canManage, disabled, onC
   );
 }
 
-function AutomationPanel({ disabled, canRun, canManage, onRun, onCreatePolicy }: {
+function AutomationPanel({ policies, disabled, canRun, canManage, onRun, onCreatePolicy }: {
+  policies: EscalationPolicy[];
   disabled: boolean;
   canRun: boolean;
   canManage: boolean;
   onRun: () => void;
   onCreatePolicy: (body: Record<string, unknown>) => void;
 }) {
-  const [code, setCode] = useState('evidence-default');
+  const [name, setName] = useState('Política de evidencias');
   const [entityType, setEntityType] = useState('evidence_request');
   const [priorNotice, setPriorNotice] = useState('24');
   const [secondEscalation, setSecondEscalation] = useState('24');
+  const [confirmRun, setConfirmRun] = useState(false);
+  const priorHours = Number(priorNotice);
+  const secondHours = Number(secondEscalation);
+  const hoursValid = priorNotice.trim() !== '' && secondEscalation.trim() !== ''
+    && Number.isFinite(priorHours) && Number.isFinite(secondHours)
+    && priorHours >= 0 && secondHours >= 0;
+  const entityOptions = [
+    ['evidence_request', 'Solicitudes de evidencia'],
+    ['action', 'Acciones'],
+    ['audit_followup', 'Seguimientos de auditoría'],
+    ['audit', 'Auditorías'],
+  ];
   if (!canRun && !canManage) return null;
   return (
-    <EnterpriseCard title="Scheduler y escalamiento" subtitle="Ejecución idempotente con locking, retry y políticas configurables por empresa." bodyClassName="p-5">
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_220px]">
+    <EnterpriseCard title="Política de avisos y escalamiento" subtitle="Define cuándo avisar vencimientos y cuándo escalar nuevamente." bodyClassName="p-5">
+      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_280px]">
         {canManage ? (
-          <form className="grid gap-3 sm:grid-cols-2" onSubmit={(event) => { event.preventDefault(); onCreatePolicy({ code, entity_type: entityType, prior_notice_hours: Number(priorNotice), first_escalation_hours: 0, second_escalation_hours: Number(secondEscalation), role_keys: [] }); }}>
-            <label className="text-sm font-semibold text-slate-700">Código<input value={code} onChange={(event) => setCode(event.target.value)} required className="mt-2 min-h-11 w-full rounded-md border border-slate-300 px-3" /></label>
-            <label className="text-sm font-semibold text-slate-700">Entidad<select value={entityType} onChange={(event) => setEntityType(event.target.value)} className="mt-2 min-h-11 w-full rounded-md border border-slate-300 px-3"><option value="evidence_request">Solicitud de evidencia</option><option value="action">Acción</option><option value="audit_followup">Seguimiento de auditoría</option><option value="audit">Auditoría</option></select></label>
-            <label className="text-sm font-semibold text-slate-700">Aviso previo (horas)<input type="number" min="0" value={priorNotice} onChange={(event) => setPriorNotice(event.target.value)} className="mt-2 min-h-11 w-full rounded-md border border-slate-300 px-3" /></label>
-            <label className="text-sm font-semibold text-slate-700">Segundo escalamiento (horas)<input type="number" min="0" value={secondEscalation} onChange={(event) => setSecondEscalation(event.target.value)} className="mt-2 min-h-11 w-full rounded-md border border-slate-300 px-3" /></label>
-            <EnterpriseButton type="submit" disabled={disabled || !code.trim()}>Guardar política</EnterpriseButton>
+          <form className="grid gap-4 sm:grid-cols-2" onSubmit={(event) => {
+            event.preventDefault();
+            onCreatePolicy({
+              name,
+              entity_type: entityType,
+              prior_notice_hours: priorHours,
+              first_escalation_hours: 0,
+              second_escalation_hours: secondHours,
+              role_keys: [],
+            });
+          }}>
+            <label className="text-sm font-semibold text-slate-700">Nombre<input value={name} onChange={(event) => setName(event.target.value)} required maxLength={180} className="mt-2 min-h-11 w-full rounded-md border border-slate-300 px-3" /></label>
+            <label className="text-sm font-semibold text-slate-700">Aplicar a<select value={entityType} onChange={(event) => setEntityType(event.target.value)} className="mt-2 min-h-11 w-full rounded-md border border-slate-300 px-3">{entityOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+            <label className="text-sm font-semibold text-slate-700">Avisar antes de vencer<input type="number" min="0" max="8760" required value={priorNotice} onChange={(event) => setPriorNotice(event.target.value)} className="mt-2 min-h-11 w-full rounded-md border border-slate-300 px-3" /><span className="mt-1 block text-xs font-normal text-slate-500">Horas antes del vencimiento.</span></label>
+            <label className="text-sm font-semibold text-slate-700">Escalar nuevamente después de<input type="number" min="0" max="8760" required value={secondEscalation} onChange={(event) => setSecondEscalation(event.target.value)} className="mt-2 min-h-11 w-full rounded-md border border-slate-300 px-3" /><span className="mt-1 block text-xs font-normal text-slate-500">Horas desde el primer escalamiento.</span></label>
+            <div className="sm:col-span-2">
+              <EnterpriseButton type="submit" disabled={disabled || !name.trim() || !hoursValid}>{disabled ? 'Guardando...' : 'Guardar política'}</EnterpriseButton>
+              {!hoursValid ? <p className="mt-2 text-sm text-red-700">Las horas deben ser valores no negativos.</p> : null}
+            </div>
           </form>
         ) : <div />}
-        {canRun ? <EnterpriseButton type="button" variant="secondary" disabled={disabled} onClick={onRun}>{disabled ? 'Ejecutando...' : 'Ejecutar ahora'}</EnterpriseButton> : null}
+        <div className="space-y-3">
+          {policies.length ? (
+            <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Políticas guardadas</p>
+              <div className="mt-3 space-y-2">
+                {policies.slice(0, 4).map(policy => (
+                  <div key={policy.id} className="rounded-md bg-white p-3 text-sm shadow-sm ring-1 ring-slate-200">
+                    <p className="font-semibold text-slate-900">{policy.display_name || 'Política de escalamiento'}</p>
+                    <p className="mt-1 text-xs text-slate-500">{entityTypeLabel(policy.entity_type)} · aviso {number(policy.prior_notice_hours)} h · reescalamiento {number(policy.second_escalation_hours)} h</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
+          {canRun ? (
+            <div className="rounded-md border border-slate-200 p-3">
+              <p className="text-sm font-semibold text-slate-900">Ejecutar ahora</p>
+              <p className="mt-1 text-sm text-slate-600">Procesará solicitudes programadas, vencimientos, avisos, escalamiento y seguimientos vencidos de esta empresa.</p>
+              {confirmRun ? (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <EnterpriseButton type="button" disabled={disabled} onClick={() => { setConfirmRun(false); onRun(); }}>{disabled ? 'Ejecutando...' : 'Confirmar ejecución'}</EnterpriseButton>
+                  <EnterpriseButton type="button" variant="secondary" disabled={disabled} onClick={() => setConfirmRun(false)}>Cancelar</EnterpriseButton>
+                </div>
+              ) : (
+                <EnterpriseButton type="button" variant="secondary" className="mt-3" disabled={disabled} onClick={() => setConfirmRun(true)}>{disabled ? 'Ejecutando...' : 'Ejecutar ahora'}</EnterpriseButton>
+              )}
+            </div>
+          ) : null}
+        </div>
       </div>
     </EnterpriseCard>
   );

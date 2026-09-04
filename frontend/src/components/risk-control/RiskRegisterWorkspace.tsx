@@ -443,7 +443,6 @@ function RiskDetailDrawer({
   }, [onClose]);
 
   const rows = [
-    [t('riskControlWorkspace.detail.identifier'), row.displayId],
     [t('riskControlWorkspace.detail.source'), t(row.sourceLabelKey)],
     [t('riskControlWorkspace.detail.classification'), row.category || dataStateLabel('unavailable', locale)],
     [t('riskControlWorkspace.detail.status'), localStatus(row.status, locale)],
@@ -459,7 +458,7 @@ function RiskDetailDrawer({
       <button
         type="button"
         aria-label={t('riskControlWorkspace.detail.closeOverlay')}
-        className="absolute inset-0 bg-slate-950/35"
+        className="absolute inset-0 bg-slate-950/5"
         onClick={onClose}
       />
       <aside
@@ -467,7 +466,7 @@ function RiskDetailDrawer({
         role="dialog"
         aria-modal="true"
         aria-labelledby="risk-detail-title"
-        className="absolute inset-x-0 bottom-0 max-h-[92vh] overflow-y-auto rounded-t-[var(--tcdx-radius-tecdex-lg)] bg-white p-5 shadow-2xl focus:outline-none md:inset-x-auto md:right-0 md:top-0 md:h-full md:max-h-none md:w-[460px] md:rounded-none md:p-6"
+        className="absolute inset-x-0 bottom-0 max-h-[92vh] overflow-x-hidden overflow-y-auto rounded-t-[var(--tcdx-radius-tecdex-lg)] bg-white p-5 shadow-2xl focus:outline-none md:inset-x-auto md:right-0 md:top-0 md:h-full md:max-h-none md:w-[min(540px,calc(100vw-24px))] md:rounded-none md:p-6"
       >
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
@@ -477,7 +476,7 @@ function RiskDetailDrawer({
             <h2 id="risk-detail-title" className="mt-2 text-xl font-black text-[var(--tcdx-color-text-ink)]">
               {row.title}
             </h2>
-            <p className="mt-1 text-xs text-[var(--tcdx-color-text-secondary)]">{row.stableKey}</p>
+            <p className="mt-1 text-xs font-semibold text-[var(--tcdx-color-text-secondary)]">{row.displayId}</p>
           </div>
           <button
             ref={closeRef}
@@ -496,7 +495,7 @@ function RiskDetailDrawer({
 
         <section className="mt-5 space-y-3" aria-label={t('riskControlWorkspace.detail.summary')}>
           {rows.map(([label, value]) => (
-            <div key={String(label)} className="grid grid-cols-[150px_minmax(0,1fr)] gap-3 border-b border-[var(--tcdx-color-border)] pb-2 text-sm">
+            <div key={String(label)} className="grid gap-1 border-b border-[var(--tcdx-color-border)] pb-2 text-sm sm:grid-cols-[150px_minmax(0,1fr)] sm:gap-3">
               <dt className="font-bold text-[var(--tcdx-color-text-secondary)]">{label}</dt>
               <dd className="min-w-0 break-words text-[var(--tcdx-color-text-ink)]">{value}</dd>
             </div>
@@ -510,22 +509,19 @@ function RiskDetailDrawer({
           </section>
         )}
 
-        <section className="mt-5 rounded-[var(--tcdx-radius-tecdex-md)] border border-[var(--tcdx-color-border)] p-4">
-          <h3 className="text-sm font-black text-[var(--tcdx-color-text-ink)]">{t('riskControlWorkspace.detail.aiTitle')}</h3>
-          <p className="mt-2 text-sm leading-6 text-[var(--tcdx-color-text-secondary)]">
-            {row.sourceType === 'quantitative'
-              ? t('riskControlWorkspace.detail.aiQuantitative')
-              : t('riskControlWorkspace.detail.aiUnavailable')}
-          </p>
-        </section>
-
         {row.sourceType === 'quantitative' && (
-          <Link
-            href={`/riesgo-cuantitativo/${encodeURIComponent(row.id)}`}
-            className="mt-5 inline-flex min-h-11 items-center rounded-[var(--tcdx-radius-tecdex-sm)] bg-[var(--tcdx-color-primary)] px-4 py-2 text-sm font-black text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--tcdx-color-primary)]"
-          >
-            {t('riskControlWorkspace.detail.openQuantitative')}
-          </Link>
+          <section className="mt-5 rounded-[var(--tcdx-radius-tecdex-md)] border border-[var(--tcdx-color-border)] p-4">
+            <h3 className="text-sm font-black text-[var(--tcdx-color-text-ink)]">{t('riskControlWorkspace.detail.aiTitle')}</h3>
+            <p className="mt-2 text-sm leading-6 text-[var(--tcdx-color-text-secondary)]">
+              {t('riskControlWorkspace.detail.aiQuantitative')}
+            </p>
+            <Link
+              href={`/riesgo-cuantitativo/${encodeURIComponent(row.id)}`}
+              className="mt-4 inline-flex min-h-11 items-center rounded-[var(--tcdx-radius-tecdex-sm)] bg-[var(--tcdx-color-primary)] px-4 py-2 text-sm font-black text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--tcdx-color-primary)]"
+            >
+              {t('riskControlWorkspace.detail.openQuantitative')}
+            </Link>
+          </section>
         )}
       </aside>
     </div>
