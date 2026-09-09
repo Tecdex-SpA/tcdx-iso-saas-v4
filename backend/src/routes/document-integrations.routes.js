@@ -1661,7 +1661,7 @@ router.get('/integrated-evidences', auth, async (req, res) => {
       SELECT
         e.id,
         e.tenant_id,
-        e.control_id,
+        tc.control_id,
         e.tenant_control_id,
         e.description,
         e.file_name,
@@ -1696,11 +1696,11 @@ router.get('/integrated-evidences', auth, async (req, res) => {
         cc.category AS catalog_category,
         tc.status AS tenant_control_status
       FROM evidences e
-      LEFT JOIN controls_catalog cc
-        ON cc.id = e.control_id
       LEFT JOIN tenant_controls tc
         ON tc.id = e.tenant_control_id
        AND tc.tenant_id = e.tenant_id
+      LEFT JOIN controls_catalog cc
+        ON cc.id = tc.control_id
       WHERE ${where}
       ORDER BY e.created_at DESC
       LIMIT $${idx}::int

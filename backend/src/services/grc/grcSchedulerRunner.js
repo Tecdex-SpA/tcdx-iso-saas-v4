@@ -3,15 +3,22 @@ const pool = require('../../config/db');
 const asyncJobs = require('../asyncJob.service');
 const { createGrcService } = require('./grc.service');
 const { observe } = require('./grcObservability');
+const {
+  runWithDbTenantContext,
+  runWithPlatformDbContext,
+} = require('../../utils/dbTenantContext');
 
 async function enabledTenantIds(database) {
-  return (await database.query(
-    `SELECT tms.tenant_id
-     FROM tenant_module_settings tms
-     JOIN saas_modules sm ON sm.module_key = tms.module_key
-     WHERE tms.module_key = 'grc_phase1_core' AND tms.is_enabled = TRUE AND sm.is_active = TRUE
-     ORDER BY tms.tenant_id`
-  )).rows.map(row => row.tenant_id);
+  return runWithPlatformDbContext(
+    { role: 'platform_scheduler', reason: 'grc_phase1_enabled_tenant_discovery' },
+    async () => (await database.query(
+      `SELECT tms.tenant_id
+       FROM tenant_module_settings tms
+       JOIN saas_modules sm ON sm.module_key = tms.module_key
+       WHERE tms.module_key = 'grc_phase1_core' AND tms.is_enabled = TRUE AND sm.is_active = TRUE
+       ORDER BY tms.tenant_id`
+    )).rows.map(row => row.tenant_id)
+  );
 }
 
 async function runEnabledTenants({ database = pool, service = createGrcService(pool, asyncJobs), workerId = `backend-${process.pid}` } = {}) {
@@ -20,12 +27,15 @@ async function runEnabledTenants({ database = pool, service = createGrcService(p
   for (const tenantId of tenantIds) {
     const correlationId = `grc-scheduler-${crypto.randomUUID()}`;
     try {
-      const result = await service.runScheduler({
-        tenantId,
-        userId: null,
-        correlationId,
-        body: { run_type: 'scheduled', worker_id: workerId, retry: true },
-      });
+      const result = await runWithDbTenantContext(
+        { tenantId, role: 'tenant_scheduler' },
+        () => service.runScheduler({
+          tenantId,
+          userId: null,
+          correlationId,
+          body: { run_type: 'scheduled', worker_id: workerId, retry: true },
+        })
+      );
       results.push({ tenant_id: tenantId, status: result.run.status, reused: result.reused });
     } catch (error) {
       observe('scheduler_runner', { tenantId, correlationId, status: 'failed', errorCode: error.code || 'GRC_SCHEDULER_RUNNER_FAILED' });

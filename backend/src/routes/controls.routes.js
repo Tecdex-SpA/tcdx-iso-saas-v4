@@ -430,8 +430,7 @@ async function resolveControlRefs(client, tenantId, tenantControlId) {
           WHEN cc.iso IS NOT NULL THEN ARRAY[cc.iso]::text[]
           ELSE ARRAY[]::text[]
         END
-      ) AS valid_for_standards,
-      c.id AS controls_id_legacy
+      ) AS valid_for_standards
     FROM tenant_controls tc
     JOIN tenant_operations op
       ON op.id = tc.operation_id
@@ -443,8 +442,6 @@ async function resolveControlRefs(client, tenantId, tenantControlId) {
       FROM controls_catalog_standards ccs
       WHERE ccs.control_id = cc.id
     ) rel ON TRUE
-    LEFT JOIN controls c
-      ON c.catalog_control_id = cc.id
     WHERE tc.id = $1
       AND tc.tenant_id = $2
     LIMIT 1
@@ -628,13 +625,10 @@ async function getTenantControlDependencies(client, tenantId, tenantControlId) {
     SELECT COUNT(*)::int AS total
     FROM evidences e
     WHERE e.tenant_id = $1
-      AND (
-        e.tenant_control_id = $2
-        OR e.control_id = $3
-      )
+      AND e.tenant_control_id = $2
       AND COALESCE(e.status, '') <> 'deleted'
     `,
-    [tenantId, control.tenant_control_id, control.catalog_control_id]
+    [tenantId, control.tenant_control_id]
   );
 
   const nonconformityResult = await client.query(
@@ -642,13 +636,13 @@ async function getTenantControlDependencies(client, tenantId, tenantControlId) {
     SELECT COUNT(*)::int AS total
     FROM tenant_nonconformities tnc
     WHERE tnc.tenant_id = $1
-      AND tnc.control_id = $2
+      AND tnc.tenant_control_id = $2
       AND (
         tnc.resolved_at IS NULL
         OR LOWER(COALESCE(tnc.status, '')) <> 'resuelta'
       )
     `,
-    [tenantId, control.catalog_control_id]
+    [tenantId, control.tenant_control_id]
   );
 
   const findingResult = await client.query(
@@ -656,13 +650,10 @@ async function getTenantControlDependencies(client, tenantId, tenantControlId) {
     SELECT COUNT(*)::int AS total
     FROM findings f
     WHERE f.tenant_id = $1
-      AND (
-        f.tenant_control_id = $2
-        OR f.tenant_control_id = $3::uuid
-      )
+      AND f.tenant_control_id = $2
       AND LOWER(COALESCE(f.status, '')) <> 'cerrado'
     `,
-    [tenantId, control.tenant_control_id, control.controls_id_legacy || null]
+    [tenantId, control.tenant_control_id]
   );
 
   const actionPlanResult = await client.query(
@@ -672,13 +663,11 @@ async function getTenantControlDependencies(client, tenantId, tenantControlId) {
     WHERE ap.tenant_id = $1
       AND (
         ap.tenant_control_id = $2
-        OR ap.tenant_control_id = $3::uuid
         OR (ap.source_type = 'control' AND ap.source_id = $2)
-        OR (ap.source_type = 'control' AND ap.source_id = $3::uuid)
       )
       AND LOWER(COALESCE(ap.status, '')) NOT IN ('cerrado', 'completado', 'cancelado')
     `,
-    [tenantId, control.tenant_control_id, control.controls_id_legacy || null]
+    [tenantId, control.tenant_control_id]
   );
 
   const dependencies = {
@@ -773,16 +762,19 @@ router.get('/workbench/:tenant_id/:iso', auth, async (req, res) => {
     const result = await client.query(
       `
       WITH latest_health AS (
-        SELECT DISTINCT ON (chs.tenant_control_id)
-          chs.tenant_control_id,
-          chs.standard_code,
-          chs.health_status,
-          COALESCE(chs.health_score, 0) AS health_score,
-          chs.calculated_at
-        FROM control_health_scores chs
-        WHERE chs.tenant_id = $1
-          AND chs.standard_code = $3
-        ORDER BY chs.tenant_control_id, chs.calculated_at DESC NULLS LAST
+        SELECT DISTINCT ON (veh.tenant_control_id)
+          veh.tenant_control_id,
+          veh.standard_code,
+          veh.effective_health_status AS health_status,
+          veh.effective_health_score AS health_score,
+          COALESCE(
+            NULLIF(veh.health_trace_json->>'effective_at', '')::timestamptz,
+            NULLIF(veh.health_trace_json->>'published_at', '')::timestamptz
+          ) AS calculated_at
+        FROM public.v_iso_control_effective_health veh
+        WHERE veh.tenant_id = $1
+          AND veh.standard_code = $3
+        ORDER BY veh.tenant_control_id, calculated_at DESC NULLS LAST
       ),
       evidence_stats AS (
         SELECT
@@ -807,14 +799,6 @@ router.get('/workbench/:tenant_id/:iso', auth, async (req, res) => {
          AND COALESCE(e.status, '') <> 'deleted'
          AND (
               e.tenant_control_id = tc.id
-              OR (
-                e.tenant_control_id IS NULL
-                AND e.control_id = tc.control_id
-                AND (
-                  e.metadata->>'operation_id' IS NULL
-                  OR e.metadata->>'operation_id' = tc.operation_id::text
-                )
-              )
          )
         LEFT JOIN tenant_document_object_links tdol
           ON tdol.tenant_id = tc.tenant_id
@@ -847,20 +831,10 @@ router.get('/workbench/:tenant_id/:iso', auth, async (req, res) => {
         FROM tenant_controls tc
         LEFT JOIN tenant_nonconformities tnc
           ON tnc.tenant_id = tc.tenant_id
-         AND (
-              tnc.control_id = tc.control_id
-         )
+         AND tnc.tenant_control_id = tc.id
         WHERE tc.tenant_id = $1
           AND tc.operation_id = $2
         GROUP BY tc.id
-      ),
-      legacy_controls AS (
-        SELECT DISTINCT ON (catalog_control_id)
-          catalog_control_id,
-          id AS controls_id_legacy
-        FROM controls
-        WHERE catalog_control_id IS NOT NULL
-        ORDER BY catalog_control_id, created_at DESC NULLS LAST, id
       ),
       finding_stats AS (
         SELECT
@@ -872,16 +846,9 @@ router.get('/workbench/:tenant_id/:iso', auth, async (req, res) => {
           COUNT(f.id)::int AS total_findings_count,
           MAX(f.created_at) AS last_finding_at
         FROM tenant_controls tc
-        LEFT JOIN legacy_controls lc
-          ON lc.catalog_control_id = tc.control_id
         LEFT JOIN findings f
           ON f.tenant_id = tc.tenant_id
-         AND (
-              f.tenant_control_id = tc.id
-              OR (
-                lc.controls_id_legacy IS NOT NULL
-                AND f.tenant_control_id = lc.controls_id_legacy              )
-         )
+         AND f.tenant_control_id = tc.id
         WHERE tc.tenant_id = $1
           AND tc.operation_id = $2
         GROUP BY tc.id
@@ -1408,17 +1375,13 @@ router.post('/workbench/:tenant_control_id/quick-finding', auth, async (req, res
       WHERE tenant_id = $1
         AND iso_code = $2
         AND LOWER(COALESCE(status,'')) <> 'cerrado'
-        AND (
-          tenant_control_id = $3
-          OR tenant_control_id = $4::uuid
-        )
+        AND tenant_control_id = $3
       ORDER BY created_at DESC NULLS LAST, id DESC
       LIMIT 1
       `,
       [
         tenant_id,
         effectiveIso,
-        control.controls_id_legacy || control.tenant_control_id,
         control.tenant_control_id,
       ]
     );
@@ -1457,7 +1420,7 @@ router.post('/workbench/:tenant_control_id/quick-finding', auth, async (req, res
         effectiveIso,
         'Hallazgo en control: ' + control.description,
         'Hallazgo generado desde Workbench de Controles para ' + control.description + '.',
-        control.controls_id_legacy || control.tenant_control_id,
+        control.tenant_control_id,
         getUserId(req.user),
       ]
     );
@@ -1520,12 +1483,10 @@ router.post('/workbench/:tenant_control_id/quick-action-plan', auth, async (req,
       SELECT *
       FROM action_plans ap
       WHERE ap.tenant_id = $1
-        AND ($4::text IS NULL OR ap.iso_code = $4)
+        AND ($3::text IS NULL OR ap.iso_code = $3)
         AND (
           ap.tenant_control_id = $2
-          OR ap.tenant_control_id = $3::uuid
           OR (ap.source_type = 'control' AND ap.source_id = $2)
-          OR (ap.source_type = 'control' AND ap.source_id = $3::uuid)
         )
       ORDER BY
         CASE
@@ -1541,7 +1502,6 @@ router.post('/workbench/:tenant_control_id/quick-action-plan', auth, async (req,
       [
         tenant_id,
         control.tenant_control_id,
-        control.controls_id_legacy || null,
         effectiveIso || null,
       ]
     );
@@ -1596,7 +1556,7 @@ router.post('/workbench/:tenant_control_id/quick-action-plan', auth, async (req,
         control.description || 'Plan generado automáticamente desde Controles.',
         priority,
         control.tenant_control_id,
-        control.controls_id_legacy || control.tenant_control_id,
+        control.tenant_control_id,
       ]
     );
 
@@ -2425,9 +2385,6 @@ router.delete('/catalog/custom/:id', auth, async (req, res) => {
   }
 });
 
-// =====================================
-// LEGACY
-// =====================================
 router.get('/:tenant_id', auth, async (req, res) => {
   try {
     const { tenant_id } = req.params;
@@ -2438,10 +2395,15 @@ router.get('/:tenant_id', auth, async (req, res) => {
 
     const result = await pool.query(
       `
-      SELECT id, clause, status, score
-      FROM controls
-      WHERE tenant_id = $1
-      ORDER BY created_at DESC
+      SELECT
+        tc.id,
+        COALESCE(cc.clause, cc.code) AS clause,
+        tc.implementation_status AS status,
+        NULL::numeric AS score
+      FROM tenant_controls tc
+      JOIN controls_catalog cc ON cc.id = tc.control_id
+      WHERE tc.tenant_id = $1
+      ORDER BY COALESCE(cc.clause, cc.code), tc.created_at DESC
       `,
       [tenant_id]
     );

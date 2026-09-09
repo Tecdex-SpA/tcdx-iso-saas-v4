@@ -24,6 +24,8 @@ function fakePool(resolver) {
 
 async function run() {
   const tenantA = '70000000-0000-0000-0000-000000000701';
+  const controlDefinitionId = '70000000-0000-0000-0000-000000000702';
+  const tenantControlId = '70000000-0000-0000-0000-000000001001';
   assert.equal(assertUuid(tenantA), tenantA);
   assert.throws(
     () => assertUuid('not-a-uuid'),
@@ -34,11 +36,17 @@ async function run() {
     if (sql.includes('user_has_permission')) return { rows: [{ allowed: values[1] !== 'framework.manage' }], rowCount: 1 };
     if (sql.includes('active_workflows')) return { rows: [{ active_workflows: 2, readiness_score: 75 }], rowCount: 1 };
     if (sql.includes('SELECT id, name, entity_type, status') && sql.includes('FROM grc_workflow_definitions')) {
+      if (values[1] === controlDefinitionId) {
+        return { rows: [{ id: controlDefinitionId, name: 'Revision de control', entity_type: 'control', status: 'active' }], rowCount: 1 };
+      }
       return { rows: [{ id: tenantA, name: 'Evidencia continua', entity_type: 'evidence', status: 'active' }], rowCount: 1 };
     }
     if (sql.includes('FROM grc_workflow_definitions d')) return { rows: [{ id: 'workflow-a' }], rowCount: 1 };
     if (sql.includes('FROM evidences e')) {
       return { rows: [{ id: tenantA, title: 'Evidencia de control', code: 'EVI-01', status: 'approved' }], rowCount: 1 };
+    }
+    if (sql.includes('FROM tenant_controls c')) {
+      return { rows: [{ id: tenantControlId, title: 'Control operativo', code: 'CTRL-01', status: 'active' }], rowCount: 1 };
     }
     if (sql.includes('FROM grc_workflow_instances i')) {
       return {
@@ -77,6 +85,12 @@ async function run() {
   assert.equal(optionQuery.values[0], tenantA);
   assert.equal(optionQuery.values[1], '%control%');
   assert.ok(optionQuery.values[2] <= 50);
+  const controlOptions = await service.listWorkflowEntityOptions(tenantA, { definition_id: controlDefinitionId, search: 'CTRL', limit: 500 });
+  assert.equal(controlOptions.entity_type, 'control');
+  assert.equal(controlOptions.items[0].id, tenantControlId);
+  const controlOptionQuery = pool.calls.find(call => call.sql.includes('FROM tenant_controls c'));
+  assert.equal(controlOptionQuery.values[0], tenantA);
+  assert.equal(controlOptionQuery.values[1], '%CTRL%');
   const instances = await service.listWorkflowInstances(tenantA, { search: 'EVI-01', limit: 500 });
   assert.equal(instances.items[0].entity_label, 'EVI-01 · Evidencia de control');
   const instanceQuery = pool.calls.find(call => call.sql.includes('FROM grc_workflow_instances i'));

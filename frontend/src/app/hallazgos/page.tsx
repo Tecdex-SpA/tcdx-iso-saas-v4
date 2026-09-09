@@ -53,7 +53,6 @@ type ScopeResponse = {
 type FindingControlRow = {
   tenant_control_id: string;
   tenant_control_id_moderno?: string | null;
-  controls_id_legacy?: string | null;
   catalog_control_id?: string | null;
   iso: string;
   clause?: string | null;

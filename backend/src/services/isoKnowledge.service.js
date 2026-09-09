@@ -187,24 +187,24 @@ async function listEvidenceExpectations(standardCode, versionCode) {
   const result = await pool.query(
     `
     SELECT
-      e.id,
-      e.standard_code,
-      e.version_code,
-      e.control_code,
+      expectation.id,
+      expectation.standard_code,
+      expectation.version_code,
+      expectation.control_code,
       c.title AS control_title,
-      e.evidence_name,
-      e.evidence_type,
-      e.description,
-      e.required_level,
-      e.freshness_days,
-      e.validation_criteria,
-      e.ai_review_guidance
-    FROM iso_evidence_expectations e
+      expectation.evidence_name,
+      expectation.evidence_type,
+      expectation.description,
+      expectation.required_level,
+      expectation.freshness_days,
+      expectation.validation_criteria,
+      expectation.ai_review_guidance
+    FROM iso_evidence_expectations expectation
     LEFT JOIN iso_controls c
-      ON c.id = e.control_id
-    WHERE e.standard_code = $1
-      AND e.version_code = $2
-    ORDER BY e.control_code, e.evidence_name
+      ON c.id = expectation.control_id
+    WHERE expectation.standard_code = $1
+      AND expectation.version_code = $2
+    ORDER BY expectation.control_code, expectation.evidence_name
     `,
     [params.standardCode, params.versionCode]
   );

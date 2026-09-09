@@ -34,6 +34,10 @@ Backend Node/Express
         |
         |
         +--> PostgreSQL / dominios operacionales
+        |      + DB-N01 local: `tenant_controls.id` es la identidad operacional canonica de control para findings/evidences/action_plans/workflows; `controls_catalog.id` queda como identidad de catalogo y `controls.id` queda solo como compatibilidad legacy de lectura/transicion hasta migracion y retiro controlado
+        |      + DB-N02 local: `control_health_scores` mantiene drill-down legacy, pero su `standard_code` se reconstruye por linaje canonico `tenant_controls.control_id -> controls_catalog_standards/controls_catalog.iso -> tenant_standards.active`; multiples normas activas quedan `AMBIGUOUS` y no se actualizan por seleccion ordenada
+        |      + DB-N03 local: integridad multi-tenant critica se refuerza con FKs compuestas `(tenant_id, parent_id)` y constraints `(tenant_id, id)` sobre relaciones GRC/Health prioritarias; RLS queda preparado con `tcdx_security.*` y politicas staged, sin habilitar RLS hasta completar contexto tenant transaccional en runtime
+        |      + DB-N04 local: backend Node queda cableado con contexto DB tenant transaction-local mediante `dbTenantContext.js`, AsyncLocalStorage, wrapper de `pg.Pool`, middleware `/api`, path platform explicito y schedulers/workers controller->tenant; RLS runtime queda parcial por `AI_READER_RLS_DEFERRED`
         |
         +--> Commercial product authority
         |      + `commercial_plans`, `commercial_plan_versions`
@@ -58,6 +62,8 @@ Backend Node/Express
         |      + official indicator matrix v1 derived from formula registry/source contracts
         |      + formula registry/execution
         |      + official calculation orchestrator as single source of truth
+        |      + DB-N02 Health authority: `F5_5_GRC_HEALTH` v2 es la unica autoridad ejecutiva Health por `official_formula_versions`, `calculation_runs`, `calculation_outputs`, `metric_snapshots` y `metric_source_bindings`; `canonicalHealthProjection.service.js` solo lee, normaliza, explica y presenta
+        |      + DB-N03/DB-N04 tenant DB context: backend Node usa `set_config(..., true)` dentro de transacciones por `withTenantTransaction`, `tenantContextMiddleware` y pool wrapper; platform admin usa `withPlatformTransaction`/scope explicito, no `BYPASSRLS` en runtime tenant; AI Engine sigue pendiente de tenant context o vistas tenant-safe
         |      + governed Observation emission producer for material Data Trust signals
         |      + snapshots/lineage
         |      + decision interpretation
@@ -181,3 +187,39 @@ Knowledge/RAG y Regulatory Intelligence alimentan Intelligence/Impact sin conver
 - F6.13-A: CLOSED / PASS_RUNTIME; Operational Learning adds a governed tenant-scoped ledger/effectiveness/memory layer in `backend/src/services/intelligence/operationalLearning.service.js` with forward migration `20260824_f6_13_a_operational_learning`. Runtime closure confirmed migration, tests, deploy runner and no parallel Priority/Observation/Gap/KB/Retrieval/AI truth.
 - F6.14-A: DONE_LOCAL; AI Governance and AI Evaluation Suite formalize governed capability registry, provider/model/prompt/context/schema/policy/authority/failure semantics and synthetic regression evaluation in `backend/src/services/intelligence/aiGovernance.service.js` and `backend/src/services/intelligence/aiEvaluationSuite.service.js`. No DDL, no second AI orchestrator, no AI truth store and no frontend/UI work. Runtime validation pending user deploy.
 - RBAC-03 commercial correction: DONE_LOCAL; commercial plan authority is capability-based in `backend/src/services/commercial/commercialPlanMatrix.service.js` and materialized by `database/migrations/20260828_commercial_standard_plan_matrix.sql`. `ISO = ONLY_ISO`, `ISO_RISK = ISO + OPERATIONAL_RISK_ONLY`, `GRC = ALL_TENANT_COMMERCIAL_CAPABILITIES`; authorization still requires active tenant, active subscription, entitled capability, active module, RBAC permission and scope. No RBAC/schema privilege model changes.
+- DB-N05: PARTIAL local; fresh production database architecture has a consolidated baseline path: `database/baseline/production_schema_v1.sql` + `database/baseline/production_seed_v1.sql`, but it is not yet complete enough for production creation. Historical migrations remain upgrade history. Fresh bootstrap excludes QA/demo/backup/preview residue, retains compatibility-only `controls` and Health/KPI surfaces required by runtime, carries DB-N01..DB-N04 contracts, and leaves broad RLS deferred until AI reader tenant-safe access is proven. Critical review 2026-09-07 corrected Health unknown numeric parity, source binding lineage, `ai_reader` safe defer and runtime function grants: no `EXECUTE ON ALL FUNCTIONS`; backend/platform use explicit app-function allowlists. `RUNTIME_TO_BASELINE_COVERAGE` reports `ACTIVE_MISSING=0`; product reference catalogs remain incomplete.
+
+## DB-N05 final local continuation — 2026-09-07
+
+Status: `DB_N05_PARTIAL`; remaining blocker `MISSING_PRODUCTION_REFERENCE_SOURCE`.
+Branch `codex/db-n01-control-identity-normalization`; HEAD `11003dd92385dcca1caf5365fa437be3aee1f648`; dirty DB-N01..DB-N04 work preserved; no staging/commit/push/merge/deploy or external DB writes.
+
+Current evidence supersedes previous missing-pgvector/static-only reports:
+
+- PostgreSQL 16.15 with local pgvector/pgvector:pg16 image ID sha256:ccc6e83d6e35e931dc7c5def2022729d5a6c370318d099181995567ff1fb4d6b. Disposable container, localhost-only random published port, tmpfs data, container/volumes removed. Helper supports auto/local/docker and retains mandatory vector.
+- ACTIVE_MISSING=0, 60 focused checks; regulatory table/constraint/index parity PASS for all 15 scoped F6.11-A/B tables. SQL baseline executed twice successfully. Bounded coverage is not a whole-product runtime certification.
+- Effective privileges PASS using real SET ROLE: migration admin bootstrap/rerun, backend DML, backend admin-only DML denied, support SELECT/write denial, platform catalog update/tenant DML denial, ai_reader no direct SELECT, no super/BYPASSRLS/CREATE privileges for runtime roles, and `R00 FUNCTION_EXECUTE_ALLOWLIST PASS`. Broad `EXECUTE ON ALL FUNCTIONS` was removed; explicit job/output grants follow existing asyncJob and official calculation consumers; app_roles and plan_version_capabilities are canonical.
+- Real catalog load twice PASS; stable identities/content/counts checked. KB derived children are rebuilt by the existing loader: logical content is compared excluding generated child IDs/timestamps; the import audit records both completed runs. Counts: 4 standards, 30 ISO codes/mappings (26 leaf controls + 4 families), 62 permissions, 45 commercial capabilities, 135 plan/capability rows, 18 modules, 53 official formulas/versions, 20 official/semantic source contracts, 22 indicators/versions/bindings, 5 KB sources, 1000 items, 1000 each evidence expectations/questions/gaps/actions/rules/hints, 6000 mappings.
+- Fresh gates PASS: BOOTSTRAP_RERUN, CATALOG_LOAD_1, CATALOG_LOAD_2, IDEMPOTENT, CATALOG_LOADER_RERUN, PGVECTOR_VALIDATION, FUNCTIONAL_VALIDATION, MULTITENANT_VALIDATION, LEGACY_ABSENCE, INTEGRITY_VALIDATION, BACKEND_STARTUP, FRESH_DB_FROM_ZERO. OBJECT_COUNTS=117|193|253. Backend startup uses a login member of tcdx_backend_runtime, not postgres.
+- Catalog completeness FAIL: the canonical SoA registry declares ISO27001/ISO27701/ISO27017/ISO27018, while the inspected versioned KB/source inventory has no complete production source for ISO27701/ISO27017/ISO27018. ISO27001's 30 derived codes are not a complete reviewed control manifest; ISO9001 has KB reference coverage but no loaded complete clause/control catalog. No legal/control content invented and no product promises silently disabled.
+- Ten requested DB-N01..DB-N04 regression commands PASS. Full backend suite/CI not run. No backend runtime edits in this continuation.
+
+Next: supply or identify governed complete reference sources/manifests for the declared product families, wire them through the same loader and close the failing catalog gate. Review application role mappings for any newly registered commercial permission identities; the loader does not silently grant those permissions. No real production creation and no DB-N06. See artifacts/db-n05/VALIDATION_RESULTS.md and REFERENCE_CATALOG_COVERAGE.md.
+
+## DB-N05 versioned ISO reference path — 2026-09-08
+
+The sole orchestrator remains `scripts/normalization/load-production-reference-catalogs.js`. Manifest v2 stores raw standard_code/version_code, explicit product compatibility code, publication/certification status, loader_status, controls/evidence/metadata paths, exact counts and SHA-256 for each file. Three entries are approved_for_loader; FDIS is transition_only. Every file and same-version evidence mapping is validated before any reference write, and before the main orchestrator connects. Pending/unapproved states, checksum or count mismatches, missing titles, duplicate controls/evidence and cross-version references fail closed.
+
+Fresh baseline adds `iso_standards`, `iso_standard_versions`, `iso_controls`, `iso_evidence_expectations`, with natural-key uniqueness and composite same-version FKs. New surrogate IDs come from PostgreSQL, not QA. Runtime backend/platform/support have SELECT only on these four tables; ai_reader has no access; migration admin loads references. No schema-wide grants or new functions were added.
+
+All four sources load into versioned tables. Only the three approved published versions project to existing product standards/controls/mappings. Existing 30 KB-derived ISO27001 codes and their compatibility behavior remain; metadata marks them compatibility_only. They are not counted as approved versioned controls and no semantic equivalence to QA ISMS codes is invented. Fresh controls_catalog/mappings=83: 53 approved projected controls + 30 preserved KB codes. QA controls_catalog's 118 exported rows and 118 mappings are not imported.
+
+Natural identity: raw standard/version/control; operational identity remains tenant_controls.id. No QA UUID is imported. FDIS is retained only in the version-aware reference layer, not the legacy product selection projection.
+
+## DB integral human review — 2026-09-09
+
+Fresh production bootstrap now has a zero-legacy authority path for DB-N01..DB-N05. Operational control identity is `tenant_controls.id`; catalog identity is `controls_catalog.id`; SoA uses `control_soa`, `control_soa_assessments` and `control_soa_change_log`; risk formulas use `risks` plus `risk_control_relations`.
+
+Health has two separate projections. Tenant/global Health is `F5_5_GRC_HEALTH` through the official formula/orchestrator lineage. Per-control Health is `public.v_iso_control_effective_health` and reads only official measured `F5_5_CONTROL_EFFECTIVENESS` snapshots with explicit `tenant_control_id`. It does not infer control scores from global GRC Health, and no UI/API path should coerce missing scores to zero.
+
+Formula execution has two productive phases: `officialCalculationOrchestrator.service.js -> recalculateOfficialAnalytics` resolves source contracts, validates bindings and formula versions, and persists runs/outputs/source snapshots; `indicatorGovernance.service.js` publishes governed metric snapshots. Fresh baseline objects `calculation_validations`, `calculation_snapshots`, indicator governance tables and metric snapshot publication columns are included because runtime services consume them.

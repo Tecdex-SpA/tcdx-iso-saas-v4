@@ -5,7 +5,7 @@ const auth = require('../middleware/auth');
 const { requireCommercialCapability } = require('../middleware/commercialEntitlement.middleware');
 const aiContextBuilder = require('../services/aiContextBuilder.service');
 const { runOperationalAiReview } = require('../services/aiOperationalReview.service');
-const { resolveSoAControlReference } = require('../utils/soaControlResolver');
+const { resolveTenantControl } = require('../utils/tenantControlIdentity');
 const {
   ACTIVE_CONTROL_REMEDIATION_STATUSES,
 } = require('../services/actionPlanTraceability.service');
@@ -295,13 +295,9 @@ function isActiveControlRemediationConflict(error) {
 }
 
 /**
- * findings.tenant_control_id apunta a controls.id (legacy).
- * action_plans.tenant_control_id apunta a tenant_controls.id (moderno).
- *
- * Este helper traduce:
- * findings.tenant_control_id (controls.id legacy)
- * -> controls.catalog_control_id
- * -> tenant_controls.id del tenant actual
+ * DB-N01: findings.tenant_control_id puede ser tenant_controls.id nuevo o
+ * controls.id legacy durante la transición. Solo se acepta si resuelve a un
+ * único tenant_controls.id del tenant actual.
  */
 const resolveModernTenantControlIdFromFinding = async (
   db,
@@ -311,13 +307,9 @@ const resolveModernTenantControlIdFromFinding = async (
   const result = await db.query(
     `
     SELECT
-      tc.id AS tenant_control_id_moderno
+      f.tenant_control_id,
+      f.iso_code
     FROM findings f
-    JOIN controls c
-      ON c.id = f.tenant_control_id
-    JOIN tenant_controls tc
-      ON tc.tenant_id = f.tenant_id
-     AND tc.control_id = c.catalog_control_id
     WHERE f.id = $1
       AND f.tenant_id = $2
     LIMIT 1
@@ -329,7 +321,22 @@ const resolveModernTenantControlIdFromFinding = async (
     return null;
   }
 
-  return result.rows[0].tenant_control_id_moderno || null;
+  const row = result.rows[0];
+  const resolved = await resolveTenantControl(db, {
+    tenantId,
+    rawControlId: row.tenant_control_id,
+    isoCode: row.iso_code,
+    mode: 'strict',
+  });
+
+  if (resolved?.ambiguous) {
+    const error = new Error('TENANT_CONTROL_ID_AMBIGUOUS');
+    error.code = 'TENANT_CONTROL_ID_AMBIGUOUS';
+    error.details = resolved.candidates || [];
+    throw error;
+  }
+
+  return resolved?.tenant_control_id_moderno || null;
 };
 
 const enrichedActionPlansSelect = `
@@ -404,7 +411,7 @@ const enrichedActionPlansSelect = `
         'evidence:' || e.id::text AS item_key,
         e.id,
         e.tenant_id,
-        e.control_id,
+        e_tc.control_id,
         e.tenant_control_id,
         e.description,
         e.file_name,
@@ -427,6 +434,9 @@ const enrichedActionPlansSelect = `
         e.id AS source_id,
         NULL::text AS evidence_usage
       FROM evidences e
+      LEFT JOIN tenant_controls e_tc
+        ON e_tc.tenant_id = e.tenant_id
+       AND e_tc.id = e.tenant_control_id
       WHERE e.tenant_id = ap.tenant_id
         AND (
           e.metadata->>'action_plan_id' = ap.id::text
@@ -443,7 +453,7 @@ const enrichedActionPlansSelect = `
           l.source_type || ':' || l.source_id::text AS item_key,
           COALESCE(e_link.id, l.id) AS id,
           l.tenant_id,
-          e_link.control_id,
+          e_link_tc.control_id,
           e_link.tenant_control_id,
           COALESCE(e_link.description, d.file_name, l.target_label, 'Evidencia documental') AS description,
           COALESCE(e_link.file_name, d.file_name, l.document_key, 'Documento') AS file_name,
@@ -473,6 +483,9 @@ const enrichedActionPlansSelect = `
           ON l.source_type = 'evidence'
          AND e_link.tenant_id = l.tenant_id
          AND e_link.id = l.source_id
+        LEFT JOIN tenant_controls e_link_tc
+          ON e_link_tc.tenant_id = e_link.tenant_id
+         AND e_link_tc.id = e_link.tenant_control_id
         LEFT JOIN document_index d
           ON l.source_type = 'document_index'
          AND d.tenant_id = l.tenant_id
@@ -1345,17 +1358,25 @@ router.post('/', auth, requireActionsManage, async (req, res) => {
     }
 
     if (tenant_control_id) {
-      const resolvedControl = await resolveSoAControlReference(
-        client,
-        tenant_id,
-        tenant_control_id,
-        iso_code
-      );
+      const resolvedControl = await resolveTenantControl(client, {
+        tenantId: tenant_id,
+        rawControlId: tenant_control_id,
+        isoCode: iso_code,
+        mode: 'strict',
+      });
 
       if (!resolvedControl) {
         return res
           .status(400)
           .json({ error: 'No se pudo resolver el control asociado al plan de acción para este tenant' });
+      }
+
+      if (resolvedControl.ambiguous) {
+        return res.status(409).json({
+          error: 'El control asociado al plan de acción es ambiguo para este tenant. Selecciona tenant_control_id explícito.',
+          code: 'TENANT_CONTROL_ID_AMBIGUOUS',
+          candidates: resolvedControl.candidates || [],
+        });
       }
 
       if (resolvedControl.iso_mismatch) {
@@ -1372,6 +1393,48 @@ router.post('/', auth, requireActionsManage, async (req, res) => {
 
       tenant_control_id = resolvedControl.tenant_control_id_moderno;
       if (!iso_code) iso_code = resolvedControl.iso;
+    }
+
+    if (source_type === 'control' && source_id) {
+      const resolvedSourceControl = await resolveTenantControl(client, {
+        tenantId: tenant_id,
+        rawControlId: source_id,
+        isoCode: iso_code,
+        mode: 'strict',
+      });
+
+      if (!resolvedSourceControl) {
+        return res.status(400).json({
+          error: 'source_id de control no resuelve a un control operativo del tenant',
+        });
+      }
+
+      if (resolvedSourceControl.ambiguous) {
+        return res.status(409).json({
+          error: 'El source_id de control es ambiguo para este tenant. Selecciona tenant_control_id explícito.',
+          code: 'TENANT_CONTROL_ID_AMBIGUOUS',
+          candidates: resolvedSourceControl.candidates || [],
+        });
+      }
+
+      if (resolvedSourceControl.iso_mismatch) {
+        return res
+          .status(400)
+          .json({ error: 'El source_id de control no pertenece a la norma ISO seleccionada' });
+      }
+
+      if (
+        tenant_control_id &&
+        String(tenant_control_id) !== String(resolvedSourceControl.tenant_control_id_moderno)
+      ) {
+        return res.status(400).json({
+          error: 'tenant_control_id y source_id de control apuntan a controles distintos',
+        });
+      }
+
+      tenant_control_id = resolvedSourceControl.tenant_control_id_moderno;
+      source_id = resolvedSourceControl.tenant_control_id_moderno;
+      if (!iso_code) iso_code = resolvedSourceControl.iso;
     }
 
     if (finding_id) {
@@ -1402,11 +1465,23 @@ router.post('/', auth, requireActionsManage, async (req, res) => {
       }
 
       if (!tenant_control_id) {
-        tenant_control_id = await resolveModernTenantControlIdFromFinding(
-          client,
-          tenant_id,
-          finding_id
-        );
+        try {
+          tenant_control_id = await resolveModernTenantControlIdFromFinding(
+            client,
+            tenant_id,
+            finding_id
+          );
+        } catch (error) {
+          if (error?.code === 'TENANT_CONTROL_ID_AMBIGUOUS') {
+            return res.status(409).json({
+              error: 'El control asociado al hallazgo es ambiguo para este tenant. Selecciona tenant_control_id explícito.',
+              code: 'TENANT_CONTROL_ID_AMBIGUOUS',
+              candidates: error.details || [],
+            });
+          }
+
+          throw error;
+        }
       }
 
       if (!tenant_control_id) {

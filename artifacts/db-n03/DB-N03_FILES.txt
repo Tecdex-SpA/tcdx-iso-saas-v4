@@ -1,0 +1,41 @@
+DB-N03 FILE MANIFEST
+Date: 2026-09-07
+
+DB-N03 ONLY
+- artifacts/db-n03/initial-git-state.txt
+- artifacts/db-n03/DB-N03_FILES.txt
+- artifacts/db-n03/TENANT_TABLE_MATRIX.md
+- backend/src/utils/dbTenantContext.js
+- backend/src/utils/dbTenantContext.test.js
+- database/migrations/20260907_dbn03_multitenant_integrity_rls.sql
+- scripts/normalization/apply-db-n03-multitenant-integrity-migration.test.js
+- scripts/normalization/db-n03-readonly-preflight.sql
+- scripts/normalization/db-n03-multitenant-integrity.postgres.test.js
+- docs/handoffs/DB-N03_MULTITENANT_INTEGRITY_RLS.md
+
+SHARED WITH DB-N01
+- backend/src/routes/action-plans.routes.js
+- backend/src/routes/evidences.routes.js
+- backend/src/routes/findings.routes.js
+- backend/src/utils/tenantControlIdentity.js
+- database/migrations/20260904_dbn01_control_identity_normalization.sql
+- docs/codex/CURRENT_STATE.md
+- docs/codex/WORK_QUEUE.md
+- docs/codex/CONTRACTS_REGISTRY.md
+- docs/codex/ARCHITECTURE_MAP.md
+- docs/codex/DECISIONS.md
+
+SHARED WITH DB-N02
+- backend/src/services/math-governance/canonicalHealthProjection.service.js
+- backend/src/services/soaIntelligence.service.js
+- database/migrations/20260904_dbn02_health_metrics_lineage_normalization.sql
+- docs/codex/CURRENT_STATE.md
+- docs/codex/WORK_QUEUE.md
+- docs/codex/CONTRACTS_REGISTRY.md
+- docs/codex/ARCHITECTURE_MAP.md
+- docs/codex/DECISIONS.md
+
+Notes:
+- DB-N03 adds a new tenant DB context helper but does not wire route runtime behavior globally in this package.
+- Full RLS rollout is deferred; DB-N03 prepares policy prerequisites and staged pilot policies without enabling RLS.
+- Existing DB-N01/DB-N02 files are preserved; DB-N03 does not reset, clean, apply migrations or write to db-v4.

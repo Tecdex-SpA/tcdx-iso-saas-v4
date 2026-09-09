@@ -280,7 +280,7 @@ function classifyKpi(row, profile, activeStandards) {
   const text = kpiHaystack(row);
   const rowStandards = uniq([...(asArray(row.applicable_standards)), row.standard_code], 10);
 
-  if (!standardMatches(activeStandards, rowStandards) && !String(row.kpi_code || '').startsWith('KPI-HLT-')) {
+  if (!standardMatches(activeStandards, rowStandards)) {
     return {
       applicable: false,
       score: 0.05,
@@ -491,8 +491,7 @@ async function loadKpis(client, tenantId, activeStandards) {
      AND COALESCE(ksm.is_active, true) = true
     WHERE COALESCE(kd.is_active, true) = true
       AND (
-        kd.code LIKE 'KPI-HLT-%'
-        OR kd.is_standard = false
+        kd.is_standard = false
         OR EXISTS (
           SELECT 1
           FROM kpi_standard_mappings ksm2
@@ -844,7 +843,7 @@ async function getTenantApplicabilitySummary({ tenantId } = {}) {
       ORDER BY updated_at DESC
       LIMIT 1
     ),
-    controls AS (
+    controls_scope AS (
       SELECT COUNT(*)::int AS count
       FROM tenant_applicable_controls
       WHERE tenant_id = $1::uuid AND active = true AND visible_to_tenant = true
@@ -883,7 +882,7 @@ async function getTenantApplicabilitySummary({ tenantId } = {}) {
       lr.summary_json AS last_run_summary,
       lr.trace_json AS last_run_trace
     FROM profile p
-    FULL JOIN controls c ON true
+    FULL JOIN controls_scope c ON true
     FULL JOIN kpis k ON true
     FULL JOIN evidence e ON true
     FULL JOIN exclusions x ON true

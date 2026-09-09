@@ -380,11 +380,12 @@ async function getCoverageForTenantStandard({
         )::integer AS expired_evidence_count
       FROM evidences e
       LEFT JOIN tenant_controls tc
-        ON tc.id = e.tenant_control_id
+        ON tc.tenant_id = e.tenant_id
+       AND tc.id = e.tenant_control_id
       LEFT JOIN controls_catalog cc
-        ON cc.id = COALESCE(tc.control_id, e.control_id)
+        ON cc.id = tc.control_id
       LEFT JOIN controls_catalog_standards ccs
-        ON ccs.control_id = COALESCE(tc.control_id, e.control_id)
+        ON ccs.control_id = tc.control_id
       WHERE e.tenant_id = $1::uuid
         AND COALESCE(e.status, '') <> 'deleted'
         AND (

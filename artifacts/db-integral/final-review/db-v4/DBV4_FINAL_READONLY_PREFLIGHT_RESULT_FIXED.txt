@@ -1,0 +1,491 @@
+BEGIN
+ current_database | current_user | server_addr | server_port |                                                             postgres_version                                                             | transaction_read_only 
+------------------+--------------+-------------+-------------+------------------------------------------------------------------------------------------------------------------------------------------+-----------------------
+ tecdex_saas      | postgres     |             |             | PostgreSQL 16.15 (Ubuntu 16.15-0ubuntu0.24.04.1) on x86_64-pc-linux-gnu, compiled by gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0, 64-bit | on
+(1 row)
+
+   datname   |    owner    | encoding | datcollate | datctype | datistemplate | datallowconn 
+-------------+-------------+----------+------------+----------+---------------+--------------
+ tecdex_saas | tecdex_user | UTF8     | C.UTF-8    | C.UTF-8  | f             | t
+(1 row)
+
+ tecdex_saas_exists | tcdx_saasv2_name_status 
+--------------------+-------------------------
+ OK                 | AVAILABLE
+(1 row)
+
+ extname  | extversion 
+----------+------------
+ pg_trgm  | 1.6
+ pgcrypto | 1.3
+ vector   | 0.6.0
+(3 rows)
+
+  rolname  | rolcanlogin | rolsuper | rolcreatedb | rolcreaterole | rolbypassrls 
+-----------+-------------+----------+-------------+---------------+--------------
+ ai_reader | t           | f        | f           | f             | f
+(1 row)
+
+ schema_name |         relation_name         | relkind 
+-------------+-------------------------------+---------
+ public      | calculation_outputs           | r
+ public      | calculation_runs              | r
+ public      | calculation_snapshots         | r
+ public      | control_health_scores         | r
+ public      | controls                      | r
+ public      | iso_controls                  | r
+ public      | iso_evidence_expectations     | r
+ public      | iso_standard_versions         | r
+ public      | iso_standards                 | r
+ public      | metric_snapshots              | r
+ public      | tenant_controls               | r
+ public      | tenants                       | r
+ public      | v_latest_health_kpi_snapshots | v
+(13 rows)
+
+ schemaname |       tablename       | rowsecurity | forcerowsecurity 
+------------+-----------------------+-------------+------------------
+ public     | action_plans          | f           | f
+ public     | control_health_scores | f           | f
+ public     | evidences             | f           | f
+ public     | findings              | f           | f
+ public     | tenant_controls       | f           | f
+(5 rows)
+
+  grantee  | table_schema |                           table_name                            | privilege_type 
+-----------+--------------+-----------------------------------------------------------------+----------------
+ ai_reader | ai_core      | ai_core_migrations                                              | SELECT
+ ai_reader | ai_core      | ai_feedback                                                     | SELECT
+ ai_reader | ai_core      | ai_response_feedback                                            | SELECT
+ ai_reader | ai_core      | ai_response_traces                                              | SELECT
+ ai_reader | ai_core      | clause_control_domain_map                                       | SELECT
+ ai_reader | ai_core      | closure_criteria                                                | SELECT
+ ai_reader | ai_core      | domain_closure_criteria                                         | SELECT
+ ai_reader | ai_core      | domain_evidence_expectations                                    | SELECT
+ ai_reader | ai_core      | domain_problem_type_map                                         | SELECT
+ ai_reader | ai_core      | domain_solution_playbooks                                       | SELECT
+ ai_reader | ai_core      | domains_catalog                                                 | SELECT
+ ai_reader | ai_core      | evidence_expectations                                           | SELECT
+ ai_reader | ai_core      | external_lookup_extra_charges                                   | SELECT
+ ai_reader | ai_core      | external_lookup_logs                                            | INSERT
+ ai_reader | ai_core      | external_lookup_logs                                            | SELECT
+ ai_reader | ai_core      | external_lookup_quota_audit                                     | SELECT
+ ai_reader | ai_core      | external_lookup_quotas                                          | SELECT
+ ai_reader | ai_core      | finding_scenarios                                               | SELECT
+ ai_reader | ai_core      | invalid_evidence_patterns                                       | SELECT
+ ai_reader | ai_core      | priority_rules                                                  | SELECT
+ ai_reader | ai_core      | problem_types                                                   | SELECT
+ ai_reader | ai_core      | response_templates                                              | SELECT
+ ai_reader | ai_core      | solution_playbooks                                              | SELECT
+ ai_reader | ai_core      | standard_domain_map                                             | SELECT
+ ai_reader | ai_core      | standard_specific_overrides                                     | SELECT
+ ai_reader | ai_core      | standards_catalog                                               | SELECT
+ ai_reader | ai_core      | trusted_external_sources                                        | SELECT
+ ai_reader | ai_core      | v_action_context                                                | SELECT
+ ai_reader | ai_core      | v_ai_useful_feedback_cases                                      | SELECT
+ ai_reader | ai_core      | v_control_context                                               | SELECT
+ ai_reader | ai_core      | v_evidence_context                                              | SELECT
+ ai_reader | ai_core      | v_external_lookup_usage_monthly                                 | SELECT
+ ai_reader | ai_core      | v_finding_context                                               | SELECT
+ ai_reader | ai_core      | v_finding_scenarios_active                                      | SELECT
+ ai_reader | ai_core      | v_kpi_context                                                   | SELECT
+ ai_reader | ai_core      | v_tenant_health_context                                         | SELECT
+ ai_reader | ai_core      | view_definition_backups                                         | SELECT
+ ai_reader | public       | action_plan_updates                                             | SELECT
+ ai_reader | public       | action_plans                                                    | SELECT
+ ai_reader | public       | action_plans_backup_history                                     | SELECT
+ ai_reader | public       | admin_audit_log                                                 | SELECT
+ ai_reader | public       | ai_auditor_runs                                                 | SELECT
+ ai_reader | public       | ai_bootstrap_knowledge_items                                    | SELECT
+ ai_reader | public       | ai_bootstrap_knowledge_runs                                     | SELECT
+ ai_reader | public       | ai_bootstrap_knowledge_sources                                  | SELECT
+ ai_reader | public       | ai_bootstrap_knowledge_topics                                   | SELECT
+ ai_reader | public       | ai_knowledge_datasets                                           | SELECT
+ ai_reader | public       | ai_knowledge_records                                            | SELECT
+ ai_reader | public       | ai_knowledge_standards                                          | SELECT
+ ai_reader | public       | ai_prompt_logs                                                  | SELECT
+ ai_reader | public       | ai_suggestions                                                  | SELECT
+ ai_reader | public       | app_roles                                                       | SELECT
+ ai_reader | public       | assessment_campaigns                                            | SELECT
+ ai_reader | public       | assessment_recipients                                           | SELECT
+ ai_reader | public       | assessments                                                     | SELECT
+ ai_reader | public       | asset_risks                                                     | SELECT
+ ai_reader | public       | asset_standards                                                 | SELECT
+ ai_reader | public       | assets                                                          | SELECT
+ ai_reader | public       | assurance_test_definitions                                      | SELECT
+ ai_reader | public       | assurance_test_exceptions                                       | SELECT
+ ai_reader | public       | assurance_test_executions                                       | SELECT
+ ai_reader | public       | assurance_test_results                                          | SELECT
+ ai_reader | public       | assurance_test_samples                                          | SELECT
+ ai_reader | public       | audit_control_reviews                                           | SELECT
+ ai_reader | public       | audit_document_generation_runs                                  | SELECT
+ ai_reader | public       | audit_document_templates                                        | SELECT
+ ai_reader | public       | audit_documentary_sources                                       | SELECT
+ ai_reader | public       | audit_event_log                                                 | SELECT
+ ai_reader | public       | audit_evidence_index                                            | SELECT
+ ai_reader | public       | audit_package_documents                                         | SELECT
+ ai_reader | public       | audit_preparation_packages                                      | SELECT
+ ai_reader | public       | audit_uploaded_zip_files                                        | SELECT
+ ai_reader | public       | audit_workpaper_template_versions                               | SELECT
+ ai_reader | public       | audits                                                          | SELECT
+ ai_reader | public       | calculation_anomalies                                           | SELECT
+ ai_reader | public       | calculation_comparisons                                         | SELECT
+ ai_reader | public       | calculation_consumers                                           | SELECT
+ ai_reader | public       | calculation_explanations                                        | SELECT
+ ai_reader | public       | calculation_inputs                                              | SELECT
+ ai_reader | public       | calculation_outputs                                             | SELECT
+ ai_reader | public       | calculation_runs                                                | SELECT
+ ai_reader | public       | calculation_snapshots                                           | SELECT
+ ai_reader | public       | calculation_validations                                         | SELECT
+ ai_reader | public       | clauses                                                         | SELECT
+ ai_reader | public       | commercial_addons                                               | SELECT
+ ai_reader | public       | commercial_editions                                             | SELECT
+ ai_reader | public       | commercial_events                                               | SELECT
+ ai_reader | public       | commercial_features                                             | SELECT
+ ai_reader | public       | commercial_modules                                              | SELECT
+ ai_reader | public       | commercial_plan_versions                                        | SELECT
+ ai_reader | public       | commercial_plans                                                | SELECT
+ ai_reader | public       | commercial_technical_capabilities                               | SELECT
+ ai_reader | public       | control_health_scores                                           | SELECT
+ ai_reader | public       | control_health_scores_backup_history                            | SELECT
+ ai_reader | public       | control_health_scores_v2_preview                                | SELECT
+ ai_reader | public       | control_soa                                                     | SELECT
+ ai_reader | public       | control_soa_assessments                                         | SELECT
+ ai_reader | public       | control_soa_change_log                                          | SELECT
+ ai_reader | public       | controls                                                        | SELECT
+ ai_reader | public       | controls_catalog                                                | SELECT
+ ai_reader | public       | controls_catalog_standards                                      | SELECT
+ ai_reader | public       | dashboard_definitions                                           | SELECT
+ ai_reader | public       | dashboard_permissions                                           | SELECT
+ ai_reader | public       | dashboard_widgets                                               | SELECT
+ ai_reader | public       | data_comparisons                                                | SELECT
+ ai_reader | public       | data_definitions                                                | SELECT
+ ai_reader | public       | data_domains                                                    | SELECT
+ ai_reader | public       | data_elements                                                   | SELECT
+ ai_reader | public       | data_lineage_edges                                              | SELECT
+ ai_reader | public       | data_owners                                                     | SELECT
+ ai_reader | public       | data_quality_assessments                                        | SELECT
+ ai_reader | public       | data_quality_rules                                              | SELECT
+ ai_reader | public       | data_snapshots                                                  | SELECT
+ ai_reader | public       | data_source_contract_versions                                   | SELECT
+ ai_reader | public       | data_source_contracts                                           | SELECT
+ ai_reader | public       | data_source_field_mappings                                      | SELECT
+ ai_reader | public       | data_sources                                                    | SELECT
+ ai_reader | public       | data_trust_score_versions                                       | SELECT
+ ai_reader | public       | data_trust_scores                                               | SELECT
+ ai_reader | public       | dealer_requests                                                 | SELECT
+ ai_reader | public       | dealer_tenant_access                                            | SELECT
+ ai_reader | public       | dealer_tenants                                                  | SELECT
+ ai_reader | public       | deployment_profiles                                             | SELECT
+ ai_reader | public       | document_ai_analysis                                            | SELECT
+ ai_reader | public       | document_association_suggestions                                | SELECT
+ ai_reader | public       | document_index                                                  | SELECT
+ ai_reader | public       | document_sync_logs                                              | SELECT
+ ai_reader | public       | evidence_ai_assessments                                         | SELECT
+ ai_reader | public       | evidence_ai_jobs                                                | SELECT
+ ai_reader | public       | evidence_document_extracts                                      | SELECT
+ ai_reader | public       | evidence_document_links                                         | SELECT
+ ai_reader | public       | evidence_knowledge_chunks                                       | SELECT
+ ai_reader | public       | evidence_tenant_control_migration_log                           | SELECT
+ ai_reader | public       | evidences                                                       | SELECT
+ ai_reader | public       | evidences_backup_history                                        | SELECT
+ ai_reader | public       | feature_capabilities                                            | SELECT
+ ai_reader | public       | findings                                                        | SELECT
+ ai_reader | public       | grc_analytical_impact_events                                    | SELECT
+ ai_reader | public       | grc_analytical_impact_rules                                     | SELECT
+ ai_reader | public       | grc_bia_assessments                                             | SELECT
+ ai_reader | public       | grc_bia_impacts                                                 | SELECT
+ ai_reader | public       | grc_continuity_plans                                            | SELECT
+ ai_reader | public       | grc_continuity_tests                                            | SELECT
+ ai_reader | public       | grc_crisis_activations                                          | SELECT
+ ai_reader | public       | grc_crisis_log                                                  | SELECT
+ ai_reader | public       | grc_gap_hypotheses                                              | SELECT
+ ai_reader | public       | grc_gap_rules                                                   | SELECT
+ ai_reader | public       | grc_gap_status_history                                          | SELECT
+ ai_reader | public       | grc_gaps                                                        | SELECT
+ ai_reader | public       | grc_import_audit_events                                         | SELECT
+ ai_reader | public       | grc_import_cell_errors                                          | SELECT
+ ai_reader | public       | grc_import_files                                                | SELECT
+ ai_reader | public       | grc_import_template_versions                                    | SELECT
+ ai_reader | public       | grc_metric_definitions                                          | SELECT
+ ai_reader | public       | grc_metric_measurements                                         | SELECT
+ ai_reader | public       | grc_observation_emission_outbox                                 | SELECT
+ ai_reader | public       | grc_observation_relations                                       | SELECT
+ ai_reader | public       | grc_observations                                                | SELECT
+ ai_reader | public       | grc_operational_dependencies                                    | SELECT
+ ai_reader | public       | grc_operational_services                                        | SELECT
+ ai_reader | public       | grc_organizational_units                                        | SELECT
+ ai_reader | public       | grc_phase3_import_batches                                       | SELECT
+ ai_reader | public       | grc_phase3_import_rows                                          | SELECT
+ ai_reader | public       | grc_phase3_readiness_impacts                                    | SELECT
+ ai_reader | public       | grc_phase3_state_history                                        | SELECT
+ ai_reader | public       | grc_quantitative_risk_assessments                               | SELECT
+ ai_reader | public       | health_score_components                                         | SELECT
+ ai_reader | public       | health_score_definitions                                        | SELECT
+ ai_reader | public       | health_score_versions                                           | SELECT
+ ai_reader | public       | iso_ai_guidance                                                 | SELECT
+ ai_reader | public       | iso_audit_questions                                             | SELECT
+ ai_reader | public       | iso_catalog_sync_status                                         | SELECT
+ ai_reader | public       | iso_clause_guides                                               | SELECT
+ ai_reader | public       | iso_clauses                                                     | SELECT
+ ai_reader | public       | iso_control_catalog_links                                       | SELECT
+ ai_reader | public       | iso_control_mapping_apply_log                                   | SELECT
+ ai_reader | public       | iso_control_mappings                                            | SELECT
+ ai_reader | public       | iso_controls                                                    | SELECT
+ ai_reader | public       | iso_document_audit_log                                          | SELECT
+ ai_reader | public       | iso_document_generation_runs                                    | SELECT
+ ai_reader | public       | iso_evidence_expectations                                       | SELECT
+ ai_reader | public       | iso_express_assessment_answers                                  | SELECT
+ ai_reader | public       | iso_express_assessment_audit_log                                | SELECT
+ ai_reader | public       | iso_express_assessment_gaps                                     | SELECT
+ ai_reader | public       | iso_express_assessment_items                                    | SELECT
+ ai_reader | public       | iso_express_assessments                                         | SELECT
+ ai_reader | public       | iso_gap_rules                                                   | SELECT
+ ai_reader | public       | iso_generated_document_sections                                 | SELECT
+ ai_reader | public       | iso_generated_documents                                         | SELECT
+ ai_reader | public       | iso_maturity_rules                                              | SELECT
+ ai_reader | public       | iso_operational_suggestion_audit_log                            | SELECT
+ ai_reader | public       | iso_operational_suggestions                                     | SELECT
+ ai_reader | public       | iso_policy_templates                                            | SELECT
+ ai_reader | public       | iso_procedure_templates                                         | SELECT
+ ai_reader | public       | iso_recommended_action_conversions                              | SELECT
+ ai_reader | public       | iso_recommended_action_workflow_events                          | SELECT
+ ai_reader | public       | iso_risk_matrix_actions                                         | SELECT
+ ai_reader | public       | iso_risk_matrix_audit_log                                       | SELECT
+ ai_reader | public       | iso_risk_matrix_items                                           | SELECT
+ ai_reader | public       | iso_risk_matrix_runs                                            | SELECT
+ ai_reader | public       | iso_risk_templates                                              | SELECT
+ ai_reader | public       | iso_standard_versions                                           | SELECT
+ ai_reader | public       | iso_standards                                                   | SELECT
+ ai_reader | public       | iso_transition_guidance                                         | SELECT
+ ai_reader | public       | knowledge_chunk_embeddings                                      | SELECT
+ ai_reader | public       | knowledge_document_chunks                                       | SELECT
+ ai_reader | public       | knowledge_document_ingestion_audit                              | SELECT
+ ai_reader | public       | knowledge_document_ingestions                                   | SELECT
+ ai_reader | public       | knowledge_documents                                             | SELECT
+ ai_reader | public       | kpi_calculation_jobs                                            | SELECT
+ ai_reader | public       | kpi_calculation_rules                                           | SELECT
+ ai_reader | public       | kpi_custom_inputs                                               | SELECT
+ ai_reader | public       | kpi_data_sources                                                | SELECT
+ ai_reader | public       | kpi_definitions                                                 | SELECT
+ ai_reader | public       | kpi_dimensions_catalog                                          | SELECT
+ ai_reader | public       | kpi_event_queue                                                 | SELECT
+ ai_reader | public       | kpi_manual_values                                               | SELECT
+ ai_reader | public       | kpi_snapshot_dimensions                                         | SELECT
+ ai_reader | public       | kpi_snapshots                                                   | SELECT
+ ai_reader | public       | kpi_staging_import                                              | SELECT
+ ai_reader | public       | kpi_standard_mappings                                           | SELECT
+ ai_reader | public       | kpi_thresholds                                                  | SELECT
+ ai_reader | public       | legal_obligations                                               | SELECT
+ ai_reader | public       | lifecycle_stage_catalog                                         | SELECT
+ ai_reader | public       | loss_events                                                     | SELECT
+ ai_reader | public       | loss_recoveries                                                 | SELECT
+ ai_reader | public       | management_objectives                                           | SELECT
+ ai_reader | public       | metric_action_proposals                                         | SELECT
+ ai_reader | public       | metric_calculation_policies                                     | SELECT
+ ai_reader | public       | metric_definition_versions                                      | SELECT
+ ai_reader | public       | metric_definitions                                              | SELECT
+ ai_reader | public       | metric_dimensions                                               | SELECT
+ ai_reader | public       | metric_formula_versions                                         | SELECT
+ ai_reader | public       | metric_impact_rules                                             | SELECT
+ ai_reader | public       | metric_interpretations                                          | SELECT
+ ai_reader | public       | metric_job_policies                                             | SELECT
+ ai_reader | public       | metric_measurements                                             | SELECT
+ ai_reader | public       | metric_snapshots                                                | SELECT
+ ai_reader | public       | metric_source_bindings                                          | SELECT
+ ai_reader | public       | metric_sources                                                  | SELECT
+ ai_reader | public       | metric_sufficiency_rules                                        | SELECT
+ ai_reader | public       | metric_thresholds                                               | SELECT
+ ai_reader | public       | metric_trust_assessments                                        | SELECT
+ ai_reader | public       | metric_trust_policies                                           | SELECT
+ ai_reader | public       | metric_validations                                              | SELECT
+ ai_reader | public       | module_features                                                 | SELECT
+ ai_reader | public       | nonconformities_catalog                                         | SELECT
+ ai_reader | public       | notifications                                                   | SELECT
+ ai_reader | public       | official_formula_definitions                                    | SELECT
+ ai_reader | public       | official_formula_dependencies                                   | SELECT
+ ai_reader | public       | official_formula_source_contracts                               | SELECT
+ ai_reader | public       | official_formula_thresholds                                     | SELECT
+ ai_reader | public       | official_formula_variables                                      | SELECT
+ ai_reader | public       | official_formula_versions                                       | SELECT
+ ai_reader | public       | operational_risk_ai_analysis_jobs                               | SELECT
+ ai_reader | public       | operational_risk_recommendations                                | SELECT
+ ai_reader | public       | operational_risk_simulations                                    | SELECT
+ ai_reader | public       | pack_definitions                                                | SELECT
+ ai_reader | public       | pack_dependencies                                               | SELECT
+ ai_reader | public       | pack_items                                                      | SELECT
+ ai_reader | public       | pack_versions                                                   | SELECT
+ ai_reader | public       | permissions                                                     | SELECT
+ ai_reader | public       | plan_version_addons                                             | SELECT
+ ai_reader | public       | plan_version_modules                                            | SELECT
+ ai_reader | public       | product_families                                                | SELECT
+ ai_reader | public       | regulation_versions                                             | SELECT
+ ai_reader | public       | regulations                                                     | SELECT
+ ai_reader | public       | regulatory_authoritative_sources                                | SELECT
+ ai_reader | public       | regulatory_governance_audit                                     | SELECT
+ ai_reader | public       | regulatory_ingestions                                           | SELECT
+ ai_reader | public       | regulatory_obligation_change_lineage                            | SELECT
+ ai_reader | public       | regulatory_pack_applicability_evaluations                       | SELECT
+ ai_reader | public       | regulatory_pack_applicability_results                           | SELECT
+ ai_reader | public       | regulatory_pack_items                                           | SELECT
+ ai_reader | public       | regulatory_pack_tenant_activations                              | SELECT
+ ai_reader | public       | regulatory_pack_versions                                        | SELECT
+ ai_reader | public       | regulatory_packs                                                | SELECT
+ ai_reader | public       | regulatory_semantic_diff_changes                                | SELECT
+ ai_reader | public       | regulatory_semantic_diffs                                       | SELECT
+ ai_reader | public       | report_access_rules                                             | SELECT
+ ai_reader | public       | report_access_rules_backup_20260430                             | SELECT
+ ai_reader | public       | report_approvals                                                | SELECT
+ ai_reader | public       | report_artifacts                                                | SELECT
+ ai_reader | public       | report_definitions                                              | SELECT
+ ai_reader | public       | report_exports                                                  | SELECT
+ ai_reader | public       | report_generations                                              | SELECT
+ ai_reader | public       | report_schedules                                                | SELECT
+ ai_reader | public       | report_template_versions                                        | SELECT
+ ai_reader | public       | report_types                                                    | SELECT
+ ai_reader | public       | responses                                                       | SELECT
+ ai_reader | public       | risk_methodology_versions                                       | SELECT
+ ai_reader | public       | role_permissions                                                | SELECT
+ ai_reader | public       | roles                                                           | SELECT
+ ai_reader | public       | saas_modules                                                    | SELECT
+ ai_reader | public       | saas_monthly_prebilling                                         | SELECT
+ ai_reader | public       | saas_monthly_prebilling_lines                                   | SELECT
+ ai_reader | public       | saas_price_catalog                                              | SELECT
+ ai_reader | public       | saas_quote_lines                                                | SELECT
+ ai_reader | public       | saas_quotes                                                     | SELECT
+ ai_reader | public       | schema_migrations                                               | SELECT
+ ai_reader | public       | search_history                                                  | SELECT
+ ai_reader | public       | standard_lifecycle_ai_feed                                      | SELECT
+ ai_reader | public       | standard_lifecycle_snapshots                                    | SELECT
+ ai_reader | public       | standard_lifecycle_stage_requests                               | SELECT
+ ai_reader | public       | standard_lifecycle_status                                       | SELECT
+ ai_reader | public       | standards                                                       | SELECT
+ ai_reader | public       | statistical_results                                             | SELECT
+ ai_reader | public       | statistical_samples                                             | SELECT
+ ai_reader | public       | support_tiers                                                   | SELECT
+ ai_reader | public       | survey_approvals                                                | SELECT
+ ai_reader | public       | survey_definitions                                              | SELECT
+ ai_reader | public       | survey_evaluations                                              | SELECT
+ ai_reader | public       | survey_question_options                                         | SELECT
+ ai_reader | public       | survey_questions                                                | SELECT
+ ai_reader | public       | survey_response_items                                           | SELECT
+ ai_reader | public       | survey_responses                                                | SELECT
+ ai_reader | public       | survey_sections                                                 | SELECT
+ ai_reader | public       | survey_versions                                                 | SELECT
+ ai_reader | public       | tcdx_async_jobs                                                 | SELECT
+ ai_reader | public       | tenant_applicability_exclusions                                 | SELECT
+ ai_reader | public       | tenant_applicability_exclusions_cleanup_backup_20260525         | SELECT
+ ai_reader | public       | tenant_applicability_profiles                                   | SELECT
+ ai_reader | public       | tenant_applicability_runs                                       | SELECT
+ ai_reader | public       | tenant_applicable_controls                                      | SELECT
+ ai_reader | public       | tenant_applicable_controls_cleanup_backup_20260525              | SELECT
+ ai_reader | public       | tenant_applicable_evidence_requirements                         | SELECT
+ ai_reader | public       | tenant_applicable_evidence_requirements_cleanup_backup_20260525 | SELECT
+ ai_reader | public       | tenant_applicable_kpis                                          | SELECT
+ ai_reader | public       | tenant_applicable_kpis_cleanup_backup_20260525                  | SELECT
+ ai_reader | public       | tenant_billing_settings                                         | SELECT
+ ai_reader | public       | tenant_company_profiles                                         | SELECT
+ ai_reader | public       | tenant_contracts                                                | SELECT
+ ai_reader | public       | tenant_controls                                                 | SELECT
+ ai_reader | public       | tenant_document_index_exclusions                                | SELECT
+ ai_reader | public       | tenant_document_object_links                                    | SELECT
+ ai_reader | public       | tenant_document_provider_credentials                            | SELECT
+ ai_reader | public       | tenant_document_sources                                         | SELECT
+ ai_reader | public       | tenant_entitlements                                             | SELECT
+ ai_reader | public       | tenant_evidence_applicability_suggestions                       | SELECT
+ ai_reader | public       | tenant_evidence_chunks                                          | SELECT
+ ai_reader | public       | tenant_evidence_semantic_profiles                               | SELECT
+ ai_reader | public       | tenant_feature_overrides                                        | SELECT
+ ai_reader | public       | tenant_integrations                                             | SELECT
+ ai_reader | public       | tenant_kpi_settings                                             | SELECT
+ ai_reader | public       | tenant_module_settings                                          | SELECT
+ ai_reader | public       | tenant_monthly_preinvoices                                      | SELECT
+ ai_reader | public       | tenant_nonconformities                                          | SELECT
+ ai_reader | public       | tenant_operations                                               | SELECT
+ ai_reader | public       | tenant_pack_installation_items                                  | SELECT
+ ai_reader | public       | tenant_pack_installations                                       | SELECT
+ ai_reader | public       | tenant_process_entity_links                                     | SELECT
+ ai_reader | public       | tenant_processes                                                | SELECT
+ ai_reader | public       | tenant_standard_audit                                           | SELECT
+ ai_reader | public       | tenant_standard_operations                                      | SELECT
+ ai_reader | public       | tenant_standards                                                | SELECT
+ ai_reader | public       | tenant_subscription_addons                                      | SELECT
+ ai_reader | public       | tenant_subscriptions                                            | SELECT
+ ai_reader | public       | tenant_sync_agent_pairing_codes                                 | SELECT
+ ai_reader | public       | tenant_sync_agents                                              | SELECT
+ ai_reader | public       | tenant_usage_limits                                             | SELECT
+ ai_reader | public       | tenants                                                         | SELECT
+ ai_reader | public       | trials                                                          | SELECT
+ ai_reader | public       | usage_limit_definitions                                         | SELECT
+ ai_reader | public       | usage_measurements                                              | SELECT
+ ai_reader | public       | user_dashboard_preferences                                      | SELECT
+ ai_reader | public       | user_roles                                                      | SELECT
+ ai_reader | public       | users                                                           | SELECT
+ ai_reader | public       | users_backup_before_role_governance_20260417                    | SELECT
+ ai_reader | public       | users_backup_before_role_normalization_20260430                 | SELECT
+ ai_reader | public       | v_audit_action_plan_timeline                                    | SELECT
+ ai_reader | public       | v_audit_control_recovery_timeline                               | SELECT
+ ai_reader | public       | v_audit_event_log_enriched                                      | SELECT
+ ai_reader | public       | v_audit_evidence_timeline                                       | SELECT
+ ai_reader | public       | v_catalog_controls_without_iso_link                             | SELECT
+ ai_reader | public       | v_commercial_plan_capabilities                                  | SELECT
+ ai_reader | public       | v_commercial_tenant_capabilities                                | SELECT
+ ai_reader | public       | v_commercial_tenant_health                                      | SELECT
+ ai_reader | public       | v_commercial_tenant_modules                                     | SELECT
+ ai_reader | public       | v_commercial_tenant_subscription                                | SELECT
+ ai_reader | public       | v_control_health_base                                           | SELECT
+ ai_reader | public       | v_control_health_detail                                         | SELECT
+ ai_reader | public       | v_control_health_risks                                          | SELECT
+ ai_reader | public       | v_control_health_risks_applicable                               | SELECT
+ ai_reader | public       | v_controls_recovered_by_remediation                             | SELECT
+ ai_reader | public       | v_controls_without_evidence                                     | SELECT
+ ai_reader | public       | v_dealer_tenants                                                | SELECT
+ ai_reader | public       | v_evidence_approval_queue                                       | SELECT
+ ai_reader | public       | v_health_dashboard_by_standard                                  | SELECT
+ ai_reader | public       | v_health_dashboard_by_standard_applicable                       | SELECT
+ ai_reader | public       | v_health_dashboard_summary                                      | SELECT
+ ai_reader | public       | v_health_dashboard_summary_applicable                           | SELECT
+ ai_reader | public       | v_health_remediation_plan                                       | SELECT
+ ai_reader | public       | v_health_remediation_summary_by_standard                        | SELECT
+ ai_reader | public       | v_health_remediation_summary_by_tenant                          | SELECT
+ ai_reader | public       | v_health_root_causes_by_standard                                | SELECT
+ ai_reader | public       | v_health_root_causes_by_tenant                                  | SELECT
+ ai_reader | public       | v_iso_catalog_sync_summary                                      | SELECT
+ ai_reader | public       | v_iso_control_catalog_coverage                                  | SELECT
+ ai_reader | public       | v_iso_control_effective_health                                  | SELECT
+ ai_reader | public       | v_iso_control_effective_health_applicable                       | SELECT
+ ai_reader | public       | v_iso_controls_without_catalog_link                             | SELECT
+ ai_reader | public       | v_iso_document_summary_by_tenant                                | SELECT
+ ai_reader | public       | v_iso_effective_kpi_summary                                     | SELECT
+ ai_reader | public       | v_iso_effective_kpi_summary_applicable                          | SELECT
+ ai_reader | public       | v_iso_express_gap_summary                                       | SELECT
+ ai_reader | public       | v_iso_express_latest_assessments                                | SELECT
+ ai_reader | public       | v_iso_express_tenant_standard_readiness                         | SELECT
+ ai_reader | public       | v_iso_generated_documents_latest                                | SELECT
+ ai_reader | public       | v_iso_operational_suggestions_queue                             | SELECT
+ ai_reader | public       | v_iso_operational_suggestions_summary                           | SELECT
+ ai_reader | public       | v_iso_risk_matrix_actions_summary                               | SELECT
+ ai_reader | public       | v_iso_risk_matrix_by_asset                                      | SELECT
+ ai_reader | public       | v_iso_risk_matrix_latest_runs                                   | SELECT
+ ai_reader | public       | v_iso_risk_matrix_summary                                       | SELECT
+ ai_reader | public       | v_latest_health_kpi_snapshots                                   | SELECT
+ ai_reader | public       | v_latest_health_kpi_snapshots_applicable                        | SELECT
+ ai_reader | public       | v_remediation_executive_by_standard                             | SELECT
+ ai_reader | public       | v_remediation_executive_by_tenant                               | SELECT
+ ai_reader | public       | v_saas_prebilling_tenant_context                                | SELECT
+ ai_reader | public       | v_standard_health_summary                                       | SELECT
+ ai_reader | public       | v_tenant_commercial_entitlements                                | SELECT
+ ai_reader | public       | v_tenant_governance_summary                                     | SELECT
+ ai_reader | public       | v_tenant_health_summary                                         | SELECT
+ ai_reader | public       | v_tenant_modules                                                | SELECT
+ ai_reader | public       | v_user_permissions                                              | SELECT
+ ai_reader | public       | vw_evidence_ai_state                                            | SELECT
+ ai_reader | public       | vw_evidence_current_ai_assessments                              | SELECT
+ ai_reader | public       | vw_evidence_current_extracts                                    | SELECT
+(428 rows)
+
+ schema_name | function_name | arguments 
+-------------+---------------+-----------
+(0 rows)
+
+ROLLBACK

@@ -546,19 +546,10 @@ async function cleanupInactiveStandardOperationalData(client, tenantId, standard
     [tenantId, standardCode]
   );
 
-  const healthDelete = await client.query(
-    `
-    DELETE FROM control_health_scores
-    WHERE tenant_id = $1::uuid
-      AND standard_code = $2::text
-    `,
-    [tenantId, standardCode]
-  );
-
   return {
     deleted_snapshot_dimensions: dimensionDelete.rowCount,
     deleted_snapshots: snapshotDelete.rowCount,
-    deleted_health_scores: healthDelete.rowCount,
+    deleted_health_scores: 0,
   };
 }
 
@@ -613,7 +604,9 @@ router.get('/overview', auth, async (req, res) => {
             COALESCE(s.name, ts.standard_code) AS name,
             TRUE AS is_active,
             COUNT(DISTINCT tc.id)::int AS tenant_controls,
-            COUNT(DISTINCT chs.id)::int AS health_records
+            COUNT(DISTINCT veh.tenant_control_id) FILTER (
+              WHERE veh.effective_health_score IS NOT NULL
+            )::int AS health_records
           FROM tenant_standards ts
           JOIN tenants t
             ON t.id = ts.tenant_id
@@ -625,9 +618,9 @@ router.get('/overview', auth, async (req, res) => {
           LEFT JOIN tenant_controls tc
             ON tc.tenant_id = ts.tenant_id
            AND tc.control_id = cc.id
-          LEFT JOIN control_health_scores chs
-            ON chs.tenant_id = ts.tenant_id
-           AND chs.standard_code = ts.standard_code
+          LEFT JOIN public.v_iso_control_effective_health veh
+            ON veh.tenant_id = ts.tenant_id
+           AND veh.standard_code = ts.standard_code
           GROUP BY
             ts.tenant_id,
             t.name,

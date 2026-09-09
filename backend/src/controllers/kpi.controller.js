@@ -91,7 +91,7 @@ async function findFirstExistingColumn(client, tableName, candidates = []) {
 }
 
 function isHealthKpiCode(code) {
-  return String(code || '').startsWith('KPI-HLT-');
+  return false;
 }
 
 function getUserRole(user) {
@@ -259,8 +259,6 @@ async function getKpiDefinitionsForTenant(tenantId) {
      AND ksm.is_active = true
     WHERE kd.is_active = true
       AND (
-        kd.code LIKE 'KPI-HLT-%'
-        OR
         (
           kd.is_standard = true
           AND EXISTS (
@@ -1099,14 +1097,6 @@ async function recalculateTenantKpis(req, res) {
   try {
     await client.query('BEGIN');
 
-    const refreshHealthRes = await client.query(
-      `
-      SELECT *
-      FROM refresh_control_health_scores_v2_1($1::uuid)
-      `,
-      [tenantId]
-    );
-
     const refreshKpiHealthRes = await client.query(
       `
       SELECT *
@@ -1121,7 +1111,7 @@ async function recalculateTenantKpis(req, res) {
       USING kpi_definitions kd
       WHERE ks.tenant_id = $1
         AND ks.kpi_id = kd.id
-        AND kd.code LIKE 'KPI-HLT-%'
+        AND COALESCE(kd.is_health_kpi, false) = true
         AND COALESCE(ks.standard_code, 'GLOBAL') NOT IN (
           SELECT ts.standard_code
           FROM tenant_standards ts
@@ -1137,7 +1127,7 @@ async function recalculateTenantKpis(req, res) {
     const snapshotsCreated = [];
 
     for (const def of defs) {
-      if (isHealthKpiCode(def.code)) {
+      if (def.is_health_kpi === true || isHealthKpiCode(def.code)) {
         continue;
       }
 
@@ -1221,8 +1211,8 @@ async function recalculateTenantKpis(req, res) {
     return res.json({
       ok: true,
       tenant_id: tenantId,
-      health_recalculated: Number(refreshHealthRes.rows[0]?.refreshed_rows || 0),
-      health_refresh: refreshHealthRes.rows[0] || null,
+      health_recalculated: 0,
+      health_refresh: null,
       health_kpi_refresh: refreshKpiHealthRes.rows || [],
       snapshots_created: snapshotsCreated.length,
       snapshots: snapshotsCreated

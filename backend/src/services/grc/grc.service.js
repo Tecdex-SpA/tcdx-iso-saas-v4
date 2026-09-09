@@ -594,6 +594,15 @@ function createGrcService(pool, asyncJobs) {
       )).rows[0];
       if (!definition) throw new GrcError('WORKFLOW_DEFINITION_NOT_ACTIVE', 'Workflow no disponible.', 404);
       if (definition.entity_type !== body.entity_type) throw new GrcError('WORKFLOW_ENTITY_TYPE_MISMATCH', 'Tipo de entidad no compatible.', 422);
+      const entityId = assertUuid(body.entity_id);
+      const runtimeEntity = await readRuntimeEntity(client, {
+        tenantId,
+        entityType: body.entity_type,
+        entityId,
+      });
+      if (!runtimeEntity) {
+        throw new GrcError('WORKFLOW_RUNTIME_ENTITY_NOT_FOUND', 'Entidad compatible no encontrada para este tenant.', 404);
+      }
       const initial = (await client.query(
         `SELECT * FROM grc_workflow_states WHERE tenant_id = $1::uuid AND version_id = $2::uuid AND state_type = 'initial' LIMIT 1`,
         [tenantId, definition.version_id]
@@ -606,8 +615,8 @@ function createGrcService(pool, asyncJobs) {
          ) VALUES ($1::uuid,$2::uuid,$3::uuid,$4::uuid,$5::uuid,$6::uuid,$7,$8::uuid,$9,$10,$11::jsonb,$12::uuid)
          RETURNING *`,
         [tenantId, body.organization_id || null, body.unit_id || null, definition.id, definition.version_id,
-          initial.id, body.entity_type, assertUuid(body.entity_id), body.due_at || null, correlationId,
-          json(body.context || {}), userId]
+          initial.id, body.entity_type, entityId, body.due_at || null, correlationId,
+          json({ ...(body.context || {}), adapter: runtimeEntity.adapter }), userId]
       )).rows[0];
       await client.query(
         `INSERT INTO grc_workflow_history (tenant_id, instance_id, to_state_id, actor_id, actor_role, correlation_id, result)

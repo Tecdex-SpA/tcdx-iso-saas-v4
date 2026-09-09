@@ -1,0 +1,63 @@
+DB-N03 initial git state
+Date: 2026-09-07
+
+Command: git branch --show-current
+Output:
+codex/db-n01-control-identity-normalization
+
+Command: git rev-parse HEAD
+Output:
+11003dd92385dcca1caf5365fa437be3aee1f648
+
+Command: git status --short
+Output:
+ M backend/src/routes/action-plans.routes.js
+ M backend/src/routes/controls.routes.js
+ M backend/src/routes/evidences.routes.js
+ M backend/src/routes/findings.routes.js
+ M backend/src/services/diagnosticAcceptance.service.js
+ M backend/src/services/grc/grc.service.js
+ M backend/src/services/grc/grc.service.test.js
+ M backend/src/services/isoOperationalExecution.service.js
+ M backend/src/services/isoRecommendedActions.service.js
+ M backend/src/services/math-governance/canonicalHealthProjection.service.js
+ M backend/src/services/math-governance/canonicalHealthProjection.service.test.js
+ M backend/src/services/soaIntelligence.service.js
+ M backend/src/services/soaIntelligence.service.test.js
+ M docs/codex/ARCHITECTURE_MAP.md
+ M docs/codex/CONTRACTS_REGISTRY.md
+ M docs/codex/CURRENT_STATE.md
+ M docs/codex/DECISIONS.md
+ M docs/codex/WORK_QUEUE.md
+?? artifacts/db-n02/
+?? backend/src/routes/controlIdentityRoutes.test.js
+?? backend/src/utils/tenantControlIdentity.js
+?? backend/src/utils/tenantControlIdentity.test.js
+?? database/migrations/20260904_dbn01_control_identity_normalization.sql
+?? database/migrations/20260904_dbn02_health_metrics_lineage_normalization.sql
+?? docs/handoffs/
+?? scripts/normalization/apply-db-n01-control-identity-migration.test.js
+?? scripts/normalization/apply-db-n02-health-metrics-lineage-migration.test.js
+?? scripts/normalization/db-n01-control-identity.postgres.test.js
+?? scripts/normalization/db-n02-health-metrics-lineage.postgres.test.js
+
+Command: git diff --name-only
+Output:
+backend/src/routes/action-plans.routes.js
+backend/src/routes/controls.routes.js
+backend/src/routes/evidences.routes.js
+backend/src/routes/findings.routes.js
+backend/src/services/diagnosticAcceptance.service.js
+backend/src/services/grc/grc.service.js
+backend/src/services/grc/grc.service.test.js
+backend/src/services/isoOperationalExecution.service.js
+backend/src/services/isoRecommendedActions.service.js
+backend/src/services/math-governance/canonicalHealthProjection.service.js
+backend/src/services/math-governance/canonicalHealthProjection.service.test.js
+backend/src/services/soaIntelligence.service.js
+backend/src/services/soaIntelligence.service.test.js
+docs/codex/ARCHITECTURE_MAP.md
+docs/codex/CONTRACTS_REGISTRY.md
+docs/codex/CURRENT_STATE.md
+docs/codex/DECISIONS.md
+docs/codex/WORK_QUEUE.md

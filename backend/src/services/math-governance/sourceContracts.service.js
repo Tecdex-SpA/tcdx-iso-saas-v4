@@ -215,8 +215,8 @@ const SOURCE_CONTRACTS = Object.freeze([
   }),
   contract({
     source_code: 'risk_register_controls', entity: 'risk',
-    tables: ['iso_risk_matrix_items', 'iso_risk_matrix_runs', 'grc_quantitative_risk_assessments', 'grc_control_assurance'],
-    columns: ['tenant_id','risk_id','probability','likelihood','impact','inherent_risk_score','exposure','severity','occurrence','detection','tenant_control_id','score','status'], required_fields: ['id','tenant_id'],
+    tables: ['risks', 'risk_control_relations', 'tenant_controls'],
+    columns: ['tenant_id','risk_id','metadata.likelihood','metadata.impact','inherent_score','residual_score','metadata.control_effectiveness_score','tenant_control_id','status'], required_fields: ['id','tenant_id'],
     variable_map: { risks: 'rows[{source_record,probability|likelihood,impact,inherent_risk_score=probability*impact}]', aggregation_method: 'arithmetic_mean', probability: 'probability|likelihood', impact: 'impact', inherentRisk: 'mean(rows.probability*rows.impact)', controlEffectiveness: 'assurance_score normalized by scale_metadata.controlEffectiveness', severity: 'severity', occurrence: 'occurrence', detection: 'detection' },
     scale_metadata: {
       variables: {

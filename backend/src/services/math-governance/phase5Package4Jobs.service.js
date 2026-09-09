@@ -20,8 +20,21 @@ function runPackage4Job({ tenantId, userId = null, jobKey, period = {}, input = 
   if (!metricKey) throw Object.assign(new Error('Job Paquete 4 no soportado.'), { code: 'PACKAGE4_JOB_NOT_FOUND', status: 404, details: { jobKey } });
   const key = idempotencyKey({ tenantId, jobKey, period, input });
   const startedAt = new Date().toISOString();
-  const result = phase5Package3.calculateOfficialByKey(metricKey, { ...input, period, correlationId });
-  return { job_key: jobKey, metric_key: metricKey, tenant_id: tenantId, user_id: userId, correlation_id: correlationId, period, idempotency_key: key, attempt, status: 'completed', started_at: startedAt, finished_at: new Date().toISOString(), timeout_ms: input.timeout_ms || 30000, retries: input.retries ?? 0, result, snapshot: { formula_code: result.formula_code, formula_version: result.formula_version, input_hash: result.input_hash, calculation_run_id: result.calculation_run_id }, error: null };
+  const formulaCode = phase5Package3.formulaCodeForKey(metricKey);
+  const result = {
+    formula_code: formulaCode,
+    formula_version: null,
+    status: 'unmeasured',
+    value: null,
+    unit: null,
+    explanation: 'Package4 job wrapper no calcula fórmulas oficiales; use officialCalculationOrchestrator.',
+    warnings: ['canonical_orchestrator_required'],
+    input_hash: crypto.createHash('sha256').update(stable(input)).digest('hex'),
+    calculation_run_id: null,
+    explanation_url: `/api/grc/official/calculations/${key}/explanation`,
+    lineage_url: `/api/grc/official/calculations/${key}/lineage`,
+  };
+  return { job_key: jobKey, metric_key: metricKey, tenant_id: tenantId, user_id: userId, correlation_id: correlationId, period, idempotency_key: key, attempt, status: 'requires_orchestrator', started_at: startedAt, finished_at: new Date().toISOString(), timeout_ms: input.timeout_ms || 30000, retries: input.retries ?? 0, result, snapshot: { formula_code: result.formula_code, formula_version: result.formula_version, input_hash: result.input_hash, calculation_run_id: result.calculation_run_id }, error: null };
 }
 function listPackage4Jobs() { return Object.keys(JOBS).map((job_key) => ({ job_key, metric_key: JOBS[job_key], tenant_scoped: true, idempotent: true, calculation_run: true, snapshot: true, retries: 'caller_policy', timeout_ms: 30000 })); }
 module.exports = { JOBS, listPackage4Jobs, runPackage4Job, idempotencyKey };

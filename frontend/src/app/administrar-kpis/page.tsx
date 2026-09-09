@@ -156,7 +156,7 @@ function formatDate(value?: string | null) {
 }
 
 function isHealthKpi(item: KpiAdminItem) {
-  return item.is_health_kpi || item.code.startsWith('KPI-HLT-');
+  return item.is_health_kpi;
 }
 
 function colorBadgeClass(color?: string | null) {
@@ -242,79 +242,7 @@ function hasKpiValue(item: KpiAdminItem) {
 
 function enrichHealthKpis(items: KpiAdminItem[], rows: EffectiveHealthRow[]): KpiAdminItem[] {
   if (!rows.length) return items;
-
-  const metrics = buildHealthFallbackMetrics(rows);
-  const derived: Record<string, { value: number | null; color: 'green' | 'yellow' | 'red' | 'gray' }> = {
-    'KPI-HLT-001': {
-      value: metrics.avgHealthScore,
-      color: statusColorFromPercent(metrics.avgHealthScore),
-    },
-    'KPI-HLT-002': {
-      value: metrics.compliancePct,
-      color: statusColorFromPercent(metrics.compliancePct),
-    },
-    'KPI-HLT-003': {
-      value: metrics.officialEvidencePct,
-      color: statusColorFromPercent(metrics.officialEvidencePct),
-    },
-    'KPI-HLT-004': {
-      value: metrics.deteriorated,
-      color: metrics.deteriorated > 0 ? 'red' : 'green',
-    },
-    'KPI-HLT-005': {
-      value: metrics.withoutEvidence,
-      color: metrics.withoutEvidence > 0 ? 'yellow' : 'green',
-    },
-    'KPI-HLT-006': {
-      value: metrics.overdue,
-      color: metrics.overdue > 0 ? 'red' : 'green',
-    },
-  };
-
-  return items.map((item) => {
-    if (!isHealthKpi(item) || hasKpiValue(item)) return item;
-
-    const metric = derived[item.code];
-    if (!metric || metric.value === null || metric.value === undefined) return item;
-
-    return {
-      ...item,
-      latest_value: metric.value,
-      latest_status_color: metric.color,
-      latest_snapshots: item.latest_snapshots && item.latest_snapshots.length > 0
-        ? item.latest_snapshots
-        : metrics.rows.map((row) => {
-            const code = row.iso || null;
-            const value =
-              item.code === 'KPI-HLT-003'
-                ? (row.official_evidence_percentage ?? metrics.officialEvidencePct)
-                : item.code === 'KPI-HLT-004'
-                ? Math.max(toSafeNumber(row.deteriorated_controls), toSafeNumber(row.non_compliant_or_no_data_controls))
-                : item.code === 'KPI-HLT-005'
-                ? toSafeNumber(row.controls_without_evidence)
-                : item.code === 'KPI-HLT-006'
-                ? toSafeNumber(row.overdue_action_plans_count)
-                : (row.avg_effective_health_score ?? row.compliance_percentage ?? metrics.avgHealthScore);
-
-            const numericValue = Number(value);
-            const snapshotColor =
-              item.code === 'KPI-HLT-004' || item.code === 'KPI-HLT-005' || item.code === 'KPI-HLT-006'
-                ? numericValue > 0
-                  ? item.code === 'KPI-HLT-005'
-                    ? 'yellow'
-                    : 'red'
-                  : 'green'
-                : statusColorFromPercent(numericValue);
-
-            return {
-              standard_code: code,
-              value,
-              status_color: snapshotColor,
-              period_type: 'health_effective',
-            };
-          }),
-    };
-  });
+  return items.map((item) => item);
 }
 
 export default function AdministrarKpisPage() {

@@ -746,7 +746,7 @@ function normalizeKpiDashboardItem(item: unknown): KpiDashboardItem {
     applicable_standards: toStringList(raw.applicable_standards),
     is_enabled: Boolean(raw.is_enabled ?? raw.enabled ?? true),
     is_health_kpi: Boolean(
-      raw.is_health_kpi || String(raw.code || '').startsWith('KPI-HLT-')
+      raw.is_health_kpi
     ),
     latest_snapshot: latestSnapshot,
     latest_snapshots: latestSnapshots,
@@ -821,7 +821,7 @@ function normalizeKpiDashboardResponse(payload: unknown): KpiDashboardResponse {
 }
 
 function isHealthKpiItem(item?: KpiDashboardItem | null) {
-  return Boolean(item?.is_health_kpi || item?.code?.startsWith('KPI-HLT-'));
+  return Boolean(item?.is_health_kpi);
 }
 
 function formatDateCL(value?: string | null, emptyLabel = 'Sin fecha') {
@@ -851,7 +851,6 @@ function getKpiStatusClass(color?: string | null) {
 function kpiCodeLabel(code?: string | null) {
   const value = String(code || '').trim();
   if (!value) return 'Sin dato';
-  if (value.startsWith('KPI-HLT-')) return 'Indicador Health';
   const label = presentationLabel(value);
   return label === value ? 'Indicador oficial' : label;
 }

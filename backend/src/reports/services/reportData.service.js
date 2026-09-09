@@ -222,11 +222,6 @@ function cleanKpiCode(value) {
 
   if (!normalized) return '-';
 
-  const match = normalized.match(/^(KPI)-?(HLT)-?(\d+)$/i);
-  if (match) {
-    return `KPI-HLT-${String(match[3]).padStart(3, '0')}`;
-  }
-
   return normalized.toUpperCase();
 }
 

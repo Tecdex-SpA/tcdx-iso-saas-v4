@@ -146,23 +146,6 @@ async function resolveControlFromDiagnostic({ user, payload }) {
   return { diagnostic, control };
 }
 
-async function resolveLegacyFindingControlId(client, catalogControlId) {
-  if (!catalogControlId) return null;
-
-  const result = await client.query(
-    `
-    SELECT id
-    FROM controls
-    WHERE catalog_control_id = $1::uuid
-    ORDER BY id ASC
-    LIMIT 1
-    `,
-    [catalogControlId]
-  );
-
-  return result.rows[0]?.id || null;
-}
-
 function buildGapDescription({ control, payload, evidence }) {
   const assessment = payload.ai_assessment || payload.aiAssessment || {};
   const sourceReason = array(payload.sources)[0]?.reason || control.traceability?.fragment || '';
@@ -204,7 +187,6 @@ async function acceptGap({ user, payload = {} } = {}) {
 
   try {
     await client.query('BEGIN');
-    const legacyControlId = await resolveLegacyFindingControlId(client, control.catalog_control_id);
     const title = text(
       payload.title || `Brecha diagnostica: ${evidence.name || control.category || control.clause || 'control sin evidencia'}`,
       '',
@@ -271,7 +253,7 @@ async function acceptGap({ user, payload = {} } = {}) {
         text(evidence.owner_role || payload.owner_role, '', 220) || null,
         text(payload.detected_by || 'diagnostic_recommendation', '', 120),
         getUserId(user),
-        legacyControlId,
+        control.tenant_control_id,
       ]
     );
 

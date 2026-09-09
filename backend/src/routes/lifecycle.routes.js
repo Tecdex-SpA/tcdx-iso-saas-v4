@@ -588,7 +588,6 @@ async function getMetricsForPair(client, tenantId, standardCode, operationId) {
         ON e.tenant_id = $1
        AND (
             e.tenant_control_id = ec.tenant_control_id
-            OR e.control_id = ec.control_id
        )
        AND COALESCE(e.status, '') <> 'deleted'
       GROUP BY ec.tenant_control_id
@@ -619,10 +618,6 @@ async function getMetricsForPair(client, tenantId, standardCode, operationId) {
         COUNT(DISTINCT f.id)::int AS open_findings_count,
         MAX(COALESCE(f.updated_at, f.created_at)) AS last_finding_at
       FROM findings f
-      LEFT JOIN controls c_finding
-        ON c_finding.id = f.tenant_control_id
-      LEFT JOIN controls c_source
-        ON c_source.id = f.source_id
       WHERE f.tenant_id = $1
         AND LOWER(COALESCE(f.status, '')) <> 'cerrado'
         AND EXISTS (
@@ -631,10 +626,6 @@ async function getMetricsForPair(client, tenantId, standardCode, operationId) {
           WHERE
             ec.tenant_control_id = f.tenant_control_id
             OR ec.tenant_control_id = f.source_id
-            OR ec.control_id = f.tenant_control_id
-            OR ec.control_id = f.source_id
-            OR ec.control_id = c_finding.catalog_control_id
-            OR ec.control_id = c_source.catalog_control_id
         )
     ),
     action_plans_std AS (
@@ -647,10 +638,6 @@ async function getMetricsForPair(client, tenantId, standardCode, operationId) {
        AND ap.source_type = 'finding'
       LEFT JOIN findings f_from_finding
         ON f_from_finding.id = ap.finding_id
-      LEFT JOIN controls c_from_source
-        ON c_from_source.id = f_from_source.tenant_control_id
-      LEFT JOIN controls c_from_finding
-        ON c_from_finding.id = f_from_finding.tenant_control_id
       WHERE ap.tenant_id = $1
         AND LOWER(COALESCE(ap.status, '')) NOT IN ('cerrado', 'completado', 'cancelado')
         AND EXISTS (
@@ -658,11 +645,9 @@ async function getMetricsForPair(client, tenantId, standardCode, operationId) {
           FROM enabled_controls ec
           WHERE
             ec.tenant_control_id = ap.tenant_control_id
-            OR ec.control_id = ap.tenant_control_id
             OR ec.tenant_control_id = ap.source_id
-            OR ec.control_id = ap.source_id
-            OR ec.control_id = c_from_source.catalog_control_id
-            OR ec.control_id = c_from_finding.catalog_control_id
+            OR ec.tenant_control_id = f_from_source.tenant_control_id
+            OR ec.tenant_control_id = f_from_finding.tenant_control_id
         )
     )
     SELECT

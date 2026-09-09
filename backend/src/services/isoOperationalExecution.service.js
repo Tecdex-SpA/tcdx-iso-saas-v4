@@ -219,18 +219,10 @@ async function resolveTenantControlContext(client, tenantId, tenantControlId) {
       cc.iso,
       cc.clause,
       cc.category,
-      cc.description AS control_description,
-      c.id AS legacy_control_id
+      cc.description AS control_description
     FROM tenant_controls tc
     JOIN controls_catalog cc
       ON cc.id = tc.control_id
-    LEFT JOIN LATERAL (
-      SELECT c1.id
-      FROM controls c1
-      WHERE c1.catalog_control_id = tc.control_id
-      ORDER BY c1.id ASC
-      LIMIT 1
-    ) c ON TRUE
     WHERE tc.tenant_id = $1::uuid
       AND tc.id = $2::uuid
     LIMIT 1
@@ -439,15 +431,15 @@ async function fetchControlHealthSuggestions(tenantId, createdBy) {
   const result = await pool.query(
     `
     WITH latest_health AS (
-      SELECT DISTINCT ON (chs.tenant_control_id)
-        chs.tenant_control_id,
-        chs.standard_code,
-        chs.health_status,
-        chs.health_score,
-        chs.calculated_at
-      FROM control_health_scores chs
-      WHERE chs.tenant_id = $1::uuid
-      ORDER BY chs.tenant_control_id, chs.calculated_at DESC NULLS LAST
+      SELECT DISTINCT ON (veh.tenant_control_id)
+        veh.tenant_control_id,
+        veh.standard_code,
+        veh.effective_health_status AS health_status,
+        veh.effective_health_score AS health_score,
+        NULLIF(veh.health_trace_json->>'effective_at', '')::timestamptz AS calculated_at
+      FROM public.v_iso_control_effective_health veh
+      WHERE veh.tenant_id = $1::uuid
+      ORDER BY veh.tenant_control_id, calculated_at DESC NULLS LAST
     )
     SELECT
       lh.*,
@@ -460,7 +452,8 @@ async function fetchControlHealthSuggestions(tenantId, createdBy) {
       ON tc.id = lh.tenant_control_id
     LEFT JOIN controls_catalog cc
       ON cc.id = tc.control_id
-    WHERE COALESCE(lh.health_score, 0) < 80
+    WHERE lh.health_score IS NOT NULL
+      AND lh.health_score < 80
     ORDER BY lh.health_score ASC NULLS FIRST, lh.calculated_at DESC
     LIMIT 80
     `,
@@ -468,7 +461,7 @@ async function fetchControlHealthSuggestions(tenantId, createdBy) {
   );
 
   return result.rows.map((row) => {
-    const critical = Number(row.health_score || 0) < 50 || String(row.health_status || '').toLowerCase() === 'deteriorado';
+    const critical = Number(row.health_score) < 50 || String(row.health_status || '').toLowerCase() === 'deteriorado';
     return suggestion({
       tenantId,
       standardCode: row.standard_code,
@@ -522,10 +515,6 @@ async function fetchEvidenceSuggestions(tenantId, createdBy) {
       ON e.tenant_id = tc.tenant_id
      AND (
        e.tenant_control_id = tc.id
-       OR (
-         e.tenant_control_id IS NULL
-         AND e.control_id = tc.control_id
-       )
      )
      AND COALESCE(e.status, '') <> 'deleted'
     WHERE tc.tenant_id = $1::uuid
@@ -586,16 +575,15 @@ async function fetchFindingSuggestions(tenantId, createdBy) {
       f.status,
       f.owner,
       f.due_date,
-      tc.id AS tenant_control_id,
-      tc.operation_id
+      direct_tc.id AS tenant_control_id,
+      direct_tc.operation_id AS operation_id
     FROM findings f
-    LEFT JOIN controls c
-      ON c.id = f.tenant_control_id
-    LEFT JOIN tenant_controls tc
-      ON tc.tenant_id = f.tenant_id
-     AND tc.control_id = c.catalog_control_id
+    LEFT JOIN tenant_controls direct_tc
+      ON direct_tc.tenant_id = f.tenant_id
+     AND direct_tc.id = f.tenant_control_id
     WHERE f.tenant_id = $1::uuid
       AND LOWER(COALESCE(f.status, '')) NOT IN ('cerrado', 'closed')
+      AND direct_tc.id IS NOT NULL
       AND NOT EXISTS (
         SELECT 1
         FROM action_plans ap
@@ -1207,8 +1195,8 @@ async function createFinding(client, suggestionRow, user, override = {}) {
   const tenantId = suggestionRow.tenant_id;
   const tenantControl = await resolveTenantControlContext(client, tenantId, target.tenant_control_id || suggestionRow.tenant_control_id);
 
-  if (!tenantControl?.legacy_control_id) {
-    throw publicError(400, 'CONTROL_REQUIRED_FOR_FINDING', 'Para crear un hallazgo se requiere un control operativo con equivalente legacy');
+  if (!tenantControl?.tenant_control_id) {
+    throw publicError(400, 'CONTROL_REQUIRED_FOR_FINDING', 'Para crear un hallazgo se requiere un control operativo del tenant');
   }
 
   const standardCode = normalizeStandardCode(target.standard_code || suggestionRow.standard_code || tenantControl.iso);
@@ -1250,7 +1238,7 @@ async function createFinding(client, suggestionRow, user, override = {}) {
       target.detected_by || 'Ejecucion ISO',
       target.due_date || suggestionRow.suggested_due_date || null,
       getUserId(user),
-      tenantControl.legacy_control_id,
+      tenantControl.tenant_control_id,
       target.nonconformity_id || null,
       target.audit_id || null,
       target.asset_id || suggestionRow.payload_json?.asset_id || null,

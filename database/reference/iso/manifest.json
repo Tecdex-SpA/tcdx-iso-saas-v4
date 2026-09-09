@@ -1,0 +1,95 @@
+{
+  "schema": "tcdx.iso_reference_manifest",
+  "version": 2,
+  "source_type": "migrated_reference_from_qa",
+  "source_audit": "artifacts/db-n05/qa-catalog-audit/DB-N05_REFERENCE_EXPORT_RESULT.txt",
+  "source_sha256": "5ebe8c04225bbe19a0f5b4a56b648af8fc43019f0195b8854384a4bbbf9c3ab0",
+  "export_timestamp": "2026-09-08 11:33:24.082996+00",
+  "status": "approved_with_transition_only",
+  "standards": [
+    {
+      "standard_code": "ISO27001",
+      "version_code": "2022",
+      "product_standard_code": "ISO_27001_2022",
+      "source_type": "migrated_reference_from_qa",
+      "source_audit": "artifacts/db-n05/qa-catalog-audit/DB-N05_REFERENCE_EXPORT_RESULT.txt",
+      "publication_status": "published",
+      "certifiable": true,
+      "loader_status": "approved_for_loader",
+      "status": "approved_for_loader",
+      "controls_file": "ISO-27001-2022/controls.jsonl",
+      "evidence_expectations_file": "ISO-27001-2022/evidence_expectations.jsonl",
+      "metadata_file": "ISO-27001-2022/metadata.json",
+      "row_count": 21,
+      "evidence_row_count": 19,
+      "sha256": {
+        "controls": "72677ed1a7102722dc0dd167a269d6c1b2d2cd7917b9c0d3fcdc24fa52a6b1b6",
+        "evidence_expectations": "143fe53ac1d28082b2c413f58c910e8eff2b2abd2334383212e9070b0faa809c",
+        "metadata": "2886ef6fef3dac97d895db85c03243af07c54e40b90273105e153ad4823e54da"
+      }
+    },
+    {
+      "standard_code": "ISO42001",
+      "version_code": "2023",
+      "product_standard_code": "ISO_42001",
+      "source_type": "migrated_reference_from_qa",
+      "source_audit": "artifacts/db-n05/qa-catalog-audit/DB-N05_REFERENCE_EXPORT_RESULT.txt",
+      "publication_status": "published",
+      "certifiable": true,
+      "loader_status": "approved_for_loader",
+      "status": "approved_for_loader",
+      "controls_file": "ISO-42001-2023/controls.jsonl",
+      "evidence_expectations_file": "ISO-42001-2023/evidence_expectations.jsonl",
+      "metadata_file": "ISO-42001-2023/metadata.json",
+      "row_count": 16,
+      "evidence_row_count": 14,
+      "sha256": {
+        "controls": "65fd7e281790a46dfc9cf5e212ae8832cc446f0e2a8005128dc5572bf123cbdf",
+        "evidence_expectations": "b0616fec66728dbf8b882e2fc8ede967b1f947102bc408978511191ba05c2f02",
+        "metadata": "af1a3f22dc9267fb3d7e53ebc883aa68a4033beba7b6ba006ba9383fd90744b2"
+      }
+    },
+    {
+      "standard_code": "ISO9001",
+      "version_code": "2015",
+      "product_standard_code": "ISO_9001_2015",
+      "source_type": "migrated_reference_from_qa",
+      "source_audit": "artifacts/db-n05/qa-catalog-audit/DB-N05_REFERENCE_EXPORT_RESULT.txt",
+      "publication_status": "published",
+      "certifiable": true,
+      "loader_status": "approved_for_loader",
+      "status": "approved_for_loader",
+      "controls_file": "ISO-9001-2015/controls.jsonl",
+      "evidence_expectations_file": "ISO-9001-2015/evidence_expectations.jsonl",
+      "metadata_file": "ISO-9001-2015/metadata.json",
+      "row_count": 16,
+      "evidence_row_count": 13,
+      "sha256": {
+        "controls": "66c2730f3bbf8961d1ccfb549d7a00823ad9efb862b3a94aaa3d89bf7b19d9a2",
+        "evidence_expectations": "44ad07adae9521c40eea7c24e7a1baddf8f1459e94c432a9641d54033e722f64",
+        "metadata": "fe709cff6df67c75a2625f13cb7282f3db11ec3c13c1a468569bf4a34173c8e0"
+      }
+    },
+    {
+      "standard_code": "ISO9001",
+      "version_code": "2026_FDIS",
+      "product_standard_code": null,
+      "source_type": "migrated_reference_from_qa",
+      "source_audit": "artifacts/db-n05/qa-catalog-audit/DB-N05_REFERENCE_EXPORT_RESULT.txt",
+      "publication_status": "transition_prep",
+      "certifiable": false,
+      "loader_status": "transition_only",
+      "status": "transition_only",
+      "controls_file": "ISO-9001-2026-FDIS/controls.jsonl",
+      "evidence_expectations_file": "ISO-9001-2026-FDIS/evidence_expectations.jsonl",
+      "metadata_file": "ISO-9001-2026-FDIS/metadata.json",
+      "row_count": 8,
+      "evidence_row_count": 8,
+      "sha256": {
+        "controls": "61bb775b3aae0c1bbb95a883d6cc0ff34198156d91aa582318b091540c1979b2",
+        "evidence_expectations": "9f86080826c0e2fdf1cb0c5737625b5ba03fca8b14b2a3c00474f3447c028a03",
+        "metadata": "fd626f218001bdafdf8394e0f452889999f28c9d80bb65bb46c41653eaa22d0c"
+      }
+    }
+  ]
+}

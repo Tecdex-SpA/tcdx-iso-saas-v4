@@ -277,8 +277,7 @@ async function runHealthSourceQuery({ preferred, fallback, buildQuery }) {
       return {
         sourceName,
         result,
-        fallback_legacy_used: fallbackUsed,
-        legacy_fallback_used: fallbackUsed,
+        compatibility_fallback_used: fallbackUsed,
         fallback_reason: fallbackUsed
           ? safeHealthFallbackReason(preferredError, 'applicable_view_query_failed')
           : (!preferredExists ? 'applicable_view_not_found' : null),
@@ -303,7 +302,7 @@ async function runHealthSourceQuery({ preferred, fallback, buildQuery }) {
 
 async function buildHealthScope(scope, sourceName, extra = {}) {
   const applicability = await getTenantApplicabilityScope(scope.tenantId);
-  const fallbackUsed = extra.fallback_legacy_used === true || extra.legacy_fallback_used === true;
+  const fallbackUsed = extra.compatibility_fallback_used === true;
   return {
     is_superadmin: scope.isSuperAdmin,
     tenant_id: scope.tenantId,
@@ -313,13 +312,11 @@ async function buildHealthScope(scope, sourceName, extra = {}) {
     active_universe: applicability.active_universe === true,
     applicability_universe_applied: applicability.applicability_universe_applied === true && !fallbackUsed,
     filtered_by_applicability_universe: applicability.filtered_by_applicability_universe === true && !fallbackUsed,
-    fallback_legacy_used: fallbackUsed,
-    legacy_fallback_used: fallbackUsed,
+    compatibility_fallback_used: fallbackUsed,
     fallback_reason: extra.fallback_reason || null,
     applicability_scope: {
       ...applicability,
-      fallback_legacy_used: fallbackUsed,
-      legacy_fallback_used: fallbackUsed,
+      compatibility_fallback_used: fallbackUsed,
       fallback_reason: extra.fallback_reason || null,
     },
   };
@@ -551,42 +548,55 @@ router.get('/kpis', async (req, res) => {
     const scope = requireTenantForNonSuper(req, res);
     if (!scope) return;
 
-    const healthQuery = await runHealthSourceQuery({
-      preferred: 'v_latest_health_kpi_snapshots_applicable',
-      fallback: 'v_latest_health_kpi_snapshots',
-      buildQuery: (sourceName) => {
-        let query = `
-          SELECT *
-          FROM ${sourceName} v
-        `;
-
-        const params = [];
-
-        query = addTenantCondition({
-          query,
-          params,
-          tenantId: scope.tenantId,
-          alias: 'v',
-        });
-
-        query = addActiveStandardCondition({
-          query,
-          alias: 'v',
-          nullableStandard: true,
-        });
-
-        query += `
-          ORDER BY v.tenant_name, v.kpi_code, v.standard_code NULLS FIRST
-        `;
-        return { query, params };
-      },
+    let query = `
+      SELECT DISTINCT ON (ms.tenant_id, ms.metric_code, COALESCE(ms.metadata->>'standard_code', ms.snapshot_payload->>'standard_code', 'GLOBAL'))
+        ms.tenant_id,
+        t.name AS tenant_name,
+        ms.metric_code AS kpi_code,
+        COALESCE(md.display_name, ms.metric_code) AS kpi_name,
+        COALESCE(ms.metadata->>'standard_code', ms.snapshot_payload->>'standard_code') AS standard_code,
+        ms.numeric_value AS value,
+        md.unit,
+        ms.publication_state AS status,
+        ms.effective_at AS calculated_at,
+        ms.coverage,
+        ms.snapshot_payload,
+        ms.metadata
+      FROM metric_snapshots ms
+      LEFT JOIN metric_definitions md
+        ON md.metric_code = ms.metric_code
+      LEFT JOIN tenants t
+        ON t.id = ms.tenant_id
+      WHERE ms.snapshot_status = 'published'
+    `;
+    const params = [];
+    query = addTenantCondition({
+      query,
+      params,
+      tenantId: scope.tenantId,
+      alias: 'ms',
     });
-
-    const { sourceName, result } = healthQuery;
-    const rows = sourceName.endsWith('_applicable') || (scope.isSuperAdmin && req.query.include_exclusions === 'true')
+    if (!scope.isSuperAdmin || req.query.include_exclusions !== 'true') {
+      query += `
+        AND (
+          COALESCE(ms.metadata->>'standard_code', ms.snapshot_payload->>'standard_code') IS NULL
+          OR COALESCE(ms.metadata->>'standard_code', ms.snapshot_payload->>'standard_code') IN (
+            SELECT ts.standard_code
+            FROM tenant_standards ts
+            WHERE ts.tenant_id = ms.tenant_id
+              AND ts.is_active = true
+          )
+        )
+      `;
+    }
+    query += `
+      ORDER BY ms.tenant_id, ms.metric_code, COALESCE(ms.metadata->>'standard_code', ms.snapshot_payload->>'standard_code', 'GLOBAL'), ms.effective_at DESC NULLS LAST, ms.created_at DESC
+    `;
+    const result = await pool.query(query, params);
+    const rows = scope.isSuperAdmin && req.query.include_exclusions === 'true'
       ? result.rows
       : await filterApplicableKpis(result.rows, scope.tenantId);
-    const responseScope = await buildHealthScope(scope, sourceName, healthQuery);
+    const responseScope = await buildHealthScope(scope, 'metric_snapshots', { sourceName: 'metric_snapshots', fallbackUsed: false });
 
     return res.json({
       ok: true,
@@ -1740,11 +1750,6 @@ router.post('/refresh', async (req, res) => {
 
     await client.query('BEGIN');
 
-    const healthResult = await client.query(
-      `SELECT * FROM refresh_control_health_scores_v2_1($1::uuid)`,
-      [finalTenantId]
-    );
-
     const cleanupAfterHealth = await client.query(
       `SELECT * FROM cleanup_inactive_health_scope($1::uuid)`,
       [finalTenantId]
@@ -1787,8 +1792,7 @@ router.post('/refresh', async (req, res) => {
               active_universe: false,
               applicability_universe_applied: false,
               filtered_by_applicability_universe: false,
-              fallback_legacy_used: true,
-              legacy_fallback_used: true,
+              compatibility_fallback_used: true,
               fallback_reason: {
                 reason: 'applicability_rebuild_failed',
                 code: rebuildError?.code || rebuildError?.name || 'APPLICABILITY_REBUILD_ERROR',
@@ -1804,8 +1808,7 @@ router.post('/refresh', async (req, res) => {
           filtered_by_applicability_universe: false,
           tenant_filter_enforced: Boolean(finalTenantId),
           filtered_by_tenant_id: Boolean(finalTenantId),
-          fallback_legacy_used: true,
-          legacy_fallback_used: true,
+          compatibility_fallback_used: true,
           fallback_reason: {
             reason: 'applicability_scope_unavailable',
             code: scopeError?.code || scopeError?.name || 'APPLICABILITY_SCOPE_ERROR',
@@ -1823,11 +1826,10 @@ router.post('/refresh', async (req, res) => {
       active_universe: applicabilityScope?.active_universe === true,
       applicability_universe_applied: applicabilityScope?.applicability_universe_applied === true,
       filtered_by_applicability_universe: applicabilityScope?.filtered_by_applicability_universe === true,
-      fallback_legacy_used: applicabilityScope?.fallback_legacy_used === true || applicabilityScope?.legacy_fallback_used === true,
-      legacy_fallback_used: applicabilityScope?.legacy_fallback_used === true || applicabilityScope?.fallback_legacy_used === true,
+      compatibility_fallback_used: applicabilityScope?.compatibility_fallback_used === true,
       tenant_filter_enforced: Boolean(finalTenantId),
       filtered_by_tenant_id: Boolean(finalTenantId),
-      health: healthResult.rows[0] || null,
+      health: null,
       kpis: kpiResult.rows[0] || null,
       cleanup: {
         after_health: cleanupAfterHealth.rows[0] || null,

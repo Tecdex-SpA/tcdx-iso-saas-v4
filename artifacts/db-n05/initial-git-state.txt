@@ -1,0 +1,108 @@
+DB-N05 initial git state
+Captured: 2026-09-07
+
+COMMAND: git branch --show-current
+codex/db-n01-control-identity-normalization
+
+COMMAND: git rev-parse HEAD
+11003dd92385dcca1caf5365fa437be3aee1f648
+
+COMMAND: git status --short
+ M backend/src/app.js
+ M backend/src/config/db.js
+ M backend/src/middleware/auth.js
+ M backend/src/routes/action-plans.routes.js
+ M backend/src/routes/controls.routes.js
+ M backend/src/routes/evidences.routes.js
+ M backend/src/routes/findings.routes.js
+ M backend/src/services/diagnosticAcceptance.service.js
+ M backend/src/services/evidence-ai.service.js
+ M backend/src/services/grc/grc.service.js
+ M backend/src/services/grc/grc.service.test.js
+ M backend/src/services/grc/grcSchedulerRunner.js
+ M backend/src/services/grc/phase2SchedulerRunner.js
+ M backend/src/services/isoOperationalExecution.service.js
+ M backend/src/services/isoRecommendedActions.service.js
+ M backend/src/services/math-governance/canonicalHealthProjection.service.js
+ M backend/src/services/math-governance/canonicalHealthProjection.service.test.js
+ M backend/src/services/soaIntelligence.service.js
+ M backend/src/services/soaIntelligence.service.test.js
+ M docs/codex/ARCHITECTURE_MAP.md
+ M docs/codex/CONTRACTS_REGISTRY.md
+ M docs/codex/CURRENT_STATE.md
+ M docs/codex/DECISIONS.md
+ M docs/codex/WORK_QUEUE.md
+?? artifacts/db-n02/
+?? artifacts/db-n03/
+?? artifacts/db-n04/
+?? backend/src/routes/controlIdentityRoutes.test.js
+?? backend/src/utils/dbTenantContext.js
+?? backend/src/utils/dbTenantContext.test.js
+?? backend/src/utils/tenantControlIdentity.js
+?? backend/src/utils/tenantControlIdentity.test.js
+?? database/migrations/20260904_dbn01_control_identity_normalization.sql
+?? database/migrations/20260904_dbn02_health_metrics_lineage_normalization.sql
+?? database/migrations/20260907_dbn03_multitenant_integrity_rls.sql
+?? database/migrations/20260907_dbn04_runtime_tenant_and_legacy_cleanup.sql
+?? docs/handoffs/
+?? scripts/normalization/apply-db-n01-control-identity-migration.test.js
+?? scripts/normalization/apply-db-n02-health-metrics-lineage-migration.test.js
+?? scripts/normalization/apply-db-n03-multitenant-integrity-migration.test.js
+?? scripts/normalization/apply-db-n04-runtime-tenant-cleanup-migration.test.js
+?? scripts/normalization/db-n01-control-identity.postgres.test.js
+?? scripts/normalization/db-n02-health-metrics-lineage.postgres.test.js
+?? scripts/normalization/db-n03-multitenant-integrity.postgres.test.js
+?? scripts/normalization/db-n04-runtime-tenant-cleanup.postgres.test.js
+
+COMMAND: git diff --stat
+ backend/src/app.js                                 |   2 +
+ backend/src/config/db.js                           |   3 +-
+ backend/src/middleware/auth.js                     |  35 ++-
+ backend/src/routes/action-plans.routes.js          | 121 ++++++--
+ backend/src/routes/controls.routes.js              |   4 +-
+ backend/src/routes/evidences.routes.js             | 174 ++++++++----
+ backend/src/routes/findings.routes.js              | 201 +++----------
+ .../src/services/diagnosticAcceptance.service.js   |  20 +-
+ backend/src/services/evidence-ai.service.js        | 316 +++++++++++----------
+ backend/src/services/grc/grc.service.js            |  13 +-
+ backend/src/services/grc/grc.service.test.js       |  14 +
+ backend/src/services/grc/grcSchedulerRunner.js     |  36 ++-
+ backend/src/services/grc/phase2SchedulerRunner.js  |  62 ++--
+ .../services/isoOperationalExecution.service.js    |  33 ++-
+ .../src/services/isoRecommendedActions.service.js  |   7 +-
+ .../canonicalHealthProjection.service.js           | 144 +++++++++-
+ .../canonicalHealthProjection.service.test.js      |  99 ++++++-
+ backend/src/services/soaIntelligence.service.js    |  14 +-
+ .../src/services/soaIntelligence.service.test.js   |   9 +-
+ docs/codex/ARCHITECTURE_MAP.md                     |   6 +
+ docs/codex/CONTRACTS_REGISTRY.md                   |   4 +
+ docs/codex/CURRENT_STATE.md                        |  44 +++
+ docs/codex/DECISIONS.md                            |   4 +
+ docs/codex/WORK_QUEUE.md                           |   4 +
+ 24 files changed, 882 insertions(+), 487 deletions(-)
+
+COMMAND: git diff --name-only
+backend/src/app.js
+backend/src/config/db.js
+backend/src/middleware/auth.js
+backend/src/routes/action-plans.routes.js
+backend/src/routes/controls.routes.js
+backend/src/routes/evidences.routes.js
+backend/src/routes/findings.routes.js
+backend/src/services/diagnosticAcceptance.service.js
+backend/src/services/evidence-ai.service.js
+backend/src/services/grc/grc.service.js
+backend/src/services/grc/grc.service.test.js
+backend/src/services/grc/grcSchedulerRunner.js
+backend/src/services/grc/phase2SchedulerRunner.js
+backend/src/services/isoOperationalExecution.service.js
+backend/src/services/isoRecommendedActions.service.js
+backend/src/services/math-governance/canonicalHealthProjection.service.js
+backend/src/services/math-governance/canonicalHealthProjection.service.test.js
+backend/src/services/soaIntelligence.service.js
+backend/src/services/soaIntelligence.service.test.js
+docs/codex/ARCHITECTURE_MAP.md
+docs/codex/CONTRACTS_REGISTRY.md
+docs/codex/CURRENT_STATE.md
+docs/codex/DECISIONS.md
+docs/codex/WORK_QUEUE.md

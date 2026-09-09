@@ -1,0 +1,31 @@
+DB-N04 initial Git evidence
+Date: 2026-09-07
+Repository: /Users/andresbarouh/repos/tcdx-iso-saas-v4
+
+Precheck commands requested:
+- git branch --show-current
+- git rev-parse HEAD
+- git status --short
+- git diff --stat
+- git diff --name-only
+
+Branch:
+codex/db-n01-control-identity-normalization
+
+HEAD:
+11003dd92385dcca1caf5365fa437be3aee1f648
+
+Branch/head gate:
+PASS - branch and HEAD matched the requested DB-N04 baseline.
+
+Initial working tree note:
+The worktree was already dirty with DB-N01, DB-N02 and DB-N03 local changes and handoffs before DB-N04 closure work. No reset, clean, stash, checkout, commit, push, merge or deploy was performed.
+
+Representative initial dirty state before DB-N04-only artifacts/tests were added:
+- Modified backend routes/services from DB-N01/DB-N02/DB-N03 normalization work.
+- Modified docs/codex continuity files.
+- Untracked artifacts/db-n02 and artifacts/db-n03.
+- Untracked DB-N01/DB-N02/DB-N03 migrations and normalization tests.
+- Untracked docs/handoffs containing DB-N01/DB-N02/DB-N03 handoffs.
+
+DB-N04 current-session additions/edits were layered on top of that preserved state.

@@ -30,29 +30,17 @@ router.get('/:tenant_id', auth, async (req, res) => {
     const result = await pool.query(
       `
       SELECT
-        c.id,
-        c.iso_code AS iso,
-        c.clause,
+        tc.id,
+        cc.iso,
+        cc.clause,
         COALESCE(cc.category, 'General') AS category,
-        COALESCE(cc.description, 'Control ' || c.clause) AS description,
-        COALESCE(NULLIF(c.status, ''), 'pendiente') AS status
-      FROM controls c
-      LEFT JOIN LATERAL (
-        SELECT cc2.*
-        FROM controls_catalog cc2
-        WHERE cc2.id = c.catalog_control_id
-           OR (
-             c.catalog_control_id IS NULL
-             AND cc2.iso = c.iso_code
-             AND cc2.clause = c.clause
-           )
-        ORDER BY
-          CASE WHEN cc2.id = c.catalog_control_id THEN 0 ELSE 1 END,
-          cc2.id
-        LIMIT 1
-      ) cc ON TRUE
-      WHERE c.tenant_id = $1
-      ORDER BY c.iso_code, c.clause, c.created_at
+        COALESCE(cc.description, 'Control ' || cc.clause) AS description,
+        COALESCE(NULLIF(tc.status, ''), 'pendiente') AS status
+      FROM tenant_controls tc
+      JOIN controls_catalog cc
+        ON cc.id = tc.control_id
+      WHERE tc.tenant_id = $1
+      ORDER BY cc.iso, cc.clause, tc.created_at
       `,
       [tenant_id]
     );

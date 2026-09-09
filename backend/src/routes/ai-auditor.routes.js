@@ -124,8 +124,6 @@ async function getChecklist(auditId) {
 async function getEvidenceStats(tenantId, auditId, checklist) {
   try {
     const hasTenantControlId = await tableHasColumn('evidences', 'tenant_control_id');
-    const hasControlId = await tableHasColumn('evidences', 'control_id');
-
     const ids = checklist
       .map((item) => item.tenant_control_id)
       .filter(Boolean)
@@ -142,10 +140,6 @@ async function getEvidenceStats(tenantId, auditId, checklist) {
 
     if (hasTenantControlId) {
       conditions.push(`e.tenant_control_id::text = ANY($2::text[])`);
-    }
-
-    if (hasControlId) {
-      conditions.push(`e.control_id::text = ANY($2::text[])`);
     }
 
     if (!conditions.length) {
@@ -167,13 +161,13 @@ async function getEvidenceStats(tenantId, auditId, checklist) {
     const result = await pool.query(
       `
       SELECT
-        COALESCE(e.tenant_control_id::text, e.control_id::text) AS control_ref,
+        e.tenant_control_id::text AS control_ref,
         COUNT(*)::int AS total
       FROM evidences e
       WHERE e.tenant_id = $1::uuid
         AND (${conditions.join(' OR ')})
         AND COALESCE(e.status, '') <> 'deleted'
-      GROUP BY COALESCE(e.tenant_control_id::text, e.control_id::text)
+      GROUP BY e.tenant_control_id::text
       `,
       [tenantId, ids]
     );

@@ -1350,22 +1350,23 @@ async function getHealthSummaryStats(tenantId) {
         AND is_active = TRUE
     ),
     latest_health AS (
-      SELECT DISTINCT ON (chs.tenant_control_id)
-        chs.tenant_control_id,
-        chs.standard_code,
-        COALESCE(chs.health_score, 0) AS health_score,
-        COALESCE(chs.pending_evidence_count, 0) AS pending_evidence_count,
+      SELECT DISTINCT ON (veh.tenant_control_id)
+        veh.tenant_control_id,
+        veh.standard_code,
+        veh.effective_health_score AS health_score,
+        COALESCE(veh.pending_evidence_count, 0) AS pending_evidence_count,
         CASE
-          WHEN COALESCE(chs.health_score, 0) < 50 THEN 'deteriorado'
-          WHEN COALESCE(chs.health_score, 0) < 80 THEN 'atencion'
+          WHEN veh.effective_health_score IS NULL THEN 'sin_datos'
+          WHEN veh.effective_health_score < 50 THEN 'deteriorado'
+          WHEN veh.effective_health_score < 80 THEN 'atencion'
           ELSE 'saludable'
         END AS derived_health_status,
-        chs.calculated_at
-      FROM control_health_scores chs
+        NULLIF(veh.health_trace_json->>'effective_at', '')::timestamptz AS calculated_at
+      FROM public.v_iso_control_effective_health veh
       INNER JOIN active_standards ast
-        ON ast.standard_code = chs.standard_code
-      WHERE chs.tenant_id = $1::uuid
-      ORDER BY chs.tenant_control_id, chs.calculated_at DESC NULLS LAST
+        ON ast.standard_code = veh.standard_code
+      WHERE veh.tenant_id = $1::uuid
+      ORDER BY veh.tenant_control_id, calculated_at DESC NULLS LAST
     ),
     critical_findings AS (
       SELECT COUNT(*)::int AS total
@@ -1408,16 +1409,16 @@ async function getWeakestStandards(tenantId) {
         AND is_active = TRUE
     ),
     latest_health AS (
-      SELECT DISTINCT ON (chs.tenant_control_id)
-        chs.tenant_control_id,
-        chs.standard_code,
-        COALESCE(chs.health_score, 0) AS health_score,
-        chs.calculated_at
-      FROM control_health_scores chs
+      SELECT DISTINCT ON (veh.tenant_control_id)
+        veh.tenant_control_id,
+        veh.standard_code,
+        veh.effective_health_score AS health_score,
+        NULLIF(veh.health_trace_json->>'effective_at', '')::timestamptz AS calculated_at
+      FROM public.v_iso_control_effective_health veh
       INNER JOIN active_standards ast
-        ON ast.standard_code = chs.standard_code
-      WHERE chs.tenant_id = $1::uuid
-      ORDER BY chs.tenant_control_id, chs.calculated_at DESC NULLS LAST
+        ON ast.standard_code = veh.standard_code
+      WHERE veh.tenant_id = $1::uuid
+      ORDER BY veh.tenant_control_id, calculated_at DESC NULLS LAST
     )
     SELECT
       standard_code,

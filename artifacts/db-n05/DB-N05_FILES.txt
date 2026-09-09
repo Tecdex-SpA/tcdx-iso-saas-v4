@@ -1,0 +1,56 @@
+DB-N05 ONLY
+- scripts/normalization/db-n05-isolated-postgres.js
+- artifacts/db-n05/VALIDATION_RESULTS.md
+- artifacts/db-n05/ACTIVE_MISSING_CLOSEOUT.md
+- scripts/normalization/db-n05-production-role-privileges.postgres.test.js
+- scripts/normalization/db-n05-reference-catalogs.test.js
+- scripts/normalization/load-production-reference-catalogs.js
+- .gitignore
+- artifacts/db-n05/initial-git-state.txt
+- artifacts/db-n05/DB-N05_FILES.txt
+- artifacts/db-n05/MIGRATION_CHAIN.md
+- artifacts/db-n05/PRODUCTION_OBJECT_ALLOWLIST.md
+- artifacts/db-n05/PRODUCTION_SEED_MATRIX.md
+- artifacts/db-n05/PRODUCTION_DB_READINESS.md
+- artifacts/db-n05/QA_TO_FRESH_DIFF.md
+- artifacts/db-n05/PRODUCTION_DATA_MIGRATION_MATRIX.md
+- artifacts/db-n05/RUNTIME_TO_BASELINE_COVERAGE.md
+- artifacts/db-n05/REFERENCE_CATALOG_COVERAGE.md
+- artifacts/db-n05/PRODUCTION_ROLE_PRIVILEGE_MATRIX.md
+- artifacts/db-n05/DBN01_N04_BASELINE_PARITY.md
+- database/baseline/production_schema_v1.sql
+- database/baseline/production_seed_v1.sql
+- scripts/normalization/db-n05-fresh-production.postgres.test.js
+- scripts/normalization/apply-db-n05-production-baseline.test.js
+- scripts/normalization/db-n05-runtime-schema-contract.test.js
+- scripts/normalization/db-n05-readonly-qa-preflight.sql
+- docs/runbooks/PRODUCTION_DATABASE_CREATION.md
+- docs/handoffs/DB-N05_FRESH_PRODUCTION_DATABASE.md
+
+SHARED WITH DB-N01
+- docs/codex/CURRENT_STATE.md
+- docs/codex/WORK_QUEUE.md
+- docs/codex/CONTRACTS_REGISTRY.md
+- docs/codex/DECISIONS.md
+- docs/codex/ARCHITECTURE_MAP.md
+
+SHARED WITH DB-N02
+- docs/codex/CURRENT_STATE.md
+- docs/codex/WORK_QUEUE.md
+- docs/codex/CONTRACTS_REGISTRY.md
+- docs/codex/DECISIONS.md
+- docs/codex/ARCHITECTURE_MAP.md
+
+SHARED WITH DB-N03
+- docs/codex/CURRENT_STATE.md
+- docs/codex/WORK_QUEUE.md
+- docs/codex/CONTRACTS_REGISTRY.md
+- docs/codex/DECISIONS.md
+- docs/codex/ARCHITECTURE_MAP.md
+
+SHARED WITH DB-N04
+- docs/codex/CURRENT_STATE.md
+- docs/codex/WORK_QUEUE.md
+- docs/codex/CONTRACTS_REGISTRY.md
+- docs/codex/DECISIONS.md
+- docs/codex/ARCHITECTURE_MAP.md

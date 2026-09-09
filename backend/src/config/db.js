@@ -1,4 +1,5 @@
 const { Pool } = require('pg');
+const { createTenantAwarePool } = require('../utils/dbTenantContext');
 
 function parseOptionalInt(value) {
   const parsed = Number(value);
@@ -31,4 +32,4 @@ const pool = new Pool({
   query_timeout: parseOptionalInt(process.env.DB_QUERY_TIMEOUT_MS),
 });
 
-module.exports = pool;
+module.exports = createTenantAwarePool(pool);

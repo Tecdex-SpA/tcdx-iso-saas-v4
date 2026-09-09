@@ -1,0 +1,23 @@
+{
+  "standard_code": "ISO27001",
+  "version_code": "2022",
+  "display_name": "ISO/IEC 27001:2022",
+  "publication_status": "published",
+  "certifiable": true,
+  "replaces_version": null,
+  "effective_from": "2022-10-25",
+  "transition_until": null,
+  "source_policy": "copyright_safe_summary",
+  "notes": "Version certificable vigente para SGSI.",
+  "is_active": true,
+  "standard": {
+    "standard_code": "ISO27001",
+    "display_name": "ISO/IEC 27001 Information security management",
+    "family": "information_security",
+    "description": "Sistema de gestion de seguridad de la informacion basado en riesgos, activos, controles y tratamiento.",
+    "is_active": true
+  },
+  "source_audit": "artifacts/db-n05/qa-catalog-audit/DB-N05_REFERENCE_EXPORT_RESULT.txt",
+  "source_sha256": "5ebe8c04225bbe19a0f5b4a56b648af8fc43019f0195b8854384a4bbbf9c3ab0",
+  "status": "approved_for_loader"
+}

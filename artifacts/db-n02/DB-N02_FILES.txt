@@ -1,0 +1,34 @@
+DB-N02 ONLY
+
+artifacts/db-n02/initial-git-state.txt
+artifacts/db-n02/DB-N02_FILES.txt
+artifacts/db-n02/HEALTH_LINEAGE_MATRIX.md
+backend/src/services/math-governance/canonicalHealthProjection.service.js
+backend/src/services/math-governance/canonicalHealthProjection.service.test.js
+database/migrations/20260904_dbn02_health_metrics_lineage_normalization.sql
+scripts/normalization/apply-db-n02-health-metrics-lineage-migration.test.js
+scripts/normalization/db-n02-health-metrics-lineage.postgres.test.js
+docs/handoffs/DB-N02_HEALTH_METRICS_LINEAGE_NORMALIZATION.md
+
+SHARED WITH DB-N01
+
+backend/src/services/soaIntelligence.service.js
+  DB-N02 delta: Health join identity fallback normalization; `tenant_control_id` stays operational identity and `catalog_control_id` fallback is allowed only when `tenant_control_id IS NULL`.
+
+backend/src/services/soaIntelligence.service.test.js
+  DB-N02 delta: regression assertion for the non-ambiguous Health join fallback.
+
+docs/codex/CURRENT_STATE.md
+  DB-N02 delta: continuity status appended; file already updated by DB-N01.
+
+docs/codex/WORK_QUEUE.md
+  DB-N02 delta: work queue row appended/updated; file already updated by DB-N01.
+
+docs/codex/CONTRACTS_REGISTRY.md
+  DB-N02 delta: Health metrics lineage authority contract added; file already updated by DB-N01.
+
+docs/codex/ARCHITECTURE_MAP.md
+  DB-N02 delta: Health lineage authority added under math-governance/PostgreSQL; file already updated by DB-N01.
+
+docs/codex/DECISIONS.md
+  DB-N02 delta: ADR for Health metrics lineage and standard ambiguity policy added; file already updated by DB-N01.
