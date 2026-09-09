@@ -65,6 +65,7 @@ async function run() {
   assert.equal(calculated.results[0].value, 15);
   assert.equal(calculated.results[0].snapshot_id, '70000000-0000-0000-0000-000000000798');
   assert.equal(persisted[0].source_code, 'risk_register_controls');
+  assert.equal(persisted[0].formula_version, 2);
   assert.equal(persisted[0].lineage.length, 3);
   assert.deepEqual(persisted[0].components.scores, [20, 10, 15]);
   assert.equal(persisted[0].details.aggregation_method, 'arithmetic_mean');
@@ -181,9 +182,61 @@ async function run() {
   assert.equal(unmeasured.results[0].data_requirements.current_population, 0);
   assert.equal(unmeasured.results[0].snapshot_id, '70000000-0000-0000-0000-000000000793');
   assert.equal(unmeasuredPersisted[0].data_trust.state, 'INSUFFICIENT_DATA');
+  assert.equal(unmeasuredPersisted[0].formula_version, 2);
   assert.deepEqual(unmeasuredSnapshots[0].counts, { received: 4, eligible: 4, usable: 0, excluded: 4 });
 
-  console.log(JSON.stringify({ status: 'OFFICIAL_CALCULATION_ORCHESTRATOR_TESTS_OK', assertions: 37 }));
+  const healthUnmeasuredPersisted = [];
+  const healthUnmeasuredSnapshots = [];
+  const healthUnmeasured = await recalculateOfficialAnalytics(
+    { tenant_id: '70000000-0000-0000-0000-000000000701', user: { id: '70000000-0000-0000-0000-000000000711' } },
+    { formula_codes: ['F5_5_GRC_HEALTH'] },
+    null,
+    {
+      client: {},
+      registry: new OfficialFormulaRegistry(),
+      resolveFormulaSource: async () => ({
+        status: 'ready',
+        source_code: 'grc_health_components',
+        counts: { received: 3, eligible: 3, usable: 3, excluded: 0 },
+        formula_input: {
+          compliance: 1,
+          actions: 0.2,
+          risk: 0.82,
+        },
+        input_hash: 'f'.repeat(64),
+        source_snapshot: { row_count: 3, source_code: 'grc_health_components' },
+        source_snapshot_hash: '1'.repeat(64),
+        lineage: [
+          { formula_code: 'F5_5_COMPLIANCE_WEIGHTED' },
+          { formula_code: 'F5_5_WEIGHTED_PROGRESS' },
+          { formula_code: 'F5_5_RESIDUAL_RISK' },
+        ],
+        warnings: [],
+        exclusions: [],
+        equivalence: {},
+        contract: { source_code: 'grc_health_components' },
+      }),
+      persistOfficialCalculation: async (_scope, result) => {
+        healthUnmeasuredPersisted.push(result);
+        return { ...result, calculation_run_id: '70000000-0000-0000-0000-000000000792' };
+      },
+      persistSourceSnapshot: async (_client, _tenantId, source) => {
+        healthUnmeasuredSnapshots.push(source);
+        return '70000000-0000-0000-0000-000000000791';
+      },
+    }
+  );
+  assert.equal(healthUnmeasured.summary.unmeasured, 1);
+  assert.equal(healthUnmeasured.results[0].machine_reason, 'FORMULA_INSUFFICIENT_COVERAGE');
+  assert.equal(healthUnmeasured.results[0].value, null);
+  assert.equal(healthUnmeasured.results[0].snapshot_id, '70000000-0000-0000-0000-000000000791');
+  assert.equal(healthUnmeasuredPersisted[0].formula_code, 'F5_5_GRC_HEALTH');
+  assert.equal(healthUnmeasuredPersisted[0].formula_version, 2);
+  assert.equal(healthUnmeasuredPersisted[0].source_code, 'grc_health_components');
+  assert.equal(healthUnmeasuredPersisted[0].value, null);
+  assert.equal(healthUnmeasuredSnapshots[0].source_code, 'grc_health_components');
+
+  console.log(JSON.stringify({ status: 'OFFICIAL_CALCULATION_ORCHESTRATOR_TESTS_OK', assertions: 48 }));
 }
 
 run().catch((error) => {

@@ -135,6 +135,7 @@ function functionalFailure({ formula, sourceContext = {}, status, failureType, c
   const requirements = dataRequirements || buildDataRequirements({ formula, sourceContext, status, code, message, missingFields, missingEntities });
   return {
     formula_code: formula.formula_code,
+    formula_version: formula.version,
     display_name: formula.display_name,
     domain: formula.category,
     status,

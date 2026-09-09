@@ -1,6 +1,6 @@
 # CURRENT_STATE — TCDX ISO SaaS V4
 
-Actualizado: 2026-09-03
+Actualizado: 2026-09-09
 Repositorio: `Tecdex-SpA/tcdx-iso-saas-v4`
 Remote/base `main` verificado para F6.14-A: `e6b431df521300119efaf9194d3ff4d8e56d7004`
 Fuente: repositorio `main` + handoffs runtime cerrados + evidencia runtime validada por el responsable del proyecto + cierre runtime F6.11-A + cierre runtime F6.11-B + cierre runtime F6.12-A + cierre runtime F6.13-A + cierre local UI-04 + cierre local UI-07.
@@ -523,3 +523,15 @@ Independent final review reproduced the DB-N01 -> DB-N05 claims on branch `codex
 Reproduced gates: zero legacy static/postgres PASS (`ACTIVE_RUNTIME_LEGACY=0`, `LEGACY_OBJECT_COUNT=0`), formula lineage PASS (53 active formulas, 20 contracts, mismatch 0, leakage 0, runtime orchestrator E2E + indicator publication PASS), DB-N05 baseline/runtime/reference/privilege/fresh PASS (`ACTIVE_MISSING=0`, PostgreSQL 16.15, pgvector image `sha256:ccc6e83d6e35e931dc7c5def2022729d5a6c370318d099181995567ff1fb4d6b`), backend `npm test` PASS outside sandbox, frontend lint/build PASS with exactly three unused warnings in `frontend/src/app/administrar-kpis/page.tsx`.
 
 No material contradiction was found. Sandbox-only failures were documented: PostgreSQL isolated `initdb` cannot create shared memory inside the managed sandbox, and the backend commercial test cannot bind its TCP test server inside the sandbox; both pass outside sandbox. No git add, commit, push, merge, deploy, DB-V4 write or `tcdx_saasv2` creation was performed.
+
+## TCDX SaaSv2 real smoke — 2026-09-09
+
+Status: `TCDX_SAASV2_REAL_SMOKE_READY_FOR_BACKEND_CUTOVER_REVIEW` on branch `main` at verified HEAD `bb61949f50c6fc5f03a2cc1ebaa4eb8e70cd2e53`.
+
+Real smoke ran against `tcdx_saasv2` on PostgreSQL 16.15 (`127.0.0.1:55432`, `postgres`) with initial and final cleanup confirmed: `tenants=0` and synthetic user `tcdx-saasv2-real-smoke@synthetic.local=0`.
+
+The inherited `formula_version_id` blocker was a `PRODUCT_DEFECT` and is resolved in `backend/src/services/math-governance/officialCalculationOrchestrator.service.js`: functional failures now preserve `formula.version` as `formula_version`. The follow-up Health blocker was classified as `HARNESS_DEFECT`: current official runtime persistence writes canonical calculation output to `calculation_outputs.output_value.value`; `calculation_outputs.numeric_value` is nullable and not written by the current official persistence path. The smoke harness now validates the real JSONB shape and preserves null for unmeasured Health.
+
+Final smoke evidence: preconditions PASS with 53 formula definitions, 53 formula versions, 53 valid formula-source links, 20 source contracts, 22 metric definitions, 22 metric source bindings, 61 ISO controls, 54 evidence expectations and 1000 knowledge items. Runtime formulas executed: `F5_5_COMPLIANCE_WEIGHTED`, `F5_5_COVERAGE`, `F5_5_RESIDUAL_RISK`, `F5_5_WEIGHTED_PROGRESS`, `F5_5_FRESHNESS_CONTINUOUS`, `F5_5_GRC_HEALTH`. Lineage counts: 18 runs, 18 outputs, 18 source snapshots, 6 metric snapshots. `FORMULA_CROSS_TENANT_LEAKAGE=0`. Tenant A Health is calculated/publicable at 95.8 from `output_value.value`; Tenant B Health is unmeasured with `FORMULA_INSUFFICIENT_COVERAGE`, no numeric score and no zero fabrication. Artifacts: `artifacts/db-integral/tcdx-saasv2-real-smoke/REAL_DB_SMOKE_RESULT.txt`, `artifacts/db-integral/tcdx-saasv2-real-smoke/REAL_DB_SMOKE_SUMMARY.md`. Handoff: `docs/codex/handoffs/TCDX-SAASV2-REAL-SMOKE.md`.
+
+No git add, commit, push, merge, deploy, create/drop database, baseline/seed/reference reload, `.env` edit, DB-V4 write or `tecdex_saas` write was performed.
