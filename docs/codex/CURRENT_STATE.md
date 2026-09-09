@@ -381,6 +381,8 @@ Autoridades preservadas: DB schema/migraciones historicas/RBAC/modelo comercial/
 - `docs/codex/handoffs/MARKET-READINESS-PART-1-UX-WORKFLOWS.md`
 - `docs/codex/handoffs/MARKET-READINESS-PART-2-SCHEDULER.md`
 - `docs/codex/handoffs/UX-WORKFLOW-SCHEDULER-AI-MARKET-READINESS-CLOSEOUT.md`
+- `docs/handoffs/DB-N01_CONTROL_IDENTITY_NORMALIZATION.md`
+- `docs/handoffs/DB-N02_HEALTH_METRICS_LINEAGE_NORMALIZATION.md`
 - `docs/codex/PHASE6_EXPANDED_CLOSURE.md`
 - `docs/architecture/grc_relationship_inventory.md`
 
@@ -415,3 +417,109 @@ Alcance cerrado: Partes 1 y 2 preservadas; Intelligence Brief ya no bloquea cont
 Validaciones locales PASS: tests focales de Partes 1, 2 y 3, regresiones GRC/workflow/RBAC/multitenant/intelligence/RAG, `npm --prefix backend run check`, `npm --prefix frontend run typecheck`, `npm --prefix frontend run lint`, `npm --prefix frontend run build`, `git diff --check`.
 
 Human Review micro-closeout: scheduler success limpia `health_status='healthy'` y `last_error_code=NULL`; estados desconocidos de conector caen en `failure`; polling AI resetea timer/attempts/request al cambiar contexto `tenantId:locale:ai`. Estado local: `READY_FOR_FINAL_HUMAN_APPROVAL`, sin commit/push/merge/deploy.
+
+## DB-N01 — Control Identity Normalization
+
+Estado local: `DB_N01_HARDENING_READY_FOR_REVIEW` sobre branch `codex/db-n01-control-identity-normalization` y HEAD `11003dd92385dcca1caf5365fa437be3aee1f648`, sin commit/push/merge/deploy ni escrituras en `db-v4`.
+
+Alcance cerrado: identidad operacional canonica de control normalizada a `tenant_controls.id` para nuevas escrituras runtime en findings, evidences, action plans, diagnostic acceptance, controles workbench, recomendaciones ISO y workflows GRC. `controls.id` queda solo como compatibilidad legacy de lectura/transicion. `isoOperationalExecution.service.js` acepta findings modernos (`findings.tenant_control_id = tenant_controls.id`) y legacy (`findings.tenant_control_id = controls.id`) sin `OR` duplicador y sin elegir candidatos ambiguos. `evidences.routes.js` usa resolver central estricto y devuelve 409 `TENANT_CONTROL_ID_AMBIGUOUS` cuando `control_id`/catalogo resuelve a multiples `tenant_controls`.
+
+Migracion forward-only agregada: `database/migrations/20260904_dbn01_control_identity_normalization.sql`, transaccional, auditable, idempotente/guarded, sin DROP de `controls`, sin DROP de `evidences.control_id`, sin `LIMIT 1` ni `max/min` para resolver identidad. `tcdx.dbn01_manual_decisions` se parsea una vez a una relacion temporal validada antes de updates; rechaza duplicados por `(table_name, record_id)`, tablas no permitidas, record inexistente, tenant/catalago incorrecto y contexto operacional incompatible. Handoff: `docs/handoffs/DB-N01_CONTROL_IDENTITY_NORMALIZATION.md`.
+
+Validacion local focal PASS: `tenantControlIdentity.test.js`, `controlIdentityRoutes.test.js`, test estatico de migracion DB-N01, test PostgreSQL aislado `db-n01-control-identity.postgres.test.js` en PostgreSQL 16.14 Homebrew con F01-F06/E01-E05/MD01-MD09/re-run/integridad PASS, `grc.service.test.js`, `soaIntelligence.service.test.js`, `node --check` de JS modificados y `git diff --check`. Suite backend completa no PASS: `npm test` desde `backend/` fallo en `grcDecisionCenter.test.js` linea 51 (`persisted` true vs false), clasificado `PREEXISTING_OR_UNRELATED` para DB-N01.
+
+## DB-N02 — Health Metrics Lineage Normalization
+
+Estado local: `DB_N02_READY_FOR_REVIEW` sobre branch `codex/db-n01-control-identity-normalization` y HEAD `11003dd92385dcca1caf5365fa437be3aee1f648`, sin commit/push/merge/deploy, sin aplicar DB-N01, sin aplicar DB-N02 y sin escrituras en `db-v4`.
+
+Alcance cerrado: autoridad ejecutiva Health unica en `F5_5_GRC_HEALTH` v2 por pipeline gobernado `official_formula_versions -> calculation_runs -> calculation_outputs -> metric_snapshots -> metric_source_bindings`. `canonicalHealthProjection.service.js` queda como proyeccion `READ_NORMALIZE_EXPLAIN_PRESENT_ONLY`; no calcula una formula ejecutiva paralela. Operational Health queda separado en `health.service.js`; `control_health_scores`, `v_latest_health_kpi_snapshots` y `KPI-HLT-*` quedan como drill-down/compatibilidad.
+
+Migracion forward-only agregada: `database/migrations/20260904_dbn02_health_metrics_lineage_normalization.sql`, transaccional, con advisory lock, preflight de columnas, funciones `dbn02_normalize_health_component_state`, `dbn02_grc_health_publication_state`, `dbn02_resolve_control_standard_code`, vista `v_control_health_scores_dbn02_lineage` y refresh `refresh_control_health_scores_v2_1(uuid)`. `standard_code` se reconstruye desde `tenant_controls.control_id -> controls_catalog_standards/controls_catalog.iso -> tenant_standards.active`; multiples normas activas devuelven `AMBIGUOUS` y no se actualizan por orden. La auditoria QA previa de `2455 control_health_scores` con `2001 missing_standard_code` queda como estrategia de remediacion post-apply, no como dato ya corregido.
+
+Validacion local focal PASS: `canonicalHealthProjection.service.test.js`, `grcHealthCalculation.service.test.js`, `soaIntelligence.service.test.js`, test estatico de migracion DB-N02, test PostgreSQL aislado `db-n02-health-metrics-lineage.postgres.test.js` en PostgreSQL 16.14 Homebrew con H01-H14 PASS e `ISOLATED_FROM_DB_V4 YES`, targeted adicionales `officialFormulas.test.js`, `sourceResolver.test.js`, `officialCalculationOrchestrator.test.js`, `phase5CalculationReadIsolation.test.js`, `indicatorCatalogSnapshotIsolation.test.js`, `node --check` de JS DB-N02 y `git diff --check`. Suite backend completa no PASS: `npm test` desde `backend/` fallo en `grcDecisionCenter.test.js` linea 51 (`persisted` true vs false), clasificado `PREEXISTING_OR_UNRELATED` para DB-N02. Handoff: `docs/handoffs/DB-N02_HEALTH_METRICS_LINEAGE_NORMALIZATION.md`; matriz: `artifacts/db-n02/HEALTH_LINEAGE_MATRIX.md`.
+
+## DB-N03 — Multi-Tenant Integrity and RLS Prerequisites
+
+Estado local: `DB_N03_READY_FOR_REVIEW` sobre branch `codex/db-n01-control-identity-normalization` y HEAD `11003dd92385dcca1caf5365fa437be3aee1f648`, preservando el working tree DB-N01 + DB-N02, sin commit/push/merge/deploy, sin aplicar DB-N01, DB-N02 ni DB-N03, y sin escrituras en `db-v4`.
+
+Alcance cerrado: inventario tenant-aware focal de `database/migrations`, `backend`, `ai-engine` y `scripts` con `TENANT_REQUIRED=226`, `TENANT_OPTIONAL_BY_DESIGN=33`, `PLATFORM_SCOPE=2` y `LEGACY_AMBIGUOUS=1`. La migracion DB-N03 agrega preflight, constraints `UNIQUE (tenant_id, id)` y FKs compuestas same-tenant para relaciones criticas `findings/evidences/action_plans/control_health_scores -> tenant_controls`, mas relaciones condicionales hacia findings, audits, assets, tenant nonconformities, readiness y calculation runs. Se preservan DB-N01 (`tenant_controls.id` canonico) y DB-N02 (`F5_5_GRC_HEALTH` authority) sin cambiar su semantica.
+
+RLS: estado previo confirmado sin RLS habilitado. DB-N03 prepara schema/funciones `tcdx_security.*` y politicas piloto staged para `tenant_controls`, `findings`, `evidences`, `action_plans` y `control_health_scores`, pero no ejecuta `ENABLE ROW LEVEL SECURITY` ni `FORCE ROW LEVEL SECURITY`. Full rollout queda `FULL_RLS_ROLLOUT_DEFERRED_WITH_JUSTIFICATION` hasta que runtime use contexto tenant transaccional seguro (`SET LOCAL`/`set_config(..., true)`) en paths tenant-scoped. Se agrega helper focal `backend/src/utils/dbTenantContext.js` y test de fuga de contexto por pool.
+
+Validacion local focal PASS: test estatico de migracion/preflight DB-N03, test PostgreSQL aislado `db-n03-multitenant-integrity.postgres.test.js` en PostgreSQL 16.14 Homebrew con I01-I10 y RLS01 PASS e `ISOLATED_FROM_DB_V4 YES`, `dbTenantContext.test.js`, regresiones DB-N01/DB-N02 focales (`tenantControlIdentity`, `controlIdentityRoutes`, `canonicalHealthProjection`, `soaIntelligence`), checks sintacticos DB-N03 y `git diff --check`. Suite backend completa no PASS: `npm test` desde `backend/` tuvo un primer fallo de bind en `commercial.service.test.js`; rerun focal de commercial PASS y fallo conocido `grcDecisionCenter.test.js:51` reproducido, clasificado `PREEXISTING_OR_UNRELATED` para DB-N03. Handoff: `docs/handoffs/DB-N03_MULTITENANT_INTEGRITY_RLS.md`; matriz: `artifacts/db-n03/TENANT_TABLE_MATRIX.md`.
+
+## DB-N04 — Runtime Tenant and Legacy Cleanup Readiness
+
+Estado local: `DB_N04_READY_FOR_REVIEW` sobre branch `codex/db-n01-control-identity-normalization` y HEAD `11003dd92385dcca1caf5365fa437be3aee1f648`, preservando el working tree DB-N01 + DB-N02 + DB-N03, sin commit/push/merge/deploy, sin aplicar DB-N01/DB-N02/DB-N03/DB-N04 y sin escrituras en `db-v4`.
+
+Alcance cerrado: `backend/src/utils/dbTenantContext.js` queda como helper canonico runtime para contexto DB tenant transaccional. `withTenantTransaction` y el wrapper de `pg.Pool` usan `BEGIN` + `set_config('app.tenant_id', ..., true)`/`set_config('app.platform_scope', ..., true)` dentro de la transaccion, con rollback/release garantizados y sin contexto persistente de sesion. `/api` se cablea con `tenantContextMiddleware`; `auth.validateTenantServiceStatus` usa transaccion tenant explicita; schedulers/workers revisados pasan de controller platform a ejecucion tenant-scoped por tenant/job.
+
+RLS readiness: `RLS_RUNTIME_PARTIAL`. Backend Node queda preparado y el test PostgreSQL aislado prueba T01-T12 con RLS real y sin fuga entre transacciones. `ai_reader`/AI Engine queda `AI_READER_RLS_DEFERRED` porque el path psycopg2 no tiene GUC tenant transaccional ni vistas tenant-safe/security-invoker probadas. DB-N04 no ejecuta `ENABLE ROW LEVEL SECURITY`, `FORCE ROW LEVEL SECURITY`, `DROP`, `DELETE` ni `TRUNCATE`.
+
+Legacy cleanup: matriz en `artifacts/db-n04/LEGACY_OBJECT_MATRIX.md`. `controls`, `control_health_scores`, KPI-HLT y `v_latest_health_kpi_snapshots*` siguen `COMPATIBILITY_REQUIRED`/`KEEP_ACTIVE`; `qa_audit.*` queda `QA_ONLY`; backups/previews (`control_health_scores_backup_history`, `control_health_scores_v2_preview`, `evidences_backup_history`, `action_plans_backup_history`, `ai_core.view_definition_backups`, backups RBAC/applicability) quedan `DROP_CANDIDATE_DEFERRED` sin drops por falta de evidencia live de 0 readers/0 writers/0 dependencies.
+
+Validacion local focal PASS: `dbTenantContext.test.js`, test estatico DB-N04, test PostgreSQL aislado `db-n04-runtime-tenant-cleanup.postgres.test.js` en PostgreSQL 16.14 Homebrew con M01-M02/T01-T12 PASS e `ISOLATED_FROM_DB_V4 YES`; regresiones DB-N01/DB-N02/DB-N03 aisladas PASS; targeted RBAC, findings/evidences/action plans, workflows, health, AI y scheduler PASS; `git diff --check` PASS. Suite backend completa no PASS: `npm test` desde `backend/` fallo solo en `grcDecisionCenter.test.js` linea 51 (`true == false`), clasificado `PREEXISTING_OR_UNRELATED` para DB-N04. Handoff: `docs/handoffs/DB-N04_RUNTIME_TENANT_AND_LEGACY_CLEANUP.md`; matrices: `artifacts/db-n04/DB_ACCESS_CONTEXT_MATRIX.md` y `artifacts/db-n04/LEGACY_OBJECT_MATRIX.md`.
+
+## DB-N05 versioned QA reference closeout — 2026-09-08
+
+Status: `DB_N05_READY_FOR_REVIEW`. Local gates only; production creation remains prohibited until integral Human Review DB-N01 -> DB-N05.
+
+| Version | Controls | Evidence expectations | Publication | Certifiable | Status |
+| --- | ---: | ---: | --- | --- | --- |
+| ISO9001:2015 | 16 | 13 | published | true | approved_for_loader |
+| ISO27001:2022 | 21 | 19 | published | true | approved_for_loader |
+| ISO42001:2023 | 16 | 14 | published | true | approved_for_loader |
+| ISO9001:2026_FDIS | 8 | 8 | transition_prep | false | transition_only |
+
+The reviewed authority is `iso_controls` plus same-version `iso_evidence_expectations` from this export. Coverage means faithful materialization of the approved product reference snapshot, whose source_policy is copyright_safe_summary; it does not assert reproduction of the full normative publications.
+
+ISO9001:2026_FDIS is transition preparation only. It has no `product_standard_code`, no row in the selectable `standards` compatibility catalog and no projection into `controls_catalog`. It does not replace ISO9001:2015 and must not be sold or represented as final/certifiable ISO9001:2026. Absence of a final 2026 catalog is not a blocker for this review gate. Historical ISO27701/27017/27018 compatibility is preserved and outside current blockers.
+
+The sole orchestrator remains `scripts/normalization/load-production-reference-catalogs.js`. Manifest v2 stores raw standard_code/version_code, explicit product compatibility code, publication/certification status, loader_status, controls/evidence/metadata paths, exact counts and SHA-256 for each file. Three entries are approved_for_loader; FDIS is transition_only. Every file and same-version evidence mapping is validated before any reference write, and before the main orchestrator connects. Pending/unapproved states, checksum or count mismatches, missing titles, duplicate controls/evidence and cross-version references fail closed.
+
+Fresh baseline adds `iso_standards`, `iso_standard_versions`, `iso_controls`, `iso_evidence_expectations`, with natural-key uniqueness and composite same-version FKs. New surrogate IDs come from PostgreSQL, not QA. Runtime backend/platform/support have SELECT only on these four tables; ai_reader has no access; migration admin loads references. No schema-wide grants or new functions were added.
+
+All four sources load into versioned tables. Only the three approved published versions project to existing product standards/controls/mappings. Existing 30 KB-derived ISO27001 codes and their compatibility behavior remain; metadata marks them compatibility_only. They are not counted as approved versioned controls and no semantic equivalence to QA ISMS codes is invented. Fresh controls_catalog/mappings=83: 53 approved projected controls + 30 preserved KB codes. QA controls_catalog's 118 exported rows and 118 mappings are not imported.
+
+All requested local gates PASS, including 63 runtime schema checks, real isolated fresh double-load/idempotence, effective reference ACL and ten established DB-N01..DB-N04 focal regressions. Source SHA-256: `5ebe8c04225bbe19a0f5b4a56b648af8fc43019f0195b8854384a4bbbf9c3ab0`. Handoff: `docs/handoffs/DB-N05_FRESH_PRODUCTION_DATABASE.md`. Next: STOP for integral Human Review; no tcdx_saasv2 creation.
+
+## DB-N05 historical local evidence — 2026-09-07 (scope superseded)
+
+
+
+Status: `DB_N05_PARTIAL`; remaining blocker `MISSING_PRODUCTION_REFERENCE_SOURCE`.
+Branch `codex/db-n01-control-identity-normalization`; HEAD `11003dd92385dcca1caf5365fa437be3aee1f648`; dirty DB-N01..DB-N04 work preserved; no staging/commit/push/merge/deploy or external DB writes.
+
+Current evidence supersedes previous missing-pgvector/static-only reports:
+
+- PostgreSQL 16.15 with local pgvector/pgvector:pg16 image ID sha256:ccc6e83d6e35e931dc7c5def2022729d5a6c370318d099181995567ff1fb4d6b. Disposable container, localhost-only random published port, tmpfs data, container/volumes removed. Helper supports auto/local/docker and retains mandatory vector.
+- ACTIVE_MISSING=0, 60 focused checks; regulatory table/constraint/index parity PASS for all 15 scoped F6.11-A/B tables. SQL baseline executed twice successfully. Bounded coverage is not a whole-product runtime certification.
+- Effective privileges PASS using real SET ROLE: migration admin bootstrap/rerun, backend DML, backend admin-only DML denied, support SELECT/write denial, platform catalog update/tenant DML denial, ai_reader no direct SELECT, no super/BYPASSRLS/CREATE privileges for runtime roles, and `R00 FUNCTION_EXECUTE_ALLOWLIST PASS`. Broad `EXECUTE ON ALL FUNCTIONS` was removed; explicit job/output grants follow existing asyncJob and official calculation consumers; app_roles and plan_version_capabilities are canonical.
+- Real catalog load twice PASS; stable identities/content/counts checked. KB derived children are rebuilt by the existing loader: logical content is compared excluding generated child IDs/timestamps; the import audit records both completed runs. Counts: 4 standards, 30 ISO codes/mappings (26 leaf controls + 4 families), 62 permissions, 45 commercial capabilities, 135 plan/capability rows, 18 modules, 53 official formulas/versions, 20 official/semantic source contracts, 22 indicators/versions/bindings, 5 KB sources, 1000 items, 1000 each evidence expectations/questions/gaps/actions/rules/hints, 6000 mappings.
+- Fresh gates PASS: BOOTSTRAP_RERUN, CATALOG_LOAD_1, CATALOG_LOAD_2, IDEMPOTENT, CATALOG_LOADER_RERUN, PGVECTOR_VALIDATION, FUNCTIONAL_VALIDATION, MULTITENANT_VALIDATION, LEGACY_ABSENCE, INTEGRITY_VALIDATION, BACKEND_STARTUP, FRESH_DB_FROM_ZERO. OBJECT_COUNTS=117|193|253. Backend startup uses a login member of tcdx_backend_runtime, not postgres.
+- Catalog completeness FAIL: the canonical SoA registry declares ISO27001/ISO27701/ISO27017/ISO27018, while the inspected versioned KB/source inventory has no complete production source for ISO27701/ISO27017/ISO27018. ISO27001's 30 derived codes are not a complete reviewed control manifest; ISO9001 has KB reference coverage but no loaded complete clause/control catalog. No legal/control content invented and no product promises silently disabled.
+- Ten requested DB-N01..DB-N04 regression commands PASS. Full backend suite/CI not run. No backend runtime edits in this continuation.
+
+Next: supply or identify governed complete reference sources/manifests for the declared product families, wire them through the same loader and close the failing catalog gate. Review application role mappings for any newly registered commercial permission identities; the loader does not silently grant those permissions. No real production creation and no DB-N06. See artifacts/db-n05/VALIDATION_RESULTS.md and REFERENCE_CATALOG_COVERAGE.md.
+
+## DB integral human review — 2026-09-09
+
+Status: `DB_INTEGRAL_READY_FOR_TCDX_SAASV2_CREATION` locally. This is a human-review readiness result only; `tcdx_saasv2` was not created, and no commit, push, merge, deploy or `db-v4` write was executed.
+
+Scope closed from DB-N01 through DB-N05 on branch `codex/db-n01-control-identity-normalization`, HEAD `11003dd92385dcca1caf5365fa437be3aee1f648`, preserving the inherited dirty working tree. Zero legacy is enforced for the fresh baseline and active runtime: `ACTIVE_RUNTIME_LEGACY=0`, `LEGACY_OBJECT_COUNT=0`, no legacy Health/KPI authority and no QA/backup/preview objects in fresh PostgreSQL.
+
+Canonical control Health is `public.v_iso_control_effective_health`: it reads measured per-control snapshots only when `metric_code='F5_5_CONTROL_EFFECTIVENESS'` and an explicit `tenant_control_id` is present in snapshot payload/metadata. Global `F5_5_GRC_HEALTH` is not projected as per-control Health. Missing snapshots preserve `NULL` score and explicit not-measured state.
+
+Formula integrity closed with 53 `ACTIVE_OFFICIAL` formulas inventoried from the active registry, 20 source contracts and 53 valid bindings. The `F5_5_SEVERITY_INDEX` mismatch was traced to the test comparing an unrounded fixture value `54.1667` against the active formula output precision 2 result `54.17`; expected values are now normalized by the active version precision, with formula expression and fixture authority unchanged. Runtime E2E uses the production entrypoint `officialCalculationOrchestrator.service.js -> recalculateOfficialAnalytics`, then the official indicator publication phase `indicatorGovernance.calculateIndicator/createSnapshot/publishSnapshot` for metric snapshots.
+
+Fresh DB gates, reference catalogs, privileges, pgvector, backend startup, frontend lint/build and backend `npm test` are PASS locally. Evidence lives in `artifacts/db-integral/` and the DB-N05 handoff. Next action remains human approval/review before any staging, commit, push, merge, deploy or real database creation.
+
+## DB integral final Human Review package — 2026-09-09
+
+Status: `DB_INTEGRAL_HUMAN_REVIEW_PACKAGE_READY`.
+
+Independent final review reproduced the DB-N01 -> DB-N05 claims on branch `codex/db-n01-control-identity-normalization` at HEAD `11003dd92385dcca1caf5365fa437be3aee1f648`. Evidence was packaged under `artifacts/db-integral/final-review/`, including inventory, SHA256SUMS, working-tree patch, gate results, formula/zero-legacy/reference/privilege/multitenant/baseline reviews, DB-V4 read-only preflight SQL and commit/creation plan.
+
+Reproduced gates: zero legacy static/postgres PASS (`ACTIVE_RUNTIME_LEGACY=0`, `LEGACY_OBJECT_COUNT=0`), formula lineage PASS (53 active formulas, 20 contracts, mismatch 0, leakage 0, runtime orchestrator E2E + indicator publication PASS), DB-N05 baseline/runtime/reference/privilege/fresh PASS (`ACTIVE_MISSING=0`, PostgreSQL 16.15, pgvector image `sha256:ccc6e83d6e35e931dc7c5def2022729d5a6c370318d099181995567ff1fb4d6b`), backend `npm test` PASS outside sandbox, frontend lint/build PASS with exactly three unused warnings in `frontend/src/app/administrar-kpis/page.tsx`.
+
+No material contradiction was found. Sandbox-only failures were documented: PostgreSQL isolated `initdb` cannot create shared memory inside the managed sandbox, and the backend commercial test cannot bind its TCP test server inside the sandbox; both pass outside sandbox. No git add, commit, push, merge, deploy, DB-V4 write or `tcdx_saasv2` creation was performed.

@@ -1,0 +1,17 @@
+{
+  "contract": "DB_INTEGRAL_FORMULA_GOLDEN_V1",
+  "source": "backend/src/services/math-governance/formulaRegistry.service.js",
+  "coverage": "all ACTIVE_OFFICIAL formulas exported by FORMULAS",
+  "input_source": "FORMULAS[].tests.normal.inputs",
+  "expected_source": "FORMULAS[].tests.normal.expected",
+  "state_policy": {
+    "normal": "calculated",
+    "missing": "not_calculable_or_formula_error",
+    "stale": "validated by formula-lineage test metadata and Health publication-state functions"
+  },
+  "notes": [
+    "The fixture intentionally delegates per-formula deterministic inputs to the official registry to avoid duplicating formula constants.",
+    "The lineage test fails if the registry omits a normal golden case for any active formula.",
+    "No QA tenant data or legacy KPI/control-health outputs are accepted as expected values."
+  ]
+}

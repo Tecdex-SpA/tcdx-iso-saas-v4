@@ -510,15 +510,12 @@ function pushGrouped(map, key, value) {
 async function loadDirectEvidences(tenantId, controls) {
   if (!controls.length) return new Map();
   const tenantControlIds = controls.map((row) => row.tenant_control_id);
-  const catalogControlIds = controls.map((row) => row.catalog_control_id).filter(Boolean);
-  const catalogToTenant = new Map(controls.map((row) => [String(row.catalog_control_id), row.tenant_control_id]));
 
   const result = await pool.query(
     `
     SELECT
       e.id,
       e.tenant_control_id,
-      e.control_id,
       e.file_name,
       e.description,
       e.status,
@@ -529,19 +526,16 @@ async function loadDirectEvidences(tenantId, controls) {
       e.metadata
     FROM evidences e
     WHERE e.tenant_id = $1::uuid
-      AND (
-        e.tenant_control_id = ANY($2::uuid[])
-        OR e.control_id = ANY($3::uuid[])
-      )
+      AND e.tenant_control_id = ANY($2::uuid[])
       AND COALESCE(e.status, 'active') NOT IN ('deleted', 'eliminada', 'eliminado', 'rechazada', 'rechazado', 'rejected')
     ORDER BY e.created_at DESC NULLS LAST
     `,
-    [tenantId, tenantControlIds, catalogControlIds]
+    [tenantId, tenantControlIds]
   );
 
   const map = new Map();
   for (const row of result.rows) {
-    const tenantControlId = row.tenant_control_id || catalogToTenant.get(String(row.control_id));
+    const tenantControlId = row.tenant_control_id;
     pushGrouped(map, tenantControlId, {
       id: row.id,
       source_type: 'evidence',

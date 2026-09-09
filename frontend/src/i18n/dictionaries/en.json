@@ -1652,22 +1652,6 @@
       "KPI-14": {
         "name": "Customer Satisfaction",
         "description": "Measures the customer satisfaction level against the defined target."
-      },
-      "KPI-HLT-001": {
-        "name": "Overall Health",
-        "description": "Measures the overall health of the ISO compliance system."
-      },
-      "KPI-HLT-002": {
-        "name": "Control Health",
-        "description": "Measures the health level of active controls based on status, score, and evidence."
-      },
-      "KPI-HLT-003": {
-        "name": "Evidence Coverage",
-        "description": "Measures the percentage of controls with valid evidence linked to the compliance scope."
-      },
-      "KPI-HLT-004": {
-        "name": "Deteriorated Controls",
-        "description": "Tracks controls that require attention due to deterioration or weak evidence coverage."
       }
     },
     "healthEngine": {

@@ -155,32 +155,28 @@ async function loadRows(tenantId, iso) {
   const result = await pool.query(
     `
     SELECT
-      c.id AS tenant_control_id,
-      c.tenant_id,
-      c.iso_code AS iso,
-      c.clause,
-      c.catalog_control_id,
+      tc.id AS tenant_control_id,
+      tc.tenant_id,
+      cc.iso,
+      COALESCE(cc.clause, cc.code) AS clause,
+      tc.control_id AS catalog_control_id,
       COALESCE(cc.category, 'General') AS category,
-      COALESCE(cc.description, 'Control ' || c.clause) AS description,
-      COALESCE(NULLIF(c.status, ''), 'pendiente') AS diagnostic_status,
-      COALESCE(c.score, 0) AS score,
+      COALESCE(cc.description, cc.title, 'Control ' || COALESCE(cc.clause, cc.code)) AS description,
+      COALESCE(NULLIF(tc.implementation_status, ''), 'pendiente') AS diagnostic_status,
+      NULL::numeric AS score,
       cs.applicable,
       cs.implementation_status,
       cs.justification,
       cs.notes,
       cs.owner,
       cs.review_date,
-      COALESCE(array_remove(array_agg(DISTINCT tc.id), NULL), ARRAY[]::uuid[]) AS linked_tenant_control_ids
-    FROM controls c
-    LEFT JOIN control_soa cs ON cs.tenant_control_id = c.id
-    LEFT JOIN controls_catalog cc ON cc.id = c.catalog_control_id
-    LEFT JOIN tenant_controls tc
-      ON tc.tenant_id = c.tenant_id
-     AND tc.control_id = c.catalog_control_id
-    WHERE c.tenant_id = $1
-      AND c.iso_code = ANY($2::text[])
-    GROUP BY c.id, cc.category, cc.description, cs.tenant_control_id
-    ORDER BY c.clause, c.created_at
+      ARRAY[tc.id]::uuid[] AS linked_tenant_control_ids
+    FROM tenant_controls tc
+    JOIN controls_catalog cc ON cc.id = tc.control_id
+    LEFT JOIN control_soa cs ON cs.tenant_control_id = tc.id
+    WHERE tc.tenant_id = $1
+      AND cc.iso = ANY($2::text[])
+    ORDER BY COALESCE(cc.clause, cc.code), tc.created_at
     `,
     [tenantId, isoAliases]
   );
@@ -199,7 +195,7 @@ async function loadSignalMaps(tenantId, iso) {
   const [evidence, findings, nonconformities, actions, risks, health, audits, kpis, latestAssessments] = await Promise.all([
     pool.query(
       `
-      SELECT c.id AS tenant_control_id,
+      SELECT tc.id AS tenant_control_id,
         COUNT(DISTINCT e.id)::int AS evidence_count,
         COUNT(DISTINCT e.id) FILTER (
           WHERE (
@@ -221,95 +217,103 @@ async function loadSignalMaps(tenantId, iso) {
         COUNT(DISTINCT e.id) FILTER (WHERE e.expires_at IS NOT NULL AND e.expires_at < CURRENT_DATE)::int AS expired_or_stale_count,
         COUNT(DISTINCT e.id) FILTER (WHERE e.last_ai_analyzed_at IS NOT NULL OR e.ai_analysis_status IN ('completed','ok','analizada'))::int AS ai_assessed_count,
         COUNT(DISTINCT e.id) FILTER (WHERE lower(COALESCE(e.status, '')) IN ('aprobada','approved','validada'))::int AS sufficient_count,
-        'tenant_control_id/catalog_control_id' AS relation
-      FROM controls c
-      LEFT JOIN tenant_controls tc ON tc.tenant_id = c.tenant_id AND tc.control_id = c.catalog_control_id
-      LEFT JOIN evidences e ON e.tenant_id = c.tenant_id AND (e.tenant_control_id = tc.id OR e.control_id = c.id)
-      WHERE c.tenant_id = $1 AND c.iso_code = ANY($2::text[])
-      GROUP BY c.id
+        'tenant_control_id' AS relation
+      FROM tenant_controls tc
+      JOIN controls_catalog cc ON cc.id = tc.control_id
+      LEFT JOIN evidences e ON e.tenant_id = tc.tenant_id AND e.tenant_control_id = tc.id
+      WHERE tc.tenant_id = $1 AND cc.iso = ANY($2::text[])
+      GROUP BY tc.id
       `,
       [tenantId, isoAliases]
     ),
     pool.query(
       `
-      SELECT c.id AS tenant_control_id,
+      SELECT tc.id AS tenant_control_id,
         COUNT(DISTINCT f.id)::int AS finding_count,
         COUNT(DISTINCT f.id) FILTER (WHERE f.closed_at IS NULL AND lower(COALESCE(f.status, 'abierto')) NOT IN ('cerrado','closed','resuelto'))::int AS open_findings_count,
         COUNT(DISTINCT f.id) FILTER (WHERE lower(COALESCE(f.severity, '')) = 'alta')::int AS high_findings_count,
         COUNT(DISTINCT f.id) FILTER (WHERE lower(COALESCE(f.severity, '')) = 'critica')::int AS critical_findings_count,
         'tenant_control_id' AS relation
-      FROM controls c
-      LEFT JOIN findings f ON f.tenant_id = c.tenant_id AND (f.iso_code = c.iso_code OR f.iso_code = ANY($2::text[])) AND f.tenant_control_id = c.id
-      WHERE c.tenant_id = $1 AND c.iso_code = ANY($2::text[])
-      GROUP BY c.id
+      FROM tenant_controls tc
+      JOIN controls_catalog cc ON cc.id = tc.control_id
+      LEFT JOIN findings f
+        ON f.tenant_id = tc.tenant_id
+       AND (f.iso_code = cc.iso OR f.iso_code = ANY($2::text[]))
+       AND f.tenant_control_id = tc.id
+      WHERE tc.tenant_id = $1 AND cc.iso = ANY($2::text[])
+      GROUP BY tc.id
       `,
       [tenantId, isoAliases]
     ),
     pool.query(
       `
-      SELECT c.id AS tenant_control_id,
+      SELECT tc.id AS tenant_control_id,
         COUNT(DISTINCT nc.id)::int AS nonconformity_count,
         COUNT(DISTINCT nc.id) FILTER (WHERE nc.resolved_at IS NULL AND lower(COALESCE(nc.status, 'abierta')) NOT IN ('cerrada','closed','resuelta'))::int AS open_nonconformities_count,
         COUNT(DISTINCT nc.id) FILTER (WHERE lower(COALESCE(nc.status, '')) IN ('mayor','major','critica','crítica'))::int AS major_nonconformities_count,
         COUNT(DISTINCT nc.id) FILTER (WHERE nc.resolved_at IS NULL AND nc.detected_at < NOW() - INTERVAL '30 days')::int AS overdue_nonconformities_count,
-        'control_id/tenant_control_id' AS relation
-      FROM controls c
-      LEFT JOIN tenant_controls tc ON tc.tenant_id = c.tenant_id AND tc.control_id = c.catalog_control_id
-      LEFT JOIN tenant_nonconformities nc ON nc.tenant_id = c.tenant_id AND (nc.control_id = c.id OR nc.control_id = tc.id)
-      WHERE c.tenant_id = $1 AND c.iso_code = ANY($2::text[])
-      GROUP BY c.id
+        'tenant_control_id' AS relation
+      FROM tenant_controls tc
+      JOIN controls_catalog cc ON cc.id = tc.control_id
+      LEFT JOIN tenant_nonconformities nc ON nc.tenant_id = tc.tenant_id AND nc.tenant_control_id = tc.id
+      WHERE tc.tenant_id = $1 AND cc.iso = ANY($2::text[])
+      GROUP BY tc.id
       `,
       [tenantId, isoAliases]
     ),
     pool.query(
       `
-      SELECT c.id AS tenant_control_id,
+      SELECT tc.id AS tenant_control_id,
         COUNT(DISTINCT ap.id)::int AS actions_count,
         COUNT(DISTINCT ap.id) FILTER (WHERE lower(COALESCE(ap.status, 'abierto')) NOT IN ('cerrado','closed','completado','completed'))::int AS open_actions_count,
         COUNT(DISTINCT ap.id) FILTER (WHERE ap.due_date IS NOT NULL AND ap.due_date < CURRENT_DATE AND lower(COALESCE(ap.status, 'abierto')) NOT IN ('cerrado','closed','completado','completed'))::int AS overdue_actions_count,
         COUNT(DISTINCT ap.id) FILTER (WHERE ap.completed_at IS NOT NULL OR lower(COALESCE(ap.status, '')) IN ('cerrado','closed','completado','completed'))::int AS completed_actions_count,
         'tenant_controls' AS relation
-      FROM controls c
-      LEFT JOIN tenant_controls tc ON tc.tenant_id = c.tenant_id AND tc.control_id = c.catalog_control_id
-      LEFT JOIN action_plans ap ON ap.tenant_id = c.tenant_id AND (ap.iso_code = c.iso_code OR ap.iso_code = ANY($2::text[])) AND ap.tenant_control_id = tc.id
-      WHERE c.tenant_id = $1 AND c.iso_code = ANY($2::text[])
-      GROUP BY c.id
+      FROM tenant_controls tc
+      JOIN controls_catalog cc ON cc.id = tc.control_id
+      LEFT JOIN action_plans ap ON ap.tenant_id = tc.tenant_id AND (ap.iso_code = cc.iso OR ap.iso_code = ANY($2::text[])) AND ap.tenant_control_id = tc.id
+      WHERE tc.tenant_id = $1 AND cc.iso = ANY($2::text[])
+      GROUP BY tc.id
       `,
       [tenantId, isoAliases]
     ),
     pool.query(
       `
-      SELECT c.id AS tenant_control_id,
+      SELECT tc.id AS tenant_control_id,
         COUNT(DISTINCT ri.id)::int AS risk_count,
-        COUNT(DISTINCT ri.id) FILTER (WHERE lower(COALESCE(ri.inherent_risk_level, '')) = 'alto')::int AS high_risk_count,
-        COUNT(DISTINCT ri.id) FILTER (WHERE lower(COALESCE(ri.inherent_risk_level, '')) IN ('critico','crítico'))::int AS critical_risk_count,
+        COUNT(DISTINCT ri.id) FILTER (WHERE COALESCE(ri.inherent_score, 0) >= 10 AND COALESCE(ri.inherent_score, 0) < 15)::int AS high_risk_count,
+        COUNT(DISTINCT ri.id) FILTER (WHERE COALESCE(ri.inherent_score, 0) >= 15)::int AS critical_risk_count,
         COUNT(DISTINCT ri.id) FILTER (WHERE lower(COALESCE(ri.status, '')) NOT IN ('closed','cerrado','mitigado'))::int AS open_treatment_count,
-        COUNT(DISTINCT ri.id) FILTER (WHERE lower(COALESCE(ri.residual_risk_level, '')) IN ('alto','critico','crítico'))::int AS residual_high_count,
-        'catalog_control_id/tenant_control_id' AS relation
-      FROM controls c
-      LEFT JOIN tenant_controls tc ON tc.tenant_id = c.tenant_id AND tc.control_id = c.catalog_control_id
-      LEFT JOIN iso_risk_matrix_items ri ON ri.tenant_id = c.tenant_id AND (ri.standard_code = c.iso_code OR ri.standard_code = ANY($2::text[])) AND (ri.catalog_control_id = c.catalog_control_id OR ri.tenant_control_id = tc.id)
-      WHERE c.tenant_id = $1 AND c.iso_code = ANY($2::text[])
-      GROUP BY c.id
+        COUNT(DISTINCT ri.id) FILTER (WHERE COALESCE(ri.residual_score, 0) >= 10)::int AS residual_high_count,
+        'risk_control_relations/risks' AS relation
+      FROM tenant_controls tc
+      JOIN controls_catalog cc ON cc.id = tc.control_id
+      LEFT JOIN risk_control_relations rcr
+        ON rcr.tenant_id = tc.tenant_id
+       AND rcr.tenant_control_id = tc.id
+      LEFT JOIN risks ri
+        ON ri.tenant_id = rcr.tenant_id
+       AND ri.id = rcr.risk_id
+      WHERE tc.tenant_id = $1 AND cc.iso = ANY($2::text[])
+      GROUP BY tc.id
       `,
       [tenantId, isoAliases]
     ),
     pool.query(
       `
-      SELECT c.id AS tenant_control_id,
-        ROUND(AVG(chs.health_score), 2) AS health_score,
-        COALESCE((array_agg(chs.health_status ORDER BY chs.calculated_at DESC))[1], 'sin_datos') AS health_status,
-        SUM(COALESCE(chs.evidence_count, 0))::int AS evidence_count,
-        SUM(COALESCE(chs.open_findings_count, 0))::int AS open_findings_count,
-        SUM(COALESCE(chs.open_actions_count, 0))::int AS open_actions_count,
-        SUM(COALESCE(chs.overdue_actions_count, 0))::int AS overdue_actions_count,
-        SUM(COALESCE(chs.high_risks_count, 0))::int AS high_risks_count,
-        'control_health_scores' AS relation
-      FROM controls c
-      LEFT JOIN tenant_controls tc ON tc.tenant_id = c.tenant_id AND tc.control_id = c.catalog_control_id
-      LEFT JOIN control_health_scores chs ON chs.tenant_id = c.tenant_id AND (chs.standard_code = c.iso_code OR chs.standard_code = ANY($2::text[])) AND (chs.tenant_control_id = tc.id OR chs.catalog_control_id = c.catalog_control_id)
-      WHERE c.tenant_id = $1 AND c.iso_code = ANY($2::text[])
-      GROUP BY c.id
+      SELECT
+        veh.tenant_control_id,
+        veh.effective_health_score AS health_score,
+        veh.effective_health_status AS health_status,
+        veh.evidence_count,
+        veh.open_findings_count,
+        veh.open_action_plans_count AS open_actions_count,
+        veh.overdue_action_plans_count AS overdue_actions_count,
+        veh.high_risks_count,
+        'v_iso_control_effective_health' AS relation
+      FROM public.v_iso_control_effective_health veh
+      WHERE veh.tenant_id = $1
+        AND veh.standard_code = ANY($2::text[])
       `,
       [tenantId, isoAliases]
     ),
@@ -326,12 +330,12 @@ async function loadSignalMaps(tenantId, iso) {
     pool.query(
       `
       SELECT COUNT(*)::int AS kpi_count,
-        COUNT(*) FILTER (WHERE status_color::text IN ('red','yellow'))::int AS bad_kpi_count,
-        ROUND(AVG(value), 2) AS avg_value
-      FROM v_latest_health_kpi_snapshots
-      WHERE tenant_id = $1 AND standard_code = ANY($2::text[])
+        COUNT(*) FILTER (WHERE publication_state::text IN ('not_calculable','insufficient_coverage'))::int AS bad_kpi_count,
+        ROUND(AVG(numeric_value), 2) AS avg_value
+      FROM metric_snapshots
+      WHERE tenant_id = $1
       `,
-      [tenantId, isoAliases]
+      [tenantId]
     ),
     pool.query(
       `
@@ -680,11 +684,15 @@ async function listAssessments({ tenantId, iso }) {
   const isoAliases = isoQueryAliases(iso);
   const result = await pool.query(
     `
-    SELECT a.*, c.clause, COALESCE(cc.category, 'General') AS category, COALESCE(cc.description, 'Control ' || c.clause) AS description
+    SELECT
+      a.*,
+      COALESCE(cc.clause, cc.code) AS clause,
+      COALESCE(cc.category, 'General') AS category,
+      COALESCE(cc.description, cc.title, 'Control ' || COALESCE(cc.clause, cc.code)) AS description
     FROM control_soa_assessments a
-    JOIN controls c ON c.id = a.tenant_control_id AND c.tenant_id = a.tenant_id
-    LEFT JOIN controls_catalog cc ON cc.id = c.catalog_control_id
-    WHERE a.tenant_id = $1 AND a.iso_code = ANY($2::text[])
+    JOIN tenant_controls tc ON tc.id = a.tenant_control_id AND tc.tenant_id = a.tenant_id
+    LEFT JOIN controls_catalog cc ON cc.id = tc.control_id
+    WHERE a.tenant_id = $1 AND cc.iso = ANY($2::text[])
     ORDER BY a.created_at DESC
     LIMIT 500
     `,
@@ -701,7 +709,7 @@ async function applyAssessment({ tenantId, assessmentId, userId }) {
       `
       SELECT a.*
       FROM control_soa_assessments a
-      JOIN controls c ON c.id = a.tenant_control_id AND c.tenant_id = a.tenant_id
+      JOIN tenant_controls tc ON tc.id = a.tenant_control_id AND tc.tenant_id = a.tenant_id
       WHERE a.id = $1 AND a.tenant_id = $2
       FOR UPDATE OF a
       `,
@@ -815,11 +823,11 @@ async function getChangeLog({ tenantId, iso }) {
   const isoAliases = isoQueryAliases(iso);
   const result = await pool.query(
     `
-    SELECT l.*, c.clause, COALESCE(cc.category, 'General') AS category
+    SELECT l.*, COALESCE(cc.clause, cc.code) AS clause, COALESCE(cc.category, 'General') AS category
     FROM control_soa_change_log l
-    JOIN controls c ON c.id = l.tenant_control_id AND c.tenant_id = l.tenant_id
-    LEFT JOIN controls_catalog cc ON cc.id = c.catalog_control_id
-    WHERE l.tenant_id = $1 AND c.iso_code = ANY($2::text[])
+    JOIN tenant_controls tc ON tc.id = l.tenant_control_id AND tc.tenant_id = l.tenant_id
+    LEFT JOIN controls_catalog cc ON cc.id = tc.control_id
+    WHERE l.tenant_id = $1 AND cc.iso = ANY($2::text[])
     ORDER BY l.changed_at DESC
     LIMIT 500
     `,

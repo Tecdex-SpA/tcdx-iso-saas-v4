@@ -86,12 +86,9 @@ check(()=>assert.ok(supplier.health({ criticality:4, security:3, dependency:5, p
 check(()=>assert.equal(supplier.trend([1,2,3]).direction, 'increase'));
 check(()=>assert.equal(supplier.concentration([{id:'s1',exposure:100},{id:'s2',exposure:50}])[0].supplier_id, 's1'));
 check(()=>assert.equal(supplier.officialSupplierRisk({ criticality:4, security:3, dependency:5, performance:2, resilience:1 }).formula_code, 'F5_5_SUPPLIER_RISK'));
-check(()=>assert.equal(phase.calculateOfficialByKey('survey-score', { items: surveyItems }).formula_code, 'F5_5_SURVEY_SCORE'));
-check(()=>assert.equal(phase.calculateOfficialByKey('assurance-score', { results: assuranceResults }).formula_code, 'F5_5_ASSURANCE_SCORE'));
-check(()=>assert.equal(phase.calculateOfficialByKey('loss-net', { grossLoss:1000, recoveries:250 }).formula_code, 'F5_5_NET_LOSS'));
-check(()=>assert.equal(phase.calculateOfficialByKey('continuity-sla', { withinSla:9, applicableCases:10 }).formula_code, 'F5_5_SLA_COMPLIANCE'));
-check(()=>assert.equal(phase.calculateOfficialByKey('asset-criticality', { confidentiality:4, integrity:5, availability:3, legal:2 }).formula_code, 'F5_5_ASSET_CRITICALITY'));
-check(()=>assert.equal(phase.calculateOfficialByKey('supplier-risk', { criticality:4, security:3, dependency:5, performance:2, resilience:1 }).formula_code, 'F5_5_SUPPLIER_RISK'));
+for (const key of ['survey-score', 'assurance-score', 'loss-net', 'continuity-sla', 'asset-criticality', 'supplier-risk']) {
+  check(()=>assert.throws(()=>phase.calculateOfficialByKey(key), /officialCalculationOrchestrator/));
+}
 const jobA = jobs.runPackage4Job({ tenantId: tenantA, jobKey:'survey.calculate', input:{ items: surveyItems } });
 const jobB = jobs.runPackage4Job({ tenantId: tenantA, jobKey:'survey.calculate', input:{ items: surveyItems } });
 check(()=>assert.equal(jobA.idempotency_key, jobB.idempotency_key));
@@ -102,6 +99,6 @@ check(()=>assert.equal(jobA.snapshot.formula_code, 'F5_5_SURVEY_SCORE'));
 check(()=>assert.ok(jobA.idempotency_key.length === 64));
 check(()=>assert.ok(jobA.result.explanation_url.includes('/api/grc/official/calculations/')));
 check(()=>assert.ok(jobA.result.lineage_url.includes('/api/grc/official/calculations/')));
-check(()=>assert.equal(phase.calculateOfficialByKey('loss-monte-carlo', { iterations:100, seed:99, frequency:{type:'poisson',lambda:1}, severity:{type:'fixed',value:100}, threshold:200 }).formula_code, 'F5_5_MONTE_CARLO'));
+check(()=>assert.throws(()=>phase.calculateOfficialByKey('loss-monte-carlo'), /officialCalculationOrchestrator/));
 check(()=>assert.equal(supplier.residualRisk({ inherent:10, controlEffectiveness:.25 }) <= 10, true));
 console.log(JSON.stringify({ status:'PHASE5_5_PACKAGE4_TESTS_OK', assertions }));

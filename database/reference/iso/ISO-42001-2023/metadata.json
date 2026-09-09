@@ -1,0 +1,23 @@
+{
+  "standard_code": "ISO42001",
+  "version_code": "2023",
+  "display_name": "ISO/IEC 42001:2023",
+  "publication_status": "published",
+  "certifiable": true,
+  "replaces_version": null,
+  "effective_from": "2023-12-18",
+  "transition_until": null,
+  "source_policy": "copyright_safe_summary",
+  "notes": "Version usada por el producto para gestion responsable de sistemas de IA.",
+  "is_active": true,
+  "standard": {
+    "standard_code": "ISO42001",
+    "display_name": "ISO/IEC 42001 Artificial intelligence management",
+    "family": "ai_management",
+    "description": "Sistema de gestion para gobernanza, riesgos, supervision, transparencia y operacion responsable de sistemas de IA.",
+    "is_active": true
+  },
+  "source_audit": "artifacts/db-n05/qa-catalog-audit/DB-N05_REFERENCE_EXPORT_RESULT.txt",
+  "source_sha256": "5ebe8c04225bbe19a0f5b4a56b648af8fc43019f0195b8854384a4bbbf9c3ab0",
+  "status": "approved_for_loader"
+}

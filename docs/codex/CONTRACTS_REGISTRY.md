@@ -57,6 +57,10 @@
 | HOTFIX-POSTDEPLOY-01 ISO Health / IA / GRC | CURRENT/HOTFIX-POSTDEPLOY-01-LOCAL | A+C | `canonicalHealthProjection.service.js` no consulta columnas inexistentes `calculation_runs.source_as_of` ni `calculation_runs.created_at`; usa `period_end/completed_at/started_at/period_start`. IA Compliance mantiene autoridad `tenant_subscription_addons.ai` + `ai.compliance` + `ai.view` + runtime `suggestions`; la migración `20260901_hotfix_postdeploy01_ai_view_rbac` concede `ai.view` sólo a `admin`, `tenant_admin` y `auditor` y valida que roles no autorizados no lo tengan. |
 | Audit operational generated report | CURRENT/UI-FUNC-05-LOCAL | CODEX C | `GET /api/audits/generated-report/:id` genera PDF read-only al vuelo desde `audits`, `tenants`, `audit_control_reviews`, `findings` y `action_plans` tenant-scoped, bajo `canReadAudits` y `ensureTenantAccess`. No reemplaza `/api/audits/report/:id`, no persiste truth de reporte, no expone UUID internos como contenido comercial y no modifica cierre/estado de auditoría. |
 | RELEASE-CLOSEOUT NORMALIZATION gate | CURRENT/NO_GO_PREDEPLOY | A+C | Gates locales A/B/C PASS para NORMALIZATION-01/02 integradas, pero commit/deploy/postdeploy permanecen bloqueados hasta preflight PostgreSQL PASS de ambas migraciones en contexto autorizado. Handoff: `docs/codex/handoffs/RELEASE-CLOSEOUT-NORMALIZATION.md`. |
+| DB-N01 control operational identity | CURRENT/DB-N01-LOCAL | CODEX A | Identidad canonica runtime de control es `tenant_controls.id`; `controls_catalog.id` es catalogo y `tenant_controls.control_id` enlaza catalogo. Nuevas escrituras de `findings.tenant_control_id`, `evidences.tenant_control_id` y `action_plans.tenant_control_id` usan `tenant_controls.id`. `controls.id` queda como compatibilidad legacy de lectura/transicion. Migracion `20260904_dbn01_control_identity_normalization.sql` audita y normaliza sin elegir ambiguedad; decisiones manuales usan `table_name`, `record_id`, `selected_tenant_control_id`, son unicas por `(table_name, record_id)` y se validan contra tenant/catalogo/contexto antes de updates; FK finales apuntan a `tenant_controls(id)`. |
+| DB-N02 Health metrics lineage authority | CURRENT/DB-N02-LOCAL | CODEX A | Autoridad ejecutiva Health unica: `F5_5_GRC_HEALTH` v2 por `official_formula_versions + calculation_runs + calculation_outputs + metric_snapshots + metric_source_bindings`. `canonicalHealthProjection.service.js` es proyeccion `READ_NORMALIZE_EXPLAIN_PRESENT_ONLY`; no formula ejecutiva paralela. Operational Health queda en `health.service.js`; `control_health_scores`/`KPI-HLT-*` son compatibilidad. Migracion `20260904_dbn02_health_metrics_lineage_normalization.sql` reconstruye `control_health_scores.standard_code` desde `tenant_controls.control_id -> controls_catalog_standards/controls_catalog.iso -> tenant_standards.active`, bloquea `AMBIGUOUS` y no deriva desde el valor legacy almacenado. |
+| DB-N03 multi-tenant integrity and RLS prerequisites | CURRENT/DB-N03-LOCAL | CODEX A | Integridad tenant critica se endurece en BD con `UNIQUE (tenant_id, id)` y FKs compuestas same-tenant para `findings`, `evidences`, `action_plans`, `control_health_scores` hacia `tenant_controls`, mas relaciones criticas condicionales. RLS completo queda diferido: DB-N03 crea funciones `tcdx_security.*` y politicas piloto staged, pero no ejecuta `ENABLE ROW LEVEL SECURITY` ni `FORCE ROW LEVEL SECURITY` hasta que el backend use contexto tenant transaccional seguro. `db-v4` no fue modificado. |
+| DB-N04 runtime tenant context and legacy cleanup readiness | CURRENT/DB-N04-LOCAL | CODEX A | `dbTenantContext.js` es el helper canonico para contexto DB runtime: `withTenantTransaction`, wrapper de `pg.Pool` y middleware `/api` usan `set_config(..., true)` transaction-local, rollback/release garantizado y sin GUC persistente de sesion. Platform scope es explicito y role-gated; tenant input no puede escalar. `RLS_RUNTIME_PARTIAL` por `AI_READER_RLS_DEFERRED`; legacy cleanup queda documentado sin drops hasta preflight autorizado con 0 readers/0 writers/0 dependencies. |
 
 Regla: si un work package cambia un contrato, actualizar este archivo en el mismo commit.
 
@@ -582,6 +586,44 @@ CONTRACTS_VERSIONED: `[]`
 
 UNNECESSARY_VERSION_BUMPS: `0`
 
+## DB-N05 Fresh Production Baseline Contract
+
+Status: VERIFIED_LOCAL / PARTIAL.
+
+Contract:
+
+```text
+empty PostgreSQL
+-> production_schema_v1.sql
+-> production_seed_v1.sql
+-> synthetic tenant bootstrap
+-> functional/integrity/multitenant/Health/backend readiness validation
+```
+
+Protected decisions:
+
+- Fresh production does not depend on QA dump, QA audit schemas, backup/cleanup/preview objects, historical demonstration data, hardcoded tenant IDs, or stale Health backup state.
+- Historical migrations remain upgrade history for existing databases; fresh production uses the consolidated baseline.
+- DB-N01 canonical control identity is preserved: `tenant_controls.id` is operational identity and `controls` is compatibility only.
+- DB-N02 Health authority is preserved: `official_formula_versions -> calculation_runs -> calculation_outputs -> metric_snapshots`; `control_health_scores` remains drill-down compatibility.
+- DB-N02 Health state parity is required: `MISSING/UNKNOWN/NOT_CONFIGURED/STALE + numeric` must remain `MISSING/UNKNOWN/NOT_CONFIGURED/STALE`, never `AVAILABLE`.
+- DB-N03 composite same-tenant FKs are present for critical relationships.
+- DB-N04 transaction-local tenant context functions and staged RLS policies are present, but broad RLS remains disabled until AI reader safety is proven.
+- While `AI_READER_RLS_DEFERRED`, `ai_reader` must not receive direct tenant-bearing `SELECT` grants.
+- READY requires runtime-to-baseline coverage `ACTIVELY_USED_MISSING=0`, complete reproducible production reference catalogs, and closed least-privilege role grants.
+
+Evidence:
+
+- `scripts/normalization/apply-db-n05-production-baseline.test.js`
+- `scripts/normalization/db-n05-fresh-production.postgres.test.js`
+- `artifacts/db-n05/MIGRATION_CHAIN.md`
+- `artifacts/db-n05/PRODUCTION_OBJECT_ALLOWLIST.md`
+- `artifacts/db-n05/RUNTIME_TO_BASELINE_COVERAGE.md`
+- `artifacts/db-n05/REFERENCE_CATALOG_COVERAGE.md`
+- `artifacts/db-n05/PRODUCTION_ROLE_PRIVILEGE_MATRIX.md`
+- `artifacts/db-n05/DBN01_N04_BASELINE_PARITY.md`
+- `docs/handoffs/DB-N05_FRESH_PRODUCTION_DATABASE.md`
+
 ## MARKET READINESS PART 1 — GRC Workflow Runtime UX Projections
 
 Status: READY_FOR_PART_2 local on branch `main`; commit/push/deploy `NO`.
@@ -922,3 +964,58 @@ Source contract versions changed: `audit_findings_actions` v7→v8, `maturity_as
 FORMULAS_VERSIONED: `[]`
 
 UNNECESSARY_VERSION_BUMPS: `0`
+
+## DB-N05 versioned QA reference closeout — 2026-09-08
+
+Status: `DB_N05_READY_FOR_REVIEW`. Local gates only; production creation remains prohibited until integral Human Review DB-N01 -> DB-N05.
+
+| Version | Controls | Evidence expectations | Publication | Certifiable | Status |
+| --- | ---: | ---: | --- | --- | --- |
+| ISO9001:2015 | 16 | 13 | published | true | approved_for_loader |
+| ISO27001:2022 | 21 | 19 | published | true | approved_for_loader |
+| ISO42001:2023 | 16 | 14 | published | true | approved_for_loader |
+| ISO9001:2026_FDIS | 8 | 8 | transition_prep | false | transition_only |
+
+The reviewed authority is `iso_controls` plus same-version `iso_evidence_expectations` from this export. Coverage means faithful materialization of the approved product reference snapshot, whose source_policy is copyright_safe_summary; it does not assert reproduction of the full normative publications.
+
+ISO9001:2026_FDIS is transition preparation only. It has no `product_standard_code`, no row in the selectable `standards` compatibility catalog and no projection into `controls_catalog`. It does not replace ISO9001:2015 and must not be sold or represented as final/certifiable ISO9001:2026. Absence of a final 2026 catalog is not a blocker for this review gate. Historical ISO27701/27017/27018 compatibility is preserved and outside current blockers.
+
+The sole orchestrator remains `scripts/normalization/load-production-reference-catalogs.js`. Manifest v2 stores raw standard_code/version_code, explicit product compatibility code, publication/certification status, loader_status, controls/evidence/metadata paths, exact counts and SHA-256 for each file. Three entries are approved_for_loader; FDIS is transition_only. Every file and same-version evidence mapping is validated before any reference write, and before the main orchestrator connects. Pending/unapproved states, checksum or count mismatches, missing titles, duplicate controls/evidence and cross-version references fail closed.
+
+Fresh baseline adds `iso_standards`, `iso_standard_versions`, `iso_controls`, `iso_evidence_expectations`, with natural-key uniqueness and composite same-version FKs. New surrogate IDs come from PostgreSQL, not QA. Runtime backend/platform/support have SELECT only on these four tables; ai_reader has no access; migration admin loads references. No schema-wide grants or new functions were added.
+
+All four sources load into versioned tables. Only the three approved published versions project to existing product standards/controls/mappings. Existing 30 KB-derived ISO27001 codes and their compatibility behavior remain; metadata marks them compatibility_only. They are not counted as approved versioned controls and no semantic equivalence to QA ISMS codes is invented. Fresh controls_catalog/mappings=83: 53 approved projected controls + 30 preserved KB codes. QA controls_catalog's 118 exported rows and 118 mappings are not imported.
+
+All requested local gates PASS, including 63 runtime schema checks, real isolated fresh double-load/idempotence, effective reference ACL and ten established DB-N01..DB-N04 focal regressions. Source SHA-256: `5ebe8c04225bbe19a0f5b4a56b648af8fc43019f0195b8854384a4bbbf9c3ab0`. Handoff: `docs/handoffs/DB-N05_FRESH_PRODUCTION_DATABASE.md`. Next: STOP for integral Human Review; no tcdx_saasv2 creation.
+
+## DB-N05 historical local evidence — 2026-09-07 (scope superseded)
+
+
+
+Status: `DB_N05_PARTIAL`; remaining blocker `MISSING_PRODUCTION_REFERENCE_SOURCE`.
+Branch `codex/db-n01-control-identity-normalization`; HEAD `11003dd92385dcca1caf5365fa437be3aee1f648`; dirty DB-N01..DB-N04 work preserved; no staging/commit/push/merge/deploy or external DB writes.
+
+Current evidence supersedes previous missing-pgvector/static-only reports:
+
+- PostgreSQL 16.15 with local pgvector/pgvector:pg16 image ID sha256:ccc6e83d6e35e931dc7c5def2022729d5a6c370318d099181995567ff1fb4d6b. Disposable container, localhost-only random published port, tmpfs data, container/volumes removed. Helper supports auto/local/docker and retains mandatory vector.
+- ACTIVE_MISSING=0, 60 focused checks; regulatory table/constraint/index parity PASS for all 15 scoped F6.11-A/B tables. SQL baseline executed twice successfully. Bounded coverage is not a whole-product runtime certification.
+- Effective privileges PASS using real SET ROLE: migration admin bootstrap/rerun, backend DML, backend admin-only DML denied, support SELECT/write denial, platform catalog update/tenant DML denial, ai_reader no direct SELECT, no super/BYPASSRLS/CREATE privileges for runtime roles, and `R00 FUNCTION_EXECUTE_ALLOWLIST PASS`. Broad `EXECUTE ON ALL FUNCTIONS` was removed; explicit job/output grants follow existing asyncJob and official calculation consumers; app_roles and plan_version_capabilities are canonical.
+- Real catalog load twice PASS; stable identities/content/counts checked. KB derived children are rebuilt by the existing loader: logical content is compared excluding generated child IDs/timestamps; the import audit records both completed runs. Counts: 4 standards, 30 ISO codes/mappings (26 leaf controls + 4 families), 62 permissions, 45 commercial capabilities, 135 plan/capability rows, 18 modules, 53 official formulas/versions, 20 official/semantic source contracts, 22 indicators/versions/bindings, 5 KB sources, 1000 items, 1000 each evidence expectations/questions/gaps/actions/rules/hints, 6000 mappings.
+- Fresh gates PASS: BOOTSTRAP_RERUN, CATALOG_LOAD_1, CATALOG_LOAD_2, IDEMPOTENT, CATALOG_LOADER_RERUN, PGVECTOR_VALIDATION, FUNCTIONAL_VALIDATION, MULTITENANT_VALIDATION, LEGACY_ABSENCE, INTEGRITY_VALIDATION, BACKEND_STARTUP, FRESH_DB_FROM_ZERO. OBJECT_COUNTS=117|193|253. Backend startup uses a login member of tcdx_backend_runtime, not postgres.
+- Catalog completeness FAIL: the canonical SoA registry declares ISO27001/ISO27701/ISO27017/ISO27018, while the inspected versioned KB/source inventory has no complete production source for ISO27701/ISO27017/ISO27018. ISO27001's 30 derived codes are not a complete reviewed control manifest; ISO9001 has KB reference coverage but no loaded complete clause/control catalog. No legal/control content invented and no product promises silently disabled.
+- Ten requested DB-N01..DB-N04 regression commands PASS. Full backend suite/CI not run. No backend runtime edits in this continuation.
+
+Next: supply or identify governed complete reference sources/manifests for the declared product families, wire them through the same loader and close the failing catalog gate. Review application role mappings for any newly registered commercial permission identities; the loader does not silently grant those permissions. No real production creation and no DB-N06. See artifacts/db-n05/VALIDATION_RESULTS.md and REFERENCE_CATALOG_COVERAGE.md.
+
+## DB integral formula and Health authority — 2026-09-09
+
+| Contract | Status | Authority | Validation |
+|---|---|---|---|
+| Zero legacy fresh runtime | CURRENT/DB-INTEGRAL-LOCAL | Fresh baseline and active runtime use `tenant_controls`, `controls_catalog`, SoA canonical tables, `risk_control_relations`/`risks`, `metric_snapshots` and governed calculation tables. Legacy control/Health/KPI objects are not authorities. | `ACTIVE_RUNTIME_LEGACY=0`; `LEGACY_OBJECT_COUNT=0`; `ZERO_LEGACY_STATIC PASS`; `ZERO_LEGACY_POSTGRES PASS`. |
+| Per-control Health projection | CURRENT/DB-INTEGRAL-LOCAL | `public.v_iso_control_effective_health` consumes only `metric_snapshots.metric_code='F5_5_CONTROL_EFFECTIVENESS'` with explicit `tenant_control_id`; absent snapshots remain not measured with `NULL` score. | Runtime schema contract PASS; fresh DB PASS; no `F5_5_GRC_HEALTH` global-to-control coercion. |
+| Global GRC Health | CURRENT/DB-INTEGRAL-LOCAL | `F5_5_GRC_HEALTH` is tenant-level and publicable only with sufficient coverage. Insufficient coverage persists audit lineage but no numeric public score. | Orchestrator E2E validates measured and insufficient-coverage states without `control_health_scores`, KPI-HLT or legacy views. |
+| Formula numeric golden | CURRENT/DB-INTEGRAL-LOCAL | 53 published registry formulas are `ACTIVE_OFFICIAL`; expected values are compared after applying active output precision/version metadata. | `FORMULA_NUMERIC_MISMATCH=0`; `REGISTRY_NUMERIC_GOLDEN PASS`. |
+| Formula runtime E2E | CURRENT/DB-INTEGRAL-LOCAL | `recalculateOfficialAnalytics` resolves source contracts, bindings and formula versions, persists `calculation_runs`, `calculation_outputs`, `calculation_snapshots`; official indicator governance publishes `metric_snapshots`. | `RUNTIME_ORCHESTRATOR_END_TO_END PASS`; `FORMULA_CROSS_TENANT_LEAKAGE=0`. |
+| Canonical risk source | CURRENT/DB-INTEGRAL-LOCAL | Risk likelihood, impact, inherent/residual risk and treatment/control effect are sourced from `risks` and `risk_control_relations` when canonical rows exist. | Runtime formula E2E includes residual risk over canonical risk rows. |
+
+Artifacts: `artifacts/db-integral/FORMULA_AUTHORITY_MATRIX.md`, `FORMULA_VALIDATION_RESULTS.md`, `ZERO_LEGACY_INVENTORY.md`, `PRODUCTION_BASELINE_FINAL_OBJECTS.md`, `CLEAN_TENANT_BOOTSTRAP.md`, `HUMAN_REVIEW_DB_N01_N05.md`.

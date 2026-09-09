@@ -53,7 +53,9 @@ const registryResult = executeFormula('F5_5_GRC_HEALTH', {
   minimum_coverage: 0.8,
 });
 
-assert.strictEqual(registryResult.status, 'calculated');
+assert.strictEqual(registryResult.status, 'insufficient_coverage');
+assert.strictEqual(registryResult.value, null);
+assert.strictEqual(registryResult.details.internal_value, 14.25);
 assert.strictEqual(registryResult.details.global_status, 'insufficient_coverage');
 assert.strictEqual(registryResult.details.score_publicable, false);
 assert.strictEqual(registryResult.details.coverage_policy, 'available_weight/applicable_weight; publish only when coverage >= minimum_coverage');

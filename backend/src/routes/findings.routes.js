@@ -4,7 +4,7 @@ const pool = require('../config/db');
 const auth = require('../middleware/auth');
 const aiContextBuilder = require('../services/aiContextBuilder.service');
 const { runOperationalAiReview } = require('../services/aiOperationalReview.service');
-const { normalizeIsoCode } = require('../utils/isoStandards');
+const { resolveTenantControl } = require('../utils/tenantControlIdentity');
 const {
   upsertActionPlanOriginRelation,
 } = require('../services/actionPlanTraceability.service');
@@ -172,157 +172,17 @@ function normalizeDateOnly(value) {
  * - controls.id legacy
  * - controls_catalog.id catálogo
  *
- * findings.tenant_control_id actualmente referencia controls.id legacy.
- * action_plans.tenant_control_id debe usar tenant_controls.id moderno.
+ * En escrituras DB-N01 el resultado debe persistirse como tenant_controls.id.
+ * Legacy/catalog solo se aceptan como entrada de compatibilidad si resuelven
+ * a un único tenant_controls.id para el tenant.
  */
 const resolveFindingControl = async (client, tenantId, rawControlId, isoCode = null) => {
-  if (!rawControlId) return null;
-
-  const value = String(rawControlId).trim();
-  if (!value) return null;
-
-  // 1) ID moderno: tenant_controls.id
-  const byTenantControl = await client.query(
-    `
-    SELECT
-      tc.id AS tenant_control_id_moderno,
-      c.id AS controls_id_legacy,
-      tc.tenant_id,
-      tc.control_id AS catalog_control_id,
-      tc.operation_id,
-      op.code AS operation_code,
-      op.name AS operation_name,
-      op.is_active AS operation_is_active,
-      cc.iso,
-      cc.clause,
-      cc.description,
-      cc.category
-    FROM tenant_controls tc
-    JOIN controls_catalog cc
-      ON cc.id = tc.control_id
-    LEFT JOIN tenant_operations op
-      ON op.id = tc.operation_id
-     AND op.tenant_id = tc.tenant_id
-    LEFT JOIN LATERAL (
-      SELECT c1.id
-      FROM controls c1
-      WHERE c1.catalog_control_id = tc.control_id
-      ORDER BY c1.id ASC
-      LIMIT 1
-    ) c ON TRUE
-    WHERE tc.id = $1
-      AND tc.tenant_id = $2
-    LIMIT 1
-    `,
-    [value, tenantId]
-  );
-
-  if (byTenantControl.rowCount > 0) {
-    const row = byTenantControl.rows[0];
-
-    if (isoCode && normalizeIsoCode(row.iso) !== normalizeIsoCode(isoCode)) {
-      return { ...row, iso_mismatch: true };
-    }
-
-    return row;
-  }
-
-  // 2) ID legacy: controls.id
-  const byLegacyControl = await client.query(
-    `
-    SELECT
-      tc.id AS tenant_control_id_moderno,
-      c.id AS controls_id_legacy,
-      tc.tenant_id,
-      c.catalog_control_id,
-      tc.operation_id,
-      op.code AS operation_code,
-      op.name AS operation_name,
-      op.is_active AS operation_is_active,
-      cc.iso,
-      cc.clause,
-      cc.description,
-      cc.category
-    FROM controls c
-    JOIN controls_catalog cc
-      ON cc.id = c.catalog_control_id
-    JOIN tenant_controls tc
-      ON tc.tenant_id = $2
-     AND tc.control_id = cc.id
-    LEFT JOIN tenant_operations op
-      ON op.id = tc.operation_id
-     AND op.tenant_id = tc.tenant_id
-    WHERE c.id = $1
-    ORDER BY
-      CASE WHEN op.is_default = TRUE THEN 0 ELSE 1 END,
-      tc.created_at ASC,
-      tc.id ASC
-    LIMIT 1
-    `,
-    [value, tenantId]
-  );
-
-  if (byLegacyControl.rowCount > 0) {
-    const row = byLegacyControl.rows[0];
-
-    if (isoCode && normalizeIsoCode(row.iso) !== normalizeIsoCode(isoCode)) {
-      return { ...row, iso_mismatch: true };
-    }
-
-    return row;
-  }
-
-  // 3) ID catálogo: controls_catalog.id
-  const byCatalogControl = await client.query(
-    `
-    SELECT
-      tc.id AS tenant_control_id_moderno,
-      c.id AS controls_id_legacy,
-      tc.tenant_id,
-      cc.id AS catalog_control_id,
-      tc.operation_id,
-      op.code AS operation_code,
-      op.name AS operation_name,
-      op.is_active AS operation_is_active,
-      cc.iso,
-      cc.clause,
-      cc.description,
-      cc.category
-    FROM controls_catalog cc
-    JOIN tenant_controls tc
-      ON tc.tenant_id = $2
-     AND tc.control_id = cc.id
-    LEFT JOIN tenant_operations op
-      ON op.id = tc.operation_id
-     AND op.tenant_id = tc.tenant_id
-    LEFT JOIN LATERAL (
-      SELECT c1.id
-      FROM controls c1
-      WHERE c1.catalog_control_id = cc.id
-      ORDER BY c1.id ASC
-      LIMIT 1
-    ) c ON TRUE
-    WHERE cc.id = $1
-    ORDER BY
-      CASE WHEN op.is_default = TRUE THEN 0 ELSE 1 END,
-      tc.created_at ASC,
-      tc.id ASC
-    LIMIT 1
-    `,
-    [value, tenantId]
-  );
-
-  if (byCatalogControl.rowCount > 0) {
-    const row = byCatalogControl.rows[0];
-
-    if (isoCode && normalizeIsoCode(row.iso) !== normalizeIsoCode(isoCode)) {
-      return { ...row, iso_mismatch: true };
-    }
-
-    return row;
-  }
-
-  return null;
+  return resolveTenantControl(client, {
+    tenantId,
+    rawControlId,
+    isoCode,
+    mode: 'strict',
+  });
 };
 
 const findRecentDuplicateFinding = async (
@@ -395,7 +255,6 @@ const enrichedFindingsSelect = `
          OR (ap.source_type = 'finding' AND ap.source_id = f.id)
     ) AS has_action_plan,
 
-    c_legacy.id AS controls_id_legacy,
     tc.id AS tenant_control_modern_id,
     tc.status AS tenant_control_status,
     tc.operation_id AS finding_operation_id,
@@ -425,9 +284,6 @@ const enrichedFindingsSelect = `
 
   FROM findings f
 
-  LEFT JOIN controls c_legacy
-    ON f.tenant_control_id = c_legacy.id
-
   LEFT JOIN LATERAL (
     SELECT
       tc1.id,
@@ -439,13 +295,7 @@ const enrichedFindingsSelect = `
       ON op1.id = tc1.operation_id
      AND op1.tenant_id = tc1.tenant_id
     WHERE tc1.tenant_id = f.tenant_id
-      AND (
-        tc1.id = f.tenant_control_id
-        OR (
-          c_legacy.catalog_control_id IS NOT NULL
-          AND tc1.control_id = c_legacy.catalog_control_id
-        )
-      )
+      AND tc1.id = f.tenant_control_id
     ORDER BY
       CASE WHEN tc1.id = f.tenant_control_id THEN 0 ELSE 1 END,
       CASE WHEN op1.is_default = TRUE THEN 0 ELSE 1 END,
@@ -459,7 +309,7 @@ const enrichedFindingsSelect = `
    AND op_current.tenant_id = f.tenant_id
 
   LEFT JOIN controls_catalog cc
-    ON cc.id = COALESCE(tc.control_id, c_legacy.catalog_control_id)
+    ON cc.id = tc.control_id
 
   LEFT JOIN tenant_nonconformities nc
     ON f.nonconformity_id = nc.id
@@ -488,7 +338,6 @@ router.get('/controls/:tenant_id', auth, async (req, res) => {
       SELECT DISTINCT ON (tc.id)
         tc.id AS tenant_control_id,
         tc.id AS tenant_control_id_moderno,
-        c.id AS controls_id_legacy,
         cc.id AS catalog_control_id,
         cc.iso,
         cc.clause,
@@ -516,13 +365,6 @@ router.get('/controls/:tenant_id', auth, async (req, res) => {
        AND tso.standard_code = cc.iso
        AND tso.operation_id = tc.operation_id
        AND tso.is_active = TRUE
-      LEFT JOIN LATERAL (
-        SELECT c1.id
-        FROM controls c1
-        WHERE c1.catalog_control_id = cc.id
-        ORDER BY c1.id ASC
-        LIMIT 1
-      ) c ON TRUE
       WHERE tc.tenant_id = $1
         AND cc.is_active = TRUE
     `;
@@ -775,6 +617,15 @@ router.post('/', auth, async (req, res) => {
       });
     }
 
+    if (resolvedControl.ambiguous) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({
+        error: 'El control asociado al hallazgo es ambiguo para este tenant. Selecciona tenant_control_id explícito.',
+        code: 'TENANT_CONTROL_ID_AMBIGUOUS',
+        candidates: resolvedControl.candidates || []
+      });
+    }
+
     if (resolvedControl.iso_mismatch) {
       await client.query('ROLLBACK');
       return res.status(400).json({
@@ -782,10 +633,10 @@ router.post('/', auth, async (req, res) => {
       });
     }
 
-    if (!resolvedControl.controls_id_legacy) {
+    if (!resolvedControl.tenant_control_id_moderno) {
       await client.query('ROLLBACK');
       return res.status(400).json({
-        error: 'El control no tiene equivalente legacy en controls.id. Revisa el mapeo controls.catalog_control_id'
+        error: 'El control no tiene tenant_controls.id resoluble para este tenant'
       });
     }
 
@@ -859,7 +710,7 @@ router.post('/', auth, async (req, res) => {
       nonconformity_id ||
       audit_id ||
       asset_id ||
-      resolvedControl.controls_id_legacy ||
+      resolvedControl.tenant_control_id_moderno ||
       null;
 
     const duplicate = await findRecentDuplicateFinding(client, {
@@ -875,7 +726,7 @@ router.post('/', auth, async (req, res) => {
       detected_by,
       due_date,
       created_by: getUserId(req.user),
-      tenant_control_id: resolvedControl.controls_id_legacy
+      tenant_control_id: resolvedControl.tenant_control_id_moderno
     });
 
     if (duplicate?.id) {
@@ -933,7 +784,7 @@ router.post('/', auth, async (req, res) => {
         normalizeNullableText(detected_by),
         due_date || null,
         getUserId(req.user),
-        resolvedControl.controls_id_legacy,
+        resolvedControl.tenant_control_id_moderno,
         nonconformity_id || null,
         audit_id || null,
         asset_id || null
@@ -1031,15 +882,23 @@ router.put('/:id', auth, async (req, res) => {
       });
     }
 
+    if (resolvedControl.ambiguous) {
+      return res.status(409).json({
+        error: 'El control asociado al hallazgo es ambiguo para este tenant. Selecciona tenant_control_id explícito.',
+        code: 'TENANT_CONTROL_ID_AMBIGUOUS',
+        candidates: resolvedControl.candidates || []
+      });
+    }
+
     if (resolvedControl.iso_mismatch) {
       return res.status(400).json({
         error: 'El control seleccionado no pertenece a la norma ISO del hallazgo'
       });
     }
 
-    if (!resolvedControl.controls_id_legacy) {
+    if (!resolvedControl.tenant_control_id_moderno) {
       return res.status(400).json({
-        error: 'El control no tiene equivalente legacy en controls.id. Revisa el mapeo controls.catalog_control_id'
+        error: 'El control no tiene tenant_controls.id resoluble para este tenant'
       });
     }
 
@@ -1101,7 +960,7 @@ router.put('/:id', auth, async (req, res) => {
         detected_by ?? row.detected_by,
         due_date ?? row.due_date,
         closedAt,
-        resolvedControl.controls_id_legacy,
+        resolvedControl.tenant_control_id_moderno,
         id
       ]
     );
@@ -1206,6 +1065,14 @@ router.post('/:id/create-action', auth, async (req, res) => {
       finding.tenant_control_id,
       finding.iso_code
     );
+
+    if (resolvedControl?.ambiguous) {
+      return res.status(409).json({
+        error: 'El control asociado al hallazgo es ambiguo para este tenant. Selecciona tenant_control_id explícito antes de crear la acción.',
+        code: 'TENANT_CONTROL_ID_AMBIGUOUS',
+        candidates: resolvedControl.candidates || []
+      });
+    }
 
     if (!resolvedControl || !resolvedControl.tenant_control_id_moderno) {
       return res.status(400).json({

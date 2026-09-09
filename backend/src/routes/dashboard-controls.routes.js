@@ -65,20 +65,23 @@ router.get('/:tenant_id', auth, async (req, res) => {
           AND is_active = TRUE
       ),
       latest_health AS (
-        SELECT DISTINCT ON (chs.tenant_control_id)
-          chs.tenant_control_id,
-          chs.standard_code,
-          COALESCE(chs.health_score, 0) AS health_score,
+        SELECT DISTINCT ON (veh.tenant_control_id)
+          veh.tenant_control_id,
+          veh.standard_code,
+          veh.effective_health_score AS health_score,
           CASE
-            WHEN COALESCE(chs.health_score, 0) < 50 THEN 'no cumple'
-            WHEN COALESCE(chs.health_score, 0) < 80 THEN 'parcial'
+            WHEN veh.effective_health_score IS NULL THEN 'sin_datos'
+            WHEN veh.effective_health_score < 50 THEN 'no cumple'
+            WHEN veh.effective_health_score < 80 THEN 'parcial'
             ELSE 'cumple'
           END AS status
-        FROM control_health_scores chs
+        FROM public.v_iso_control_effective_health veh
         INNER JOIN active_standards ast
-          ON ast.standard_code = chs.standard_code
-        WHERE chs.tenant_id = $1
-        ORDER BY chs.tenant_control_id, chs.calculated_at DESC NULLS LAST
+          ON ast.standard_code = veh.standard_code
+        WHERE veh.tenant_id = $1
+        ORDER BY veh.tenant_control_id,
+          NULLIF(veh.health_trace_json->>'effective_at', '')::timestamptz DESC NULLS LAST,
+          NULLIF(veh.health_trace_json->>'published_at', '')::timestamptz DESC NULLS LAST
       )
       SELECT
         tc.id,

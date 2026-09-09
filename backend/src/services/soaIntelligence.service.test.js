@@ -41,6 +41,7 @@ function createFakePool() {
     async query(sql, params = []) {
       const compactSql = String(sql).replace(/\s+/g, ' ').trim();
       state.queries.push({ sql: compactSql, params });
+      assert.doesNotMatch(compactSql, /\bFROM controls\b|\bJOIN controls\b|control_health_scores|v_latest_health_kpi_snapshots|KPI-HLT-/);
 
       if (/^BEGIN/.test(compactSql)) return { rows: [], rowCount: 0 };
       if (/^COMMIT/.test(compactSql)) {
@@ -103,7 +104,7 @@ function createFakePool() {
         return { rows: [state.assessment], rowCount: 1 };
       }
 
-      if (compactSql.includes('SELECT c.id AS tenant_control_id') && compactSql.includes('linked_tenant_control_ids')) {
+      if (compactSql.includes('SELECT tc.id AS tenant_control_id') && compactSql.includes('linked_tenant_control_ids')) {
         return {
           rows: [{
             tenant_control_id: TENANT_CONTROL_ID,
@@ -127,15 +128,32 @@ function createFakePool() {
         };
       }
 
+      if (compactSql.includes('FROM public.v_iso_control_effective_health veh')) {
+        assert.ok(compactSql.includes('veh.tenant_control_id'));
+        return {
+          rows: [{
+            tenant_control_id: TENANT_CONTROL_ID,
+            health_score: 84,
+            health_status: 'saludable',
+            evidence_count: 1,
+            open_findings_count: 0,
+            open_actions_count: 0,
+            overdue_actions_count: 0,
+            high_risks_count: 0,
+            relation: 'v_iso_control_effective_health',
+          }],
+          rowCount: 1,
+        };
+      }
+
       if (
         compactSql.includes('evidences e') ||
         compactSql.includes('findings f') ||
         compactSql.includes('tenant_nonconformities nc') ||
         compactSql.includes('action_plans ap') ||
-        compactSql.includes('iso_risk_matrix_items ri') ||
-        compactSql.includes('control_health_scores chs') ||
+        compactSql.includes('risk_control_relations rcr') ||
         compactSql.includes('FROM audits a') ||
-        compactSql.includes('FROM v_latest_health_kpi_snapshots') ||
+        compactSql.includes('FROM metric_snapshots') ||
         compactSql.includes('FROM control_soa_assessments')
       ) {
         return { rows: [], rowCount: 0 };

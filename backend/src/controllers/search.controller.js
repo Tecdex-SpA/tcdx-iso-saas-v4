@@ -415,14 +415,7 @@ async function globalSearch(req, res) {
             ON cc.id = tc.control_id
            AND cc.is_active = TRUE
           WHERE tc.tenant_id = e.tenant_id
-            AND (
-              tc.id = e.tenant_control_id
-              OR (
-                e.tenant_control_id IS NULL
-                AND e.control_id IS NOT NULL
-                AND tc.control_id = e.control_id
-              )
-            )
+            AND tc.id = e.tenant_control_id
           ORDER BY tc.created_at DESC NULLS LAST, tc.id DESC
           LIMIT 1
         ) ctx ON TRUE

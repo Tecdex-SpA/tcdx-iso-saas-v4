@@ -54,7 +54,6 @@ const getSoAPreflight = async (client, tenantId, iso) => {
       active_operations_count: 0,
       catalog_controls_count: 0,
       tenant_controls_count: 0,
-      legacy_controls_count: 0,
       soa_rows_count: 0,
       data_source: null,
       can_initialize_soa: false,
@@ -123,31 +122,22 @@ const getSoAPreflight = async (client, tenantId, iso) => {
     [tenantId, isoAliases]
   );
 
-  const legacyControlsResult = await client.query(
-    `
-    SELECT COUNT(*)::int AS total
-    FROM controls
-    WHERE tenant_id = $1
-      AND iso_code = ANY($2::text[])
-    `,
-    [tenantId, isoAliases]
-  );
-
   const soaRowsResult = await client.query(
     `
     SELECT COUNT(*)::int AS total
     FROM control_soa cs
-    JOIN controls c
-      ON c.id = cs.tenant_control_id
-    WHERE c.tenant_id = $1
-      AND c.iso_code = ANY($2::text[])
+    JOIN tenant_controls tc
+      ON tc.id = cs.tenant_control_id
+    JOIN controls_catalog cc
+      ON cc.id = tc.control_id
+    WHERE tc.tenant_id = $1
+      AND cc.iso = ANY($2::text[])
     `,
     [tenantId, isoAliases]
   );
 
   const activeOperationsCount = countValue(activeOpsResult);
   const tenantControlsCount = countValue(tenantControlsResult);
-  const legacyControlsCount = countValue(legacyControlsResult);
   const soaRowsCount = countValue(soaRowsResult);
 
   let blockingReason = null;
@@ -155,7 +145,7 @@ const getSoAPreflight = async (client, tenantId, iso) => {
   else if (activeOperationsCount === 0) blockingReason = 'no_active_operations';
   else if (tenantControlsCount === 0) blockingReason = 'no_tenant_controls';
 
-  const canInitialize = !blockingReason && (legacyControlsCount === 0 || soaRowsCount < legacyControlsCount);
+  const canInitialize = !blockingReason && soaRowsCount < tenantControlsCount;
 
   return {
     tenant_id: tenantId,
@@ -165,9 +155,9 @@ const getSoAPreflight = async (client, tenantId, iso) => {
     active_operations_count: activeOperationsCount,
     catalog_controls_count: countValue(catalogResult),
     tenant_controls_count: tenantControlsCount,
-    legacy_controls_count: legacyControlsCount,
+    canonical_controls_count: tenantControlsCount,
     soa_rows_count: soaRowsCount,
-    data_source: tenantControlsCount > 0 ? 'tenant_controls' : 'controls',
+    data_source: 'tenant_controls',
     can_initialize_soa: canInitialize,
     blocking_reason: blockingReason,
     recommended_action: canInitialize ? 'initialize_soa_from_tenant_controls' : null
@@ -183,12 +173,13 @@ const bootstrapSoA = async (client, tenantId, iso) => {
   const result = await client.query(
     `
     INSERT INTO control_soa (tenant_control_id)
-    SELECT c.id
-    FROM controls c
+    SELECT tc.id
+    FROM tenant_controls tc
+    JOIN controls_catalog cc ON cc.id = tc.control_id
     LEFT JOIN control_soa cs
-      ON cs.tenant_control_id = c.id
-    WHERE c.tenant_id = $1
-      AND c.iso_code = ANY($2::text[])
+      ON cs.tenant_control_id = tc.id
+    WHERE tc.tenant_id = $1
+      AND cc.iso = ANY($2::text[])
       AND cs.tenant_control_id IS NULL
     RETURNING tenant_control_id
     `,
@@ -197,77 +188,18 @@ const bootstrapSoA = async (client, tenantId, iso) => {
   return result.rows;
 };
 
-const materializeControlsFromTenantControls = async (client, tenantId, iso) => {
-  const canonicalIso = normalizeIso(iso);
-  const isoAliases = isoQueryAliases(canonicalIso);
-  const result = await client.query(
-    `
-    WITH source_controls AS (
-      SELECT DISTINCT ON (tc.control_id)
-        tc.tenant_id,
-        $2::text AS iso_code,
-        cc.clause,
-        COALESCE(NULLIF(tc.status, ''), 'pendiente') AS status,
-        COALESCE(ROUND(tc.score)::int, 0) AS score,
-        tc.control_id AS catalog_control_id,
-        tc.created_at
-      FROM tenant_controls tc
-      JOIN controls_catalog cc
-        ON cc.id = tc.control_id
-      JOIN tenant_operations op
-        ON op.id = tc.operation_id
-       AND op.tenant_id = tc.tenant_id
-       AND op.is_active = TRUE
-      JOIN tenant_standard_operations tso
-        ON tso.operation_id = tc.operation_id
-       AND tso.tenant_id = tc.tenant_id
-       AND tso.standard_code = ANY($3::text[])
-       AND tso.is_active = TRUE
-      WHERE tc.tenant_id = $1
-        AND cc.iso = ANY($3::text[])
-        AND cc.is_active = TRUE
-      ORDER BY tc.control_id, tc.created_at DESC NULLS LAST, tc.id
-    )
-    INSERT INTO controls (
-      tenant_id,
-      iso_code,
-      clause,
-      status,
-      score,
-      catalog_control_id
-    )
-    SELECT
-      sc.tenant_id,
-      sc.iso_code,
-      sc.clause,
-      sc.status,
-      sc.score,
-      sc.catalog_control_id
-    FROM source_controls sc
-    WHERE NOT EXISTS (
-      SELECT 1
-      FROM controls c
-      WHERE c.tenant_id = sc.tenant_id
-        AND c.iso_code = ANY($3::text[])
-        AND c.catalog_control_id = sc.catalog_control_id
-    )
-    `,
-    [tenantId, canonicalIso, isoAliases]
-  );
-
-  return result.rowCount || 0;
-};
-
 const getSoACount = async (client, tenantId, iso) => {
   const isoAliases = isoQueryAliases(iso);
   const result = await client.query(
     `
     SELECT COUNT(*)::int AS total
     FROM control_soa cs
-    JOIN controls c
-      ON c.id = cs.tenant_control_id
-    WHERE c.tenant_id = $1
-      AND c.iso_code = ANY($2::text[])
+    JOIN tenant_controls tc
+      ON tc.id = cs.tenant_control_id
+    JOIN controls_catalog cc
+      ON cc.id = tc.control_id
+    WHERE tc.tenant_id = $1
+      AND cc.iso = ANY($2::text[])
     `,
     [tenantId, isoAliases]
   );
@@ -305,22 +237,21 @@ const getSoARows = async (client, tenantId, iso, tenantControlId = null) => {
   let controlFilter = '';
   if (tenantControlId) {
     params.push(tenantControlId);
-    controlFilter = `AND c.id = $${params.length}`;
+    controlFilter = `AND tc.id = $${params.length}`;
   }
 
   const result = await client.query(
     `
     SELECT
-      c.id AS tenant_control_id,
-      c.id AS controls_id_legacy,
-      tc_primary.id AS modern_tenant_control_id,
-      c.tenant_id,
+      tc.id AS tenant_control_id,
+      tc.id AS modern_tenant_control_id,
+      tc.tenant_id,
       $2::text[] AS iso_aliases,
-      c.iso_code AS iso,
-      c.clause,
+      cc.iso,
+      COALESCE(cc.clause, cc.code) AS clause,
       COALESCE(cc.category, 'General') AS category,
-      COALESCE(cc.description, 'Control ' || c.clause) AS description,
-      COALESCE(NULLIF(c.status, ''), 'pendiente') AS diagnostic_status,
+      COALESCE(cc.description, cc.title, 'Control ' || COALESCE(cc.clause, cc.code)) AS description,
+      COALESCE(NULLIF(tc.implementation_status, ''), 'pendiente') AS diagnostic_status,
       cs.applicable,
       cs.implementation_status,
       cs.justification,
@@ -338,30 +269,10 @@ const getSoARows = async (client, tenantId, iso, tenantControlId = null) => {
       COALESCE(ri.high_or_critical_risk_count, 0)::int AS high_or_critical_risk_count,
       COALESCE(ap.overdue_actions_count, 0)::int AS overdue_actions_count
     FROM control_soa cs
-    JOIN controls c
-      ON c.id = cs.tenant_control_id
-    LEFT JOIN LATERAL (
-      SELECT tc.id
-      FROM tenant_controls tc
-      WHERE tc.tenant_id = c.tenant_id
-        AND tc.control_id = c.catalog_control_id
-      ORDER BY tc.created_at ASC NULLS LAST, tc.id ASC
-      LIMIT 1
-    ) tc_primary ON TRUE
-    LEFT JOIN LATERAL (
-      SELECT cc2.*
-      FROM controls_catalog cc2
-      WHERE cc2.id = c.catalog_control_id
-         OR (
-           c.catalog_control_id IS NULL
-           AND cc2.iso = ANY($2::text[])
-           AND cc2.clause = c.clause
-         )
-      ORDER BY
-        CASE WHEN cc2.id = c.catalog_control_id THEN 0 ELSE 1 END,
-        cc2.id
-      LIMIT 1
-    ) cc ON TRUE
+    JOIN tenant_controls tc
+      ON tc.id = cs.tenant_control_id
+    JOIN controls_catalog cc
+      ON cc.id = tc.control_id
     LEFT JOIN LATERAL (
       SELECT
         COUNT(DISTINCT e.id)::int AS evidence_count,
@@ -380,59 +291,53 @@ const getSoARows = async (client, tenantId, iso, tenantControlId = null) => {
           WHERE lower(COALESCE(e.status, '')) IN ('rechazada','rechazado','rejected')
         )::int AS rejected_evidence_count
       FROM evidences e
-      WHERE e.tenant_id = c.tenant_id
-        AND (
-          e.control_id = c.id
-          OR e.tenant_control_id = c.id
-          OR (tc_primary.id IS NOT NULL AND e.tenant_control_id = tc_primary.id)
-        )
+      WHERE e.tenant_id = tc.tenant_id
+        AND e.tenant_control_id = tc.id
     ) ev ON TRUE
     LEFT JOIN LATERAL (
       SELECT COUNT(DISTINCT f.id)::int AS open_findings_count
       FROM findings f
-      WHERE f.tenant_id = c.tenant_id
-        AND (f.iso_code = c.iso_code OR f.iso_code = ANY($2::text[]))
-        AND (f.tenant_control_id = c.id OR (tc_primary.id IS NOT NULL AND f.tenant_control_id = tc_primary.id))
+      WHERE f.tenant_id = tc.tenant_id
+        AND (f.iso_code = cc.iso OR f.iso_code = ANY($2::text[]))
+        AND f.tenant_control_id = tc.id
         AND f.closed_at IS NULL
         AND lower(COALESCE(f.status, 'abierto')) NOT IN ('cerrado','closed','resuelto','resolved')
     ) f ON TRUE
     LEFT JOIN LATERAL (
       SELECT COUNT(DISTINCT nc.id)::int AS open_nonconformities_count
       FROM tenant_nonconformities nc
-      WHERE nc.tenant_id = c.tenant_id
-        AND (nc.control_id = c.id OR (tc_primary.id IS NOT NULL AND nc.control_id = tc_primary.id))
+      WHERE nc.tenant_id = tc.tenant_id
+        AND nc.tenant_control_id = tc.id
         AND nc.resolved_at IS NULL
         AND lower(COALESCE(nc.status, 'abierta')) NOT IN ('cerrada','closed','resuelta','resolved')
     ) nc ON TRUE
     LEFT JOIN LATERAL (
       SELECT COUNT(DISTINCT ri.id)::int AS high_or_critical_risk_count
-      FROM iso_risk_matrix_items ri
-      WHERE ri.tenant_id = c.tenant_id
-        AND (ri.standard_code = c.iso_code OR ri.standard_code = ANY($2::text[]))
-        AND (
-          ri.catalog_control_id = c.catalog_control_id
-          OR (tc_primary.id IS NOT NULL AND ri.tenant_control_id = tc_primary.id)
-        )
+      FROM risk_control_relations rcr
+      JOIN risks ri
+        ON ri.id = rcr.risk_id
+       AND ri.tenant_id = rcr.tenant_id
+      WHERE rcr.tenant_id = tc.tenant_id
+        AND rcr.tenant_control_id = tc.id
         AND lower(COALESCE(ri.status, 'suggested')) NOT IN ('rejected','archived','closed','cerrado')
         AND (
-          lower(COALESCE(ri.inherent_risk_level, '')) IN ('alto','critico','crítico')
-          OR lower(COALESCE(ri.residual_risk_level, '')) IN ('alto','critico','crítico')
+          COALESCE(ri.inherent_score, 0) >= 15
+          OR COALESCE(ri.residual_score, 0) >= 15
         )
     ) ri ON TRUE
     LEFT JOIN LATERAL (
       SELECT COUNT(DISTINCT ap.id)::int AS overdue_actions_count
       FROM action_plans ap
-      WHERE ap.tenant_id = c.tenant_id
-        AND (ap.iso_code = c.iso_code OR ap.iso_code = ANY($2::text[]))
-        AND (ap.tenant_control_id = c.id OR (tc_primary.id IS NOT NULL AND ap.tenant_control_id = tc_primary.id))
+      WHERE ap.tenant_id = tc.tenant_id
+        AND ap.tenant_control_id = tc.id
         AND ap.due_date IS NOT NULL
         AND ap.due_date < CURRENT_DATE
         AND lower(COALESCE(ap.status, 'abierto')) NOT IN ('cerrado','closed','completado','completed','cancelado')
     ) ap ON TRUE
-    WHERE c.tenant_id = $1
-      AND c.iso_code = ANY($2::text[])
+    WHERE tc.tenant_id = $1
+      AND cc.iso = ANY($2::text[])
       ${controlFilter}
-    ORDER BY c.clause, c.created_at
+    ORDER BY COALESCE(cc.clause, cc.code), tc.created_at
     `,
     params
   );
@@ -500,9 +405,7 @@ router.post('/:tenant_id/initialize', auth, async (req, res) => {
       return res.status(409).json(preflightBefore);
     }
 
-    const legacyControlsBefore = preflightBefore.legacy_controls_count;
     const soaRowsBefore = preflightBefore.soa_rows_count;
-    const legacyControlsCreated = await materializeControlsFromTenantControls(client, tenant_id, iso);
     const createdSoARows = await bootstrapSoA(client, tenant_id, iso);
     for (const row of createdSoARows) {
       await insertSoAChangeLog(client, {
@@ -525,11 +428,10 @@ router.post('/:tenant_id/initialize', auth, async (req, res) => {
       tenant_id,
       iso,
       tenant_controls_count: preflightBefore.tenant_controls_count,
-      legacy_controls_before: legacyControlsBefore,
-      legacy_controls_created: legacyControlsCreated,
+      canonical_controls_before: preflightBefore.tenant_controls_count,
       soa_rows_created: createdSoARows.length,
       soa_rows_total: soaRowsTotal,
-      message: legacyControlsCreated === 0 && createdSoARows.length === 0 && soaRowsTotal === soaRowsBefore
+      message: createdSoARows.length === 0 && soaRowsTotal === soaRowsBefore
         ? 'SoA ya inicializado'
         : 'SoA inicializado desde controles existentes'
     });
@@ -765,9 +667,10 @@ router.put('/:tenant_control_id', auth, async (req, res) => {
 
     const controlResult = await client.query(
       `
-      SELECT id, tenant_id, iso_code
-      FROM controls
-      WHERE id = $1
+      SELECT tc.id, tc.tenant_id, cc.iso AS iso_code
+      FROM tenant_controls tc
+      JOIN controls_catalog cc ON cc.id = tc.control_id
+      WHERE tc.id = $1
       LIMIT 1
       `,
       [tenant_control_id]

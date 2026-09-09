@@ -1,0 +1,23 @@
+{
+  "standard_code": "ISO9001",
+  "version_code": "2015",
+  "display_name": "ISO 9001:2015",
+  "publication_status": "published",
+  "certifiable": true,
+  "replaces_version": null,
+  "effective_from": "2015-09-15",
+  "transition_until": null,
+  "source_policy": "copyright_safe_summary",
+  "notes": "Version certificable vigente para gestion de calidad en esta fase.",
+  "is_active": true,
+  "standard": {
+    "standard_code": "ISO9001",
+    "display_name": "ISO 9001 Quality management",
+    "family": "quality_management",
+    "description": "Sistema de gestion de calidad para procesos, cliente, proveedores, no conformidades y mejora.",
+    "is_active": true
+  },
+  "source_audit": "artifacts/db-n05/qa-catalog-audit/DB-N05_REFERENCE_EXPORT_RESULT.txt",
+  "source_sha256": "5ebe8c04225bbe19a0f5b4a56b648af8fc43019f0195b8854384a4bbbf9c3ab0",
+  "status": "approved_for_loader"
+}

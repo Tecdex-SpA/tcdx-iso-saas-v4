@@ -1,0 +1,23 @@
+{
+  "standard_code": "ISO9001",
+  "version_code": "2026_FDIS",
+  "display_name": "ISO 9001:2026 FDIS - preparacion de transicion",
+  "publication_status": "transition_prep",
+  "certifiable": false,
+  "replaces_version": "2015",
+  "effective_from": null,
+  "transition_until": null,
+  "source_policy": "copyright_safe_summary",
+  "notes": "Version FDIS/draft para preparacion. No reemplaza ISO 9001:2015 ni habilita certificacion final.",
+  "is_active": true,
+  "standard": {
+    "standard_code": "ISO9001",
+    "display_name": "ISO 9001 Quality management",
+    "family": "quality_management",
+    "description": "Sistema de gestion de calidad para procesos, cliente, proveedores, no conformidades y mejora.",
+    "is_active": true
+  },
+  "source_audit": "artifacts/db-n05/qa-catalog-audit/DB-N05_REFERENCE_EXPORT_RESULT.txt",
+  "source_sha256": "5ebe8c04225bbe19a0f5b4a56b648af8fc43019f0195b8854384a4bbbf9c3ab0",
+  "status": "transition_only"
+}

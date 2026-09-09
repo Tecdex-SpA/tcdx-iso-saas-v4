@@ -3,6 +3,11 @@ const fs = require('fs');
 const path = require('path');
 const pool = require('../config/db');
 const {
+  runWithDbTenantContext,
+  withPlatformTransaction,
+  withTenantTransaction,
+} = require('../utils/dbTenantContext');
+const {
   getJwtSecret,
   getJwtSignOptions,
 } = require('../config/security');
@@ -261,9 +266,10 @@ async function resolveEvidenceContext(client, evidenceId) {
       ai.raw_response_json AS current_ai_raw_response_json
     FROM evidences e
     LEFT JOIN tenant_controls tc
-      ON tc.id = e.tenant_control_id
+      ON tc.tenant_id = e.tenant_id
+     AND tc.id = e.tenant_control_id
     LEFT JOIN controls_catalog cc
-      ON cc.id = COALESCE(e.control_id, tc.control_id)
+      ON cc.id = tc.control_id
     LEFT JOIN tenant_operations op
       ON op.id = tc.operation_id
     LEFT JOIN vw_evidence_current_extracts ext
@@ -1250,188 +1256,193 @@ async function claimNextJob(client, workerName) {
   return result.rowCount > 0 ? result.rows[0] : null;
 }
 
+async function claimNextJobWithPlatformContext(workerName) {
+  return withPlatformTransaction(
+    pool,
+    { role: 'platform_worker', reason: 'evidence_ai_job_claim' },
+    (client) => claimNextJob(client, workerName)
+  );
+}
+
 async function processSingleEvidenceAiJob(workerName = 'evidence-ai-worker') {
-  const client = await pool.connect();
-  let job = null;
+  const job = await claimNextJobWithPlatformContext(workerName);
 
-  try {
-    await client.query('BEGIN');
+  if (!job) {
+    return null;
+  }
 
-    job = await claimNextJob(client, workerName);
+  return runWithDbTenantContext({ tenantId: job.tenant_id, role: 'evidence_ai_worker' }, async () => {
+    const client = await pool.connect();
 
-    if (!job) {
-      await client.query('COMMIT');
-      return null;
-    }
+    try {
+      await client.query('BEGIN');
 
-    let context = await resolveEvidenceContext(client, job.evidence_id);
+      let context = await resolveEvidenceContext(client, job.evidence_id);
 
-    if (!context) {
-      throw new Error(`No existe evidencia ${job.evidence_id}`);
-    }
+      if (!context) {
+        throw new Error(`No existe evidencia ${job.evidence_id}`);
+      }
 
-    let extractionRow = null;
-    let assessmentRow = null;
-    let chunkCount = 0;
+      let extractionRow = null;
+      let assessmentRow = null;
+      let chunkCount = 0;
 
-    if (job.job_type === 'extract_document') {
-      const payload = await buildEvidencePayload(context, job.job_type, safeObject(job.payload));
-      const aiResponse = await callOwnAi(payload);
+      if (job.job_type === 'extract_document') {
+        const payload = await buildEvidencePayload(context, job.job_type, safeObject(job.payload));
+        const aiResponse = await callOwnAi(payload);
 
-      extractionRow = await persistCurrentExtraction(
-        client,
-        context,
-        safeObject(aiResponse.extraction)
-      );
-
-      await enqueueEvidenceAiJob(
-        client,
-        context.tenant_id,
-        context.id,
-        'analyze_evidence',
-        { source_job_id: job.id, source: 'extract_document' },
-        90,
-        job.created_by || null
-      );
-
-      await markJobCompleted(client, job.id, {
-        extraction_id: extractionRow?.id || null,
-        assessment_id: null,
-        chunk_count: 0,
-        own_ai_response_meta: {
-          ok: true,
-          source: 'own_ai_140'
-        }
-      });
-    } else if (job.job_type === 'analyze_evidence') {
-      const payload = await buildEvidencePayload(context, job.job_type, safeObject(job.payload));
-      const aiResponse = await callOwnAi(payload);
-
-      if (!context.current_extract_id && safeObject(aiResponse.extraction).extraction_status) {
         extractionRow = await persistCurrentExtraction(
           client,
           context,
           safeObject(aiResponse.extraction)
         );
+
+        await enqueueEvidenceAiJob(
+          client,
+          context.tenant_id,
+          context.id,
+          'analyze_evidence',
+          { source_job_id: job.id, source: 'extract_document' },
+          90,
+          job.created_by || null
+        );
+
+        await markJobCompleted(client, job.id, {
+          extraction_id: extractionRow?.id || null,
+          assessment_id: null,
+          chunk_count: 0,
+          own_ai_response_meta: {
+            ok: true,
+            source: 'own_ai_140'
+          }
+        });
+      } else if (job.job_type === 'analyze_evidence') {
+        const payload = await buildEvidencePayload(context, job.job_type, safeObject(job.payload));
+        const aiResponse = await callOwnAi(payload);
+
+        if (!context.current_extract_id && safeObject(aiResponse.extraction).extraction_status) {
+          extractionRow = await persistCurrentExtraction(
+            client,
+            context,
+            safeObject(aiResponse.extraction)
+          );
+          context = await resolveEvidenceContext(client, context.id);
+        }
+
+        assessmentRow = await persistCurrentAssessment(
+          client,
+          context,
+          safeObject(aiResponse.assessment)
+        );
+
         context = await resolveEvidenceContext(client, context.id);
+
+        await pushLifecycleEvidenceEvent(
+          client,
+          context,
+          assessmentRow,
+          job.job_type
+        );
+
+        await enqueueEvidenceAiJob(
+          client,
+          context.tenant_id,
+          context.id,
+          'build_chunks',
+          { source_job_id: job.id, source: 'analyze_evidence' },
+          70,
+          job.created_by || null
+        );
+
+        await markJobCompleted(client, job.id, {
+          extraction_id: context.current_extract_id || extractionRow?.id || null,
+          assessment_id: assessmentRow?.id || null,
+          chunk_count: 0,
+          own_ai_response_meta: {
+            ok: true,
+            source: 'own_ai_140'
+          }
+        });
+      } else if (job.job_type === 'build_chunks') {
+        chunkCount = await replaceKnowledgeChunks(
+          client,
+          context,
+          [],
+          { id: context.current_assessment_id, validity_result: context.current_validity_result }
+        );
+
+        await enqueueEvidenceAiJob(
+          client,
+          context.tenant_id,
+          context.id,
+          'push_learning',
+          { source_job_id: job.id, source: 'build_chunks' },
+          60,
+          job.created_by || null
+        );
+
+        await markJobCompleted(client, job.id, {
+          extraction_id: context.current_extract_id || null,
+          assessment_id: context.current_assessment_id || null,
+          chunk_count: chunkCount,
+          own_ai_response_meta: {
+            ok: true,
+            source: 'local_chunk_builder'
+          }
+        });
+      } else if (job.job_type === 'push_learning') {
+        const countResult = await client.query(
+          `
+          SELECT COUNT(*)::int AS total
+          FROM evidence_knowledge_chunks
+          WHERE evidence_id = $1
+          `,
+          [context.id]
+        );
+
+        chunkCount = Number(countResult.rows[0]?.total || 0);
+
+        await markJobCompleted(client, job.id, {
+          extraction_id: context.current_extract_id || null,
+          assessment_id: context.current_assessment_id || null,
+          chunk_count: chunkCount,
+          own_ai_response_meta: {
+            ok: true,
+            source: 'learning_ready'
+          }
+        });
+      } else {
+        throw new Error(`job_type no soportado: ${job.job_type}`);
       }
 
-      assessmentRow = await persistCurrentAssessment(
-        client,
-        context,
-        safeObject(aiResponse.assessment)
-      );
+      await client.query('COMMIT');
 
-      context = await resolveEvidenceContext(client, context.id);
-
-      await pushLifecycleEvidenceEvent(
-        client,
-        context,
-        assessmentRow,
-        job.job_type
-      );
-
-      await enqueueEvidenceAiJob(
-        client,
-        context.tenant_id,
-        context.id,
-        'build_chunks',
-        { source_job_id: job.id, source: 'analyze_evidence' },
-        70,
-        job.created_by || null
-      );
-
-      await markJobCompleted(client, job.id, {
-        extraction_id: context.current_extract_id || extractionRow?.id || null,
+      return {
+        job_id: job.id,
+        evidence_id: job.evidence_id,
+        job_type: job.job_type,
+        extraction_id: extractionRow?.id || null,
         assessment_id: assessmentRow?.id || null,
-        chunk_count: 0,
-        own_ai_response_meta: {
-          ok: true,
-          source: 'own_ai_140'
-        }
-      });
-    } else if (job.job_type === 'build_chunks') {
-      chunkCount = await replaceKnowledgeChunks(
-        client,
-        context,
-        [],
-        { id: context.current_assessment_id, validity_result: context.current_validity_result }
-      );
-
-      await enqueueEvidenceAiJob(
-        client,
-        context.tenant_id,
-        context.id,
-        'push_learning',
-        { source_job_id: job.id, source: 'build_chunks' },
-        60,
-        job.created_by || null
-      );
-
-      await markJobCompleted(client, job.id, {
-        extraction_id: context.current_extract_id || null,
-        assessment_id: context.current_assessment_id || null,
         chunk_count: chunkCount,
-        own_ai_response_meta: {
-          ok: true,
-          source: 'local_chunk_builder'
-        }
-      });
-    } else if (job.job_type === 'push_learning') {
-      const countResult = await client.query(
-        `
-        SELECT COUNT(*)::int AS total
-        FROM evidence_knowledge_chunks
-        WHERE evidence_id = $1
-        `,
-        [context.id]
-      );
+      };
+    } catch (err) {
+      await client.query('ROLLBACK');
 
-      chunkCount = Number(countResult.rows[0]?.total || 0);
-
-      await markJobCompleted(client, job.id, {
-        extraction_id: context.current_extract_id || null,
-        assessment_id: context.current_assessment_id || null,
-        chunk_count: chunkCount,
-        own_ai_response_meta: {
-          ok: true,
-          source: 'learning_ready'
-        }
-      });
-    } else {
-      throw new Error(`job_type no soportado: ${job.job_type}`);
-    }
-
-    await client.query('COMMIT');
-
-    return {
-      job_id: job.id,
-      evidence_id: job.evidence_id,
-      job_type: job.job_type,
-      extraction_id: extractionRow?.id || null,
-      assessment_id: assessmentRow?.id || null,
-      chunk_count: chunkCount
-    };
-  } catch (err) {
-    await client.query('ROLLBACK');
-
-    try {
-      if (job?.id) {
-        const recoveryClient = await pool.connect();
-        try {
-          await markJobFailed(recoveryClient, job, err);
-        } finally {
-          recoveryClient.release();
-        }
+      try {
+        await withTenantTransaction(
+          pool,
+          { tenantId: job.tenant_id, role: 'evidence_ai_worker_recovery' },
+          (recoveryClient) => markJobFailed(recoveryClient, job, err)
+        );
+      } catch (recoveryErr) {
+        console.error('ERROR RECOVERING FAILED EVIDENCE AI JOB:', stripNullBytes(recoveryErr.message));
       }
-    } catch (recoveryErr) {
-      console.error('ERROR RECOVERING FAILED EVIDENCE AI JOB:', stripNullBytes(recoveryErr.message));
-    }
 
-    throw err;
-  } finally {
-    client.release();
-  }
+      throw err;
+    } finally {
+      client.release();
+    }
+  });
 }
 
 async function processEvidenceAiJobs(limit = 1, workerName = 'evidence-ai-worker') {

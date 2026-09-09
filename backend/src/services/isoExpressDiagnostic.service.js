@@ -368,10 +368,12 @@ async function fetchControlRows(tenantId, standardCode, versionCode) {
     WITH latest_health AS (
       SELECT DISTINCT ON (tenant_control_id)
         tenant_control_id,
-        health_status,
-        health_score
-      FROM control_health_scores
-      ORDER BY tenant_control_id, calculated_at DESC NULLS LAST
+        effective_health_status AS health_status,
+        effective_health_score AS health_score
+      FROM public.v_iso_control_effective_health
+      WHERE tenant_id = $1::uuid
+      ORDER BY tenant_control_id,
+        NULLIF(health_trace_json->>'effective_at', '')::timestamptz DESC NULLS LAST
     ),
     evidence_stats AS (
       SELECT
@@ -389,13 +391,7 @@ async function fetchControlRows(tenantId, standardCode, versionCode) {
       FROM tenant_controls tc
       LEFT JOIN evidences e
         ON e.tenant_id = tc.tenant_id
-       AND (
-          e.tenant_control_id = tc.id
-          OR (
-            e.tenant_control_id IS NULL
-            AND e.control_id = tc.control_id
-          )
-       )
+       AND e.tenant_control_id = tc.id
        AND COALESCE(e.status, '') <> 'deleted'
       WHERE tc.tenant_id = $1::uuid
       GROUP BY tc.id

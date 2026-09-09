@@ -179,18 +179,10 @@ async function getTenantControlContext(tenantId, tenantControlId) {
       cc.iso,
       cc.clause,
       cc.category,
-      cc.description AS control_description,
-      c.id AS legacy_control_id
+      cc.description AS control_description
     FROM tenant_controls tc
     JOIN controls_catalog cc
       ON cc.id = tc.control_id
-    LEFT JOIN LATERAL (
-      SELECT c1.id
-      FROM controls c1
-      WHERE c1.catalog_control_id = tc.control_id
-      ORDER BY c1.id ASC
-      LIMIT 1
-    ) c ON TRUE
     WHERE tc.tenant_id = $1::uuid
       AND tc.id = $2::uuid
     LIMIT 1
@@ -348,8 +340,8 @@ async function buildConversionPreview(user, recommendationId, payload = {}) {
         !String(suggestion.suggestion_type || '').includes('finding')) {
       blockedReasons.push('Para crear hallazgo se requiere prioridad alta/critica o sugerencia orientada a hallazgo.');
     }
-    if (!tenantControl?.legacy_control_id) {
-      blockedReasons.push('Para crear hallazgo se requiere control operativo con equivalente legacy.');
+    if (!tenantControl?.tenant_control_id) {
+      blockedReasons.push('Para crear hallazgo se requiere control operativo canonico.');
     }
   }
 

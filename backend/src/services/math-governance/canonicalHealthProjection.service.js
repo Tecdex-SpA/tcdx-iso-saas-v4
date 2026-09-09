@@ -8,8 +8,8 @@ const GLOBAL_HEALTH_AUTHORITY = 'official_formula_versions+calculation_runs+calc
 const GLOBAL_SCORE_FORMULA = 'F5_5_GRC_HEALTH';
 const GLOBAL_SCORE_VERSION = 2;
 const MODEL_VERSION = 'canonical-health-projection-v1';
-const LEGACY_KPI_HLT_ROLE = 'COMPATIBILITY_SOURCE_COMPONENT';
 const EVIDENCE_COVERAGE_MAPPING = 'EVIDENCE-FRESH=freshness; COVERAGE=compliance_coverage; EVIDENCE-COVERAGE=compatibility_alias_only';
+const OFFICIAL_PROJECTION_ROLE = 'READ_NORMALIZE_EXPLAIN_PRESENT_ONLY';
 const DEFAULT_MINIMUM_COVERAGE = FUNCTIONAL_INDICATORS.find((item) => item.functional_code === 'GRC-HEALTH')?.minimum_coverage || HEALTH_DEFINITIONS.grc_health.minimum_coverage || 0.8;
 
 const COMPONENTS = Object.freeze([
@@ -49,13 +49,47 @@ function normalizeState(value) {
   return 'UNKNOWN';
 }
 
-function classifyOfficialComponent(spec, source = null) {
-  const numericValue = normalizePercent(source?.value, spec.key);
-  const state = normalizeState(source?.state || source?.status || source?.run_status);
-  if (numericValue !== null && state === 'AVAILABLE') {
-    return { ...spec, classification: 'AVAILABLE', value: numericValue, source };
+function intervalToMs(value) {
+  if (!value) return null;
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+  if (typeof value === 'object') {
+    const days = Number(value.days || 0);
+    const hours = Number(value.hours || 0);
+    const minutes = Number(value.minutes || 0);
+    const seconds = Number(value.seconds || 0);
+    const milliseconds = Number(value.milliseconds || 0);
+    const total = (((days * 24 + hours) * 60 + minutes) * 60 + seconds) * 1000 + milliseconds;
+    return Number.isFinite(total) && total > 0 ? total : null;
   }
-  if (numericValue !== null && ['UNKNOWN', 'MISSING'].includes(state)) {
+  const text = String(value).trim();
+  const match = text.match(/^(\d+(?:\.\d+)?)\s*(milliseconds?|seconds?|minutes?|hours?|days?)$/i);
+  if (!match) return null;
+  const amount = Number(match[1]);
+  const unit = match[2].toLowerCase();
+  const multiplier = unit.startsWith('millisecond') ? 1
+    : unit.startsWith('second') ? 1000
+      : unit.startsWith('minute') ? 60000
+        : unit.startsWith('hour') ? 3600000
+          : 86400000;
+  return Number.isFinite(amount) ? amount * multiplier : null;
+}
+
+function isSourceStale(source = null, asOf = new Date()) {
+  const staleAfterMs = intervalToMs(source?.stale_after_ms ?? source?.stale_after);
+  if (!staleAfterMs) return false;
+  const effectiveAt = source?.effective_at || source?.updated_at || source?.period?.as_of || source?.period?.end || null;
+  if (!effectiveAt) return false;
+  const timestamp = new Date(effectiveAt).getTime();
+  const asOfMs = asOf instanceof Date ? asOf.getTime() : new Date(asOf).getTime();
+  if (!Number.isFinite(timestamp) || !Number.isFinite(asOfMs)) return false;
+  return timestamp + staleAfterMs < asOfMs;
+}
+
+function classifyOfficialComponent(spec, source = null, options = {}) {
+  const numericValue = normalizePercent(source?.value, spec.key);
+  let state = normalizeState(source?.state || source?.status || source?.run_status);
+  if (state === 'AVAILABLE' && isSourceStale(source, options.asOf)) state = 'STALE';
+  if (numericValue !== null && state === 'AVAILABLE') {
     return { ...spec, classification: 'AVAILABLE', value: numericValue, source };
   }
   if (!source) {
@@ -158,6 +192,53 @@ async function loadGovernedPolicy(client, tenantId) {
   };
 }
 
+async function loadComponentPolicies(client, tenantId) {
+  if (!(await relationExists(client, 'metric_calculation_policies'))) return new Map();
+  const result = await client.query(
+    `SELECT DISTINCT ON (metric_key, formula_code)
+       metric_key,
+       formula_code,
+       stale_after,
+       metadata,
+       version_number,
+       published_at,
+       created_at
+     FROM metric_calculation_policies
+     WHERE status IN ('published','active')
+       AND (tenant_id = $1::uuid OR tenant_id IS NULL)
+       AND (
+         metric_key = ANY($2::text[])
+         OR formula_code = ANY($3::text[])
+       )
+     ORDER BY metric_key, formula_code, tenant_id DESC NULLS LAST, version_number DESC, published_at DESC NULLS LAST, created_at DESC`,
+    [
+      tenantId,
+      COMPONENTS.map((item) => item.metric_code).concat(['GRC-HEALTH']),
+      COMPONENTS.map((item) => item.formula_code).concat([GLOBAL_SCORE_FORMULA]),
+    ],
+  );
+  const policies = new Map();
+  for (const row of result.rows) {
+    const value = {
+      stale_after: row.stale_after || null,
+      stale_after_ms: intervalToMs(row.stale_after),
+      metadata: row.metadata || {},
+    };
+    if (row.metric_key) policies.set(`metric:${row.metric_key}`, value);
+    if (row.formula_code) policies.set(`formula:${row.formula_code}`, value);
+  }
+  return policies;
+}
+
+function attachPolicy(source, policy) {
+  if (!source || !policy) return source;
+  return {
+    ...source,
+    stale_after: policy.stale_after,
+    stale_after_ms: policy.stale_after_ms,
+  };
+}
+
 async function loadLatestRuns(client, tenantId) {
   if (!(await relationExists(client, 'calculation_runs')) || !(await relationExists(client, 'calculation_outputs'))) return new Map();
   const result = await client.query(
@@ -185,6 +266,7 @@ async function loadLatestRuns(client, tenantId) {
     value: row.output_value?.value ?? row.output_value ?? null,
     state: row.run_status,
     period: { start: row.period_start || null, end: row.period_end || null, as_of: row.period_end || row.completed_at || row.started_at || null },
+    effective_at: row.period_end || row.completed_at || row.started_at || row.period_start || null,
     updated_at: row.completed_at || row.started_at || row.period_end || null,
     machine_reason: row.metadata?.machine_reason || row.output_metadata?.machine_reason || row.output_value?.machine_reason || null,
     payload: row.output_value || null,
@@ -217,6 +299,7 @@ async function loadLatestSnapshots(client, tenantId) {
       coverage: payload.coverage ?? null,
       trust: payload.trust || null,
       period: payload.period || { as_of: row.effective_at || null },
+      effective_at: row.effective_at || null,
       updated_at: row.published_at || row.created_at || null,
       machine_reason: payload.machine_reason || payload.data_requirements?.reason || resultPayload.machine_reason || null,
       payload,
@@ -224,25 +307,38 @@ async function loadLatestSnapshots(client, tenantId) {
   }));
 }
 
-async function loadLegacyComponents(client, tenantId) {
-  if (!(await relationExists(client, 'v_latest_health_kpi_snapshots'))) return [];
-  const result = await client.query(
-    `SELECT kpi_key, kpi_name, value, unit, status, calculated_at
-     FROM v_latest_health_kpi_snapshots
-     WHERE tenant_id = $1::uuid
-       AND kpi_key LIKE 'KPI-HLT-%'
-     ORDER BY kpi_key`,
-    [tenantId],
-  ).catch(() => ({ rows: [] }));
-  return result.rows.map((row) => ({
-    code: row.kpi_key,
-    name: row.kpi_name,
-    value: normalizePercent(row.value),
-    unit: row.unit || '%',
-    status: row.status || null,
-    source_role: LEGACY_KPI_HLT_ROLE,
-    updated_at: row.calculated_at || null,
-  }));
+function selectOfficialGlobalHealth({ globalSource = null, componentProjection }) {
+  const sourceClassification = classifyOfficialComponent(
+    { key: 'global', label: 'Health GRC oficial', weight: 1, formula_code: GLOBAL_SCORE_FORMULA, metric_code: 'GRC-HEALTH' },
+    globalSource,
+  );
+  const payload = globalSource?.payload || {};
+  const details = payload.details || payload.health || payload.result?.details || {};
+  const sourceCoverage = Number(details.coverage ?? payload.coverage ?? globalSource?.coverage);
+  const coverage = Number.isFinite(sourceCoverage) ? sourceCoverage : componentProjection.coverage;
+  const sourceMinimumCoverage = Number(details.minimum_coverage ?? details.threshold ?? payload.minimum_coverage ?? componentProjection.minimum_coverage);
+  const minimumCoverage = Number.isFinite(sourceMinimumCoverage) ? sourceMinimumCoverage : componentProjection.minimum_coverage;
+  const measured = sourceClassification.classification === 'AVAILABLE' && coverage >= minimumCoverage;
+  const score = measured ? sourceClassification.value : null;
+  const status = sourceClassification.classification === 'AVAILABLE'
+    ? (measured ? 'measured' : 'insufficient_coverage')
+    : 'not_calculable';
+
+  return {
+    ...componentProjection,
+    score,
+    global_score: score,
+    published_score: measured ? score : null,
+    score_publicable: measured,
+    global_status: status,
+    status,
+    label: measured ? 'Health medido' : status === 'insufficient_coverage' ? 'Cobertura insuficiente' : 'No calculable',
+    coverage,
+    confidence: coverage,
+    minimum_coverage: minimumCoverage,
+    official_global_source: globalSource || null,
+    official_global_classification: sourceClassification.classification,
+  };
 }
 
 async function getCanonicalHealthProjection({ user } = {}) {
@@ -255,14 +351,15 @@ async function getCanonicalHealthProjection({ user } = {}) {
   }
   const client = await pool.connect();
   try {
-    const [policy, runs, snapshots, compatibilityComponents] = await Promise.all([
+    const [policy, componentPolicies, runs, snapshots] = await Promise.all([
       loadGovernedPolicy(client, tenantId),
+      loadComponentPolicies(client, tenantId),
       loadLatestRuns(client, tenantId),
       loadLatestSnapshots(client, tenantId),
-      loadLegacyComponents(client, tenantId),
     ]);
     const officialComponents = COMPONENTS.map((spec) => {
-      const source = snapshots.get(spec.metric_code) || runs.get(spec.formula_code) || null;
+      const policySource = componentPolicies.get(`metric:${spec.metric_code}`) || componentPolicies.get(`formula:${spec.formula_code}`) || null;
+      const source = attachPolicy(snapshots.get(spec.metric_code) || runs.get(spec.formula_code) || null, policySource);
       return classifyOfficialComponent(spec, source);
     });
     const latest = officialComponents
@@ -271,12 +368,15 @@ async function getCanonicalHealthProjection({ user } = {}) {
       .sort()
       .pop() || null;
     const period = officialComponents.find((component) => component.source?.period)?.source?.period || null;
-    const health = projectHealthFromComponents({
+    const componentProjection = projectHealthFromComponents({
       components: officialComponents,
       minimumCoverage: policy.minimum_coverage,
       period,
       updatedAt: latest,
     });
+    const globalPolicy = componentPolicies.get('metric:GRC-HEALTH') || componentPolicies.get(`formula:${GLOBAL_SCORE_FORMULA}`) || null;
+    const globalSource = attachPolicy(snapshots.get('GRC-HEALTH') || runs.get(GLOBAL_SCORE_FORMULA) || null, globalPolicy);
+    const health = selectOfficialGlobalHealth({ globalSource, componentProjection });
     return {
       model_version: MODEL_VERSION,
       ...health,
@@ -289,9 +389,9 @@ async function getCanonicalHealthProjection({ user } = {}) {
         coverage_policy_source: policy.source,
         data_trust_accuracy_policy: 'accuracy remains NOT_CONFIGURED until a real measurable source or canonical binding exists',
         evidence_coverage_mapping: EVIDENCE_COVERAGE_MAPPING,
-        legacy_kpi_hlt_role: LEGACY_KPI_HLT_ROLE,
+        projection_role: OFFICIAL_PROJECTION_ROLE,
       },
-      compatibility_components: compatibilityComponents,
+      compatibility_components: [],
       alerts: {
         missing_components: health.missing_components.length,
         insufficient_coverage: health.global_status === 'insufficient_coverage' ? 1 : 0,
@@ -310,9 +410,12 @@ module.exports = {
   GLOBAL_HEALTH_AUTHORITY,
   GLOBAL_SCORE_FORMULA,
   GLOBAL_SCORE_VERSION,
-  LEGACY_KPI_HLT_ROLE,
   MODEL_VERSION,
+  OFFICIAL_PROJECTION_ROLE,
   classifyOfficialComponent,
   getCanonicalHealthProjection,
+  isSourceStale,
+  loadComponentPolicies,
   projectHealthFromComponents,
+  selectOfficialGlobalHealth,
 };

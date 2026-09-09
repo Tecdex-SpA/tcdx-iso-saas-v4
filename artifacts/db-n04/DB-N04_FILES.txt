@@ -1,0 +1,64 @@
+DB-N04 FILES
+Date: 2026-09-07
+Repository: /Users/andresbarouh/repos/tcdx-iso-saas-v4
+
+DB-N04 ONLY
+- artifacts/db-n04/initial-git-state.txt
+- artifacts/db-n04/DB_ACCESS_CONTEXT_MATRIX.md
+- artifacts/db-n04/LEGACY_OBJECT_MATRIX.md
+- artifacts/db-n04/DB-N04_FILES.txt
+- database/migrations/20260907_dbn04_runtime_tenant_and_legacy_cleanup.sql
+- scripts/normalization/db-n04-readonly-preflight.sql
+- scripts/normalization/db-n04-runtime-tenant-cleanup.postgres.test.js
+- scripts/normalization/apply-db-n04-runtime-tenant-cleanup-migration.test.js
+- docs/handoffs/DB-N04_RUNTIME_TENANT_AND_LEGACY_CLEANUP.md
+
+SHARED WITH DB-N01
+- docs/codex/CURRENT_STATE.md
+- docs/codex/WORK_QUEUE.md
+- docs/codex/DECISIONS.md
+- docs/codex/CONTRACTS_REGISTRY.md
+- docs/codex/ARCHITECTURE_MAP.md
+
+SHARED WITH DB-N02
+- docs/codex/CURRENT_STATE.md
+- docs/codex/WORK_QUEUE.md
+- docs/codex/DECISIONS.md
+- docs/codex/CONTRACTS_REGISTRY.md
+- docs/codex/ARCHITECTURE_MAP.md
+
+SHARED WITH DB-N03
+- backend/src/utils/dbTenantContext.js
+- backend/src/utils/dbTenantContext.test.js
+- docs/codex/CURRENT_STATE.md
+- docs/codex/WORK_QUEUE.md
+- docs/codex/DECISIONS.md
+- docs/codex/CONTRACTS_REGISTRY.md
+- docs/codex/ARCHITECTURE_MAP.md
+
+DB-N04 RUNTIME WIRING
+- backend/src/config/db.js
+- backend/src/app.js
+- backend/src/middleware/auth.js
+- backend/src/services/grc/grcSchedulerRunner.js
+- backend/src/services/grc/phase2SchedulerRunner.js
+- backend/src/services/evidence-ai.service.js
+
+PRESERVED PREEXISTING DB-N01/DB-N02/DB-N03 FILES
+- artifacts/db-n02/*
+- artifacts/db-n03/*
+- backend/src/routes/controlIdentityRoutes.test.js
+- backend/src/utils/tenantControlIdentity.js
+- backend/src/utils/tenantControlIdentity.test.js
+- database/migrations/20260904_dbn01_control_identity_normalization.sql
+- database/migrations/20260904_dbn02_health_metrics_lineage_normalization.sql
+- database/migrations/20260907_dbn03_multitenant_integrity_rls.sql
+- docs/handoffs/DB-N01_CONTROL_IDENTITY_NORMALIZATION.md
+- docs/handoffs/DB-N02_HEALTH_METRICS_LINEAGE_NORMALIZATION.md
+- docs/handoffs/DB-N03_MULTITENANT_INTEGRITY_RLS.md
+- scripts/normalization/apply-db-n01-control-identity-migration.test.js
+- scripts/normalization/apply-db-n02-health-metrics-lineage-migration.test.js
+- scripts/normalization/apply-db-n03-multitenant-integrity-migration.test.js
+- scripts/normalization/db-n01-control-identity.postgres.test.js
+- scripts/normalization/db-n02-health-metrics-lineage.postgres.test.js
+- scripts/normalization/db-n03-multitenant-integrity.postgres.test.js

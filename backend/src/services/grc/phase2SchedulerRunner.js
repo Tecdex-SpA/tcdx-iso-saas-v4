@@ -1,6 +1,10 @@
 const pool = require('../../config/db');
 const { observe } = require('./grcObservability');
 const { createPhase2Service } = require('./phase2.service');
+const {
+  runWithDbTenantContext,
+  runWithPlatformDbContext,
+} = require('../../utils/dbTenantContext');
 
 const defaultService = createPhase2Service(pool);
 let running = false;
@@ -69,17 +73,20 @@ async function runDueConnectors({
   running = true;
   try {
     const normalizedWorkerId = String(workerId || 'phase2-scheduler').replace(/[^A-Za-z0-9._:-]/g, '').slice(0, 80) || 'phase2-scheduler';
-    const due = await database.query(
-      `SELECT i.id,i.tenant_id
-       FROM grc_connector_instances i
-       JOIN tenant_module_settings ms
-         ON ms.tenant_id=i.tenant_id AND ms.module_key='grc_phase2_integrated' AND ms.is_enabled=TRUE
-       WHERE i.status='connected'
-         AND COALESCE((i.schedule->>'enabled')::boolean,FALSE)=TRUE
-         AND i.next_sync_at IS NOT NULL AND i.next_sync_at<=now()
-       ORDER BY i.next_sync_at
-       LIMIT $1`,
-      [Math.max(1, Math.min(Number(limit) || 10, 50))]
+    const due = await runWithPlatformDbContext(
+      { role: 'platform_scheduler', reason: 'phase2_due_connector_discovery' },
+      () => database.query(
+        `SELECT i.id,i.tenant_id
+         FROM grc_connector_instances i
+         JOIN tenant_module_settings ms
+           ON ms.tenant_id=i.tenant_id AND ms.module_key='grc_phase2_integrated' AND ms.is_enabled=TRUE
+         WHERE i.status='connected'
+           AND COALESCE((i.schedule->>'enabled')::boolean,FALSE)=TRUE
+           AND i.next_sync_at IS NOT NULL AND i.next_sync_at<=now()
+         ORDER BY i.next_sync_at
+         LIMIT $1`,
+        [Math.max(1, Math.min(Number(limit) || 10, 50))]
+      )
     );
     if (!due.rows.length) return { status: 'skipped', reason: 'no_due_connectors', processed: 0, results: [] };
     const results = [];
@@ -87,17 +94,23 @@ async function runDueConnectors({
       const bucket = new Date(clock()).toISOString().slice(0, 16);
       const idempotencyKey = `${normalizedWorkerId}:${connector.id}:${bucket}`;
       try {
-        const result = await connectorService.runConnector({
-          tenantId: connector.tenant_id,
-          userId: null,
-          role: workerRole,
-          correlationId: idempotencyKey,
-          id: connector.id,
-          idempotencyKey,
-        });
-        const status = classifyConnectorRun(result);
-        const errorCode = result?.run?.error_code || null;
-        await scheduleNext(database, connector, nextIntervalMinutes(status, result, clock()), status, errorCode);
+        const { status, errorCode } = await runWithDbTenantContext(
+          { tenantId: connector.tenant_id, role: 'tenant_scheduler' },
+          async () => {
+            const connectorResult = await connectorService.runConnector({
+              tenantId: connector.tenant_id,
+              userId: null,
+              role: workerRole,
+              correlationId: idempotencyKey,
+              id: connector.id,
+              idempotencyKey,
+            });
+            const connectorStatus = classifyConnectorRun(connectorResult);
+            const connectorErrorCode = connectorResult?.run?.error_code || null;
+            await scheduleNext(database, connector, nextIntervalMinutes(connectorStatus, connectorResult, clock()), connectorStatus, connectorErrorCode);
+            return { result: connectorResult, status: connectorStatus, errorCode: connectorErrorCode };
+          }
+        );
         observe('phase2_scheduler_connector', {
           tenantId: connector.tenant_id,
           correlationId: idempotencyKey,
@@ -110,7 +123,10 @@ async function runDueConnectors({
       } catch (error) {
         const status = classifyConnectorError(error);
         const errorCode = error?.code || 'PHASE2_CONNECTOR_RUN_FAILED';
-        await scheduleNext(database, connector, nextIntervalMinutes(status, null, clock()), status, errorCode);
+        await runWithDbTenantContext(
+          { tenantId: connector.tenant_id, role: 'tenant_scheduler' },
+          () => scheduleNext(database, connector, nextIntervalMinutes(status, null, clock()), status, errorCode)
+        );
         observe('phase2_scheduler_connector', {
           tenantId: connector.tenant_id,
           correlationId: idempotencyKey,

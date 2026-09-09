@@ -17,6 +17,7 @@ const {
 } = require('../services/evidence-ai.service')
 const aiContextBuilder = require('../services/aiContextBuilder.service')
 const { runOperationalAiReview } = require('../services/aiOperationalReview.service')
+const { resolveTenantControl } = require('../utils/tenantControlIdentity')
 
 const AI_RECOMMENDATION_THRESHOLD = Number(
   process.env.EVIDENCE_AI_RECOMMENDATION_THRESHOLD ||
@@ -237,11 +238,6 @@ function buildAiRecommendationPayload(row, acceptancePct) {
 async function refreshHealthForTenant(client, tenantId) {
   try {
     await client.query(
-      `SELECT * FROM refresh_control_health_scores_v2_1($1::uuid)`,
-      [tenantId]
-    )
-
-    await client.query(
       `SELECT * FROM refresh_kpi_health_snapshots($1::uuid)`,
       [tenantId]
     )
@@ -262,55 +258,6 @@ const getEvidenceById = async (db, id) => {
   )
 }
 
-// =============================
-// Resolver control_id a catálogo
-// =============================
-const resolveCatalogControlId = async (db, rawControlId) => {
-  if (!rawControlId) return null
-
-  const catalogCheck = await db.query(
-    `SELECT id FROM controls_catalog WHERE id = $1 LIMIT 1`,
-    [rawControlId]
-  )
-
-  if (catalogCheck.rowCount > 0) {
-    return catalogCheck.rows[0].id
-  }
-
-  const tenantControlCheck = await db.query(
-    `
-    SELECT control_id
-    FROM tenant_controls
-    WHERE id = $1
-    LIMIT 1
-    `,
-    [rawControlId]
-  )
-
-  if (
-    tenantControlCheck.rowCount > 0 &&
-    tenantControlCheck.rows[0].control_id
-  ) {
-    return tenantControlCheck.rows[0].control_id
-  }
-
-  const controlCheck = await db.query(
-    `
-    SELECT catalog_control_id
-    FROM controls
-    WHERE id = $1
-    LIMIT 1
-    `,
-    [rawControlId]
-  )
-
-  if (controlCheck.rowCount > 0 && controlCheck.rows[0].catalog_control_id) {
-    return controlCheck.rows[0].catalog_control_id
-  }
-
-  return null
-}
-
 async function getOperationalTenantControlContext(
   db,
   {
@@ -320,6 +267,69 @@ async function getOperationalTenantControlContext(
     expectedIso = null
   }
 ) {
+  if (!tenantControlId && catalogControlId) {
+    const candidates = await db.query(
+      `
+      SELECT
+        tc.id AS tenant_control_id,
+        tc.tenant_id,
+        tc.control_id AS catalog_control_id,
+        tc.operation_id,
+        tc.status AS tenant_control_status,
+        cc.iso,
+        cc.clause,
+        cc.description AS control_description,
+        cc.category,
+        op.name AS operation_name,
+        op.code AS operation_code,
+        op.operation_type
+      FROM tenant_controls tc
+      JOIN controls_catalog cc
+        ON cc.id = tc.control_id
+       AND cc.is_active = TRUE
+      JOIN tenant_operations op
+        ON op.id = tc.operation_id
+       AND op.tenant_id = tc.tenant_id
+       AND op.is_active = TRUE
+      JOIN tenant_standard_operations tso
+        ON tso.tenant_id = tc.tenant_id
+       AND tso.standard_code = cc.iso
+       AND tso.operation_id = tc.operation_id
+       AND tso.is_active = TRUE
+      JOIN tenant_standards ts
+        ON ts.tenant_id = tc.tenant_id
+       AND ts.standard_code = cc.iso
+       AND ts.is_active = TRUE
+      WHERE tc.tenant_id = $1
+        AND tc.control_id = $2::uuid
+        AND ($3::text IS NULL OR cc.iso = $3::text)
+      ORDER BY
+        op.is_default DESC,
+        op.sort_order ASC,
+        op.name ASC,
+        tc.created_at ASC,
+        tc.id ASC
+      LIMIT 2
+      `,
+      [tenantId, catalogControlId, expectedIso]
+    )
+
+    if (candidates.rowCount > 1) {
+      const error = new Error('control_id es ambiguo para este tenant; envía tenant_control_id')
+      error.code = 'TENANT_CONTROL_ID_AMBIGUOUS'
+      error.details = candidates.rows.map((row) => ({
+        tenant_control_id: row.tenant_control_id,
+        catalog_control_id: row.catalog_control_id,
+        operation_id: row.operation_id,
+        operation_code: row.operation_code || null,
+        operation_name: row.operation_name || null
+      }))
+      throw error
+    }
+
+    return candidates.rows[0] || null
+  }
+
   const result = await db.query(
     `
     SELECT
@@ -481,14 +491,7 @@ async function recommendEligibleEvidences(client, tenantId, filters = {}) {
        AND ts.standard_code = cc.iso
        AND ts.is_active = TRUE
       WHERE tc.tenant_id = e.tenant_id
-        AND (
-          tc.id = e.tenant_control_id
-          OR (
-            e.tenant_control_id IS NULL
-            AND e.control_id IS NOT NULL
-            AND tc.control_id = e.control_id
-          )
-        )
+        AND tc.id = e.tenant_control_id
       ORDER BY
         CASE WHEN tc.id = e.tenant_control_id THEN 0 ELSE 1 END,
         op.is_default DESC,
@@ -659,7 +662,26 @@ const resolveUploadContext = async ({
   }
 
   if (!finalCatalogControlId && controlId) {
-    finalCatalogControlId = await resolveCatalogControlId(db, controlId)
+    const resolvedControl = await resolveTenantControl(db, {
+      tenantId,
+      rawControlId: controlId,
+      isoCode: null,
+      mode: 'strict'
+    })
+
+    if (!resolvedControl) {
+      throw new Error('control_id no resuelve a un control operativo del tenant')
+    }
+
+    if (resolvedControl.ambiguous) {
+      const error = new Error('control_id es ambiguo para este tenant; envía tenant_control_id')
+      error.code = 'TENANT_CONTROL_ID_AMBIGUOUS'
+      error.details = resolvedControl.candidates || []
+      throw error
+    }
+
+    finalTenantControlId = resolvedControl.tenant_control_id_moderno
+    finalCatalogControlId = resolvedControl.catalog_control_id
   }
 
   const operationalContext = await getOperationalTenantControlContext(db, {
@@ -842,6 +864,14 @@ router.post('/upload', auth, evidenceUpload, async (req, res) => {
     })
   } catch (err) {
     await client.query('ROLLBACK')
+    if (err?.code === 'TENANT_CONTROL_ID_AMBIGUOUS') {
+      return res.status(409).json({
+        error: err.message,
+        code: 'TENANT_CONTROL_ID_AMBIGUOUS',
+        candidates: err.details || []
+      })
+    }
+
     safeErrorLog('UPLOAD ERROR:', err, req)
     return res.status(500).json({
       error: 'Error subiendo evidencia'
@@ -1581,14 +1611,7 @@ router.get('/:tenant_id', auth, async (req, res) => {
          AND ts.standard_code = cc.iso
          AND ts.is_active = TRUE
         WHERE tc.tenant_id = e.tenant_id
-          AND (
-            tc.id = e.tenant_control_id
-            OR (
-              e.tenant_control_id IS NULL
-              AND e.control_id IS NOT NULL
-              AND tc.control_id = e.control_id
-            )
-          )
+          AND tc.id = e.tenant_control_id
         ORDER BY
           CASE WHEN tc.id = e.tenant_control_id THEN 0 ELSE 1 END,
           op.is_default DESC,

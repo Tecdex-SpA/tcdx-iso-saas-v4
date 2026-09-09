@@ -34,7 +34,6 @@ type SoAStandard = {
 
 type SoARow = {
   tenant_control_id: string;
-  controls_id_legacy?: string | null;
   modern_tenant_control_id?: string | null;
   tenant_id?: string | null;
   iso?: string | null;

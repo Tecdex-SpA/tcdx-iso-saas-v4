@@ -54,6 +54,10 @@ backups/
 !RBAC01_DB_READONLY_AUDIT.sql
 !RBAC02_COMMERCIAL_GATING_READONLY_AUDIT.sql
 !database/migrations/*.sql
+!database/baseline/
+!database/baseline/production_schema_v1.sql
+!database/baseline/production_seed_v1.sql
+!scripts/normalization/db-n05-readonly-qa-preflight.sql
 !tests/fixtures/phase1-base-schema.sql
 *.bak
 
@@ -102,3 +106,5 @@ frontend/.env.local
 backend/.env
 ai-engine/.env
 reports/plan_fortalecimiento_tcdx_iso_saas.md
+
+!scripts/normalization/db-n05-export-qa-reference-catalogs.sql

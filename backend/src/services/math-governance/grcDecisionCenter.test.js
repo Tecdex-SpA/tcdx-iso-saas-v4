@@ -48,10 +48,11 @@ async function run() {
       persistSourceSnapshot: async () => 'snapshot',
     }
   );
-  assert.equal(persisted, false);
+  assert.equal(persisted, true);
   assert.equal(emptyResult.summary.unmeasured, 1);
   assert.equal(emptyResult.results[0].failure_type, 'insufficient_data');
 
+  let technicalPersisted = false;
   const technical = await recalculateOfficialAnalytics(
     { tenant_id: '70000000-0000-0000-0000-000000000701', user: { id: '70000000-0000-0000-0000-000000000711' } },
     { formula_codes: ['F5_5_INHERENT_RISK'] },
@@ -59,9 +60,11 @@ async function run() {
     {
       client: {},
       resolveFormulaSource: async () => { throw Object.assign(new Error('column event_date does not exist'), { code: '42703' }); },
-      persistOfficialCalculation: async () => { throw new Error('no debe persistir'); },
+      persistOfficialCalculation: async () => { technicalPersisted = true; return {}; },
+      persistSourceSnapshot: async () => null,
     }
   );
+  assert.equal(technicalPersisted, true);
   assert.equal(technical.summary.source_incompatible, 1);
   assert.equal(technical.summary.failed, 0);
 

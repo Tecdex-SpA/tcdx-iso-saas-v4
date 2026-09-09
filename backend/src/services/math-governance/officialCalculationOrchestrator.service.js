@@ -440,7 +440,12 @@ async function recalculateOfficialAnalytics(scope, body = {}, requestId = null, 
       const calculated = registry.execute(formula.formula_code, dependency.input);
       const resultValue = numeric(calculated.value);
       if (calculated.status !== 'calculated' || resultValue === null) {
-        const failure = functionalFailure({ formula, sourceContext, status: 'unmeasured', failureType: 'insufficient_data', code: 'FORMULA_RESULT_EMPTY', message: 'La fórmula no produjo un valor numérico verificable y no será publicada.', warnings: sourceWarnings, period });
+        const formulaStatus = String(calculated.status || '');
+        const reasonCode = formulaStatus === 'insufficient_coverage' ? 'FORMULA_INSUFFICIENT_COVERAGE' : 'FORMULA_RESULT_EMPTY';
+        const reasonMessage = formulaStatus === 'insufficient_coverage'
+          ? 'La fórmula produjo un valor interno con cobertura insuficiente; no se publica score numérico.'
+          : 'La fórmula no produjo un valor numérico verificable y no será publicada.';
+        const failure = functionalFailure({ formula, sourceContext, status: 'unmeasured', failureType: 'insufficient_data', code: reasonCode, message: reasonMessage, warnings: sourceWarnings, dataRequirements: calculated.details?.missing_components ? { status: 'insufficient', missing_fields: calculated.details.missing_components.map((component) => component.key), missing_entities: [], incomplete_records: [], required_population: null, current_population: null, coverage_gap: calculated.details.threshold ?? null, freshness_gap: null, route_to_fix: '/metricas', required_capability: 'metrics.engine', reason: formulaStatus || reasonCode } : null, period });
         results.push(await persistFunctionalFailure({ persist, persistSnapshot, client, scope, tenantId, formula, source, failure, period, requestId }));
         continue;
       }

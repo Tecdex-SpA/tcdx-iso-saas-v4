@@ -571,7 +571,7 @@ async function getReportType(reportTypeCode) {
       return {
         ...fallback.rows[0],
         requested_code: requestedCode,
-        resolved_from_legacy: true,
+        resolved_from_compatibility_mapping: true,
       };
     }
   }

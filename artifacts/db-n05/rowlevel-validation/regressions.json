@@ -1,0 +1,52 @@
+[
+  {
+    "command": "node scripts/normalization/apply-db-n01-control-identity-migration.test.js",
+    "exit_code": 0,
+    "output": "DB-N01 migration static checks: OK\n"
+  },
+  {
+    "command": "node scripts/normalization/apply-db-n02-health-metrics-lineage-migration.test.js",
+    "exit_code": 0,
+    "output": "DB-N02 health metrics lineage migration static checks: OK\n"
+  },
+  {
+    "command": "node scripts/normalization/apply-db-n03-multitenant-integrity-migration.test.js",
+    "exit_code": 0,
+    "output": "DB-N03 multi-tenant integrity migration static checks: OK\n"
+  },
+  {
+    "command": "node scripts/normalization/apply-db-n04-runtime-tenant-cleanup-migration.test.js",
+    "exit_code": 0,
+    "output": "DB-N04 runtime tenant cleanup migration static checks: OK\n"
+  },
+  {
+    "command": "node backend/src/utils/tenantControlIdentity.test.js",
+    "exit_code": 0,
+    "output": "tenantControlIdentity tests: OK\n"
+  },
+  {
+    "command": "node backend/src/utils/dbTenantContext.test.js",
+    "exit_code": 0,
+    "output": "DB-N04 tenant DB context tests: OK\n"
+  },
+  {
+    "command": "node backend/src/routes/controlIdentityRoutes.test.js",
+    "exit_code": 0,
+    "output": "control identity route contract tests: OK\n"
+  },
+  {
+    "command": "node backend/src/services/math-governance/canonicalHealthProjection.service.test.js",
+    "exit_code": 0,
+    "output": "NORMALIZATION02_CANONICAL_HEALTH_PROJECTION_PASS\n"
+  },
+  {
+    "command": "node backend/src/services/math-governance/grcHealthCalculation.service.test.js",
+    "exit_code": 0,
+    "output": "NORMALIZATION02_GLOBAL_SCORE_SEMANTICS_PASS\n"
+  },
+  {
+    "command": "node backend/src/services/soaIntelligence.service.test.js",
+    "exit_code": 0,
+    "output": "soaIntelligence.service tests OK\n"
+  }
+]

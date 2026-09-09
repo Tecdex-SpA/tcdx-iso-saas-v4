@@ -103,14 +103,6 @@ const getEffectiveWhere = () => `
 `;
 
 async function refreshHealthForTenant(client, tenantId) {
-  const healthRes = await client.query(
-    `
-    SELECT *
-    FROM refresh_control_health_scores_v2_1($1::uuid)
-    `,
-    [tenantId]
-  );
-
   const kpiRes = await client.query(
     `
     SELECT *
@@ -120,7 +112,7 @@ async function refreshHealthForTenant(client, tenantId) {
   );
 
   return {
-    health: healthRes.rows || [],
+    health: [],
     kpis: kpiRes.rows || []
   };
 }

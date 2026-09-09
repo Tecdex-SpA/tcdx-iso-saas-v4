@@ -7,6 +7,7 @@ const {
 const {
   authenticatedRateLimit,
 } = require('./authenticatedRateLimit.middleware');
+const { withTenantTransaction } = require('../utils/dbTenantContext');
 
 function getBearerToken(req) {
   const header =
@@ -104,21 +105,25 @@ async function validateTenantServiceStatus(req, res, decoded) {
     return true;
   }
 
-  const result = await pool.query(
-    `
-    SELECT
-      id,
-      name,
-      COALESCE(service_status, 'active') AS service_status,
-      suspended_at,
-      suspension_reason,
-      deleted_at,
-      deletion_reason
-    FROM tenants
-    WHERE id = $1::uuid
-    LIMIT 1
-    `,
-    [tenantId]
+  const result = await withTenantTransaction(
+    pool,
+    { tenantId, role: 'auth_tenant_status' },
+    (client) => client.query(
+      `
+      SELECT
+        id,
+        name,
+        COALESCE(service_status, 'active') AS service_status,
+        suspended_at,
+        suspension_reason,
+        deleted_at,
+        deletion_reason
+      FROM tenants
+      WHERE id = $1::uuid
+      LIMIT 1
+      `,
+      [tenantId]
+    )
   );
 
   const tenant = result.rows[0];

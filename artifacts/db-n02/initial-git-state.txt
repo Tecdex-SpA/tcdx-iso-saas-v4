@@ -1,0 +1,91 @@
+DB-N02 initial git state
+Captured: 2026-09-04
+
+git branch --show-current
+codex/db-n01-control-identity-normalization
+
+git rev-parse HEAD
+11003dd92385dcca1caf5365fa437be3aee1f648
+
+git status --short
+ M backend/src/routes/action-plans.routes.js
+ M backend/src/routes/controls.routes.js
+ M backend/src/routes/evidences.routes.js
+ M backend/src/routes/findings.routes.js
+ M backend/src/services/diagnosticAcceptance.service.js
+ M backend/src/services/grc/grc.service.js
+ M backend/src/services/grc/grc.service.test.js
+ M backend/src/services/isoOperationalExecution.service.js
+ M backend/src/services/isoRecommendedActions.service.js
+ M backend/src/services/soaIntelligence.service.js
+ M docs/codex/ARCHITECTURE_MAP.md
+ M docs/codex/CONTRACTS_REGISTRY.md
+ M docs/codex/CURRENT_STATE.md
+ M docs/codex/DECISIONS.md
+ M docs/codex/WORK_QUEUE.md
+?? backend/src/routes/controlIdentityRoutes.test.js
+?? backend/src/utils/tenantControlIdentity.js
+?? backend/src/utils/tenantControlIdentity.test.js
+?? database/migrations/20260904_dbn01_control_identity_normalization.sql
+?? docs/handoffs/
+?? scripts/normalization/apply-db-n01-control-identity-migration.test.js
+?? scripts/normalization/db-n01-control-identity.postgres.test.js
+
+git diff --stat
+ backend/src/routes/action-plans.routes.js          | 121 ++++++++++---
+ backend/src/routes/controls.routes.js              |   4 +-
+ backend/src/routes/evidences.routes.js             | 174 +++++++++++++-----
+ backend/src/routes/findings.routes.js              | 201 +++++----------------
+ .../src/services/diagnosticAcceptance.service.js   |  20 +-
+ backend/src/services/grc/grc.service.js            |  13 +-
+ backend/src/services/grc/grc.service.test.js       |  14 ++
+ .../services/isoOperationalExecution.service.js    |  33 +++-
+ .../src/services/isoRecommendedActions.service.js  |   7 +-
+ backend/src/services/soaIntelligence.service.js    |   6 +-
+ docs/codex/ARCHITECTURE_MAP.md                     |   1 +
+ docs/codex/CONTRACTS_REGISTRY.md                   |   1 +
+ docs/codex/CURRENT_STATE.md                        |  10 +
+ docs/codex/DECISIONS.md                            |   1 +
+ docs/codex/WORK_QUEUE.md                           |   1 +
+ 15 files changed, 336 insertions(+), 271 deletions(-)
+
+git diff --name-only
+backend/src/routes/action-plans.routes.js
+backend/src/routes/controls.routes.js
+backend/src/routes/evidences.routes.js
+backend/src/routes/findings.routes.js
+backend/src/services/diagnosticAcceptance.service.js
+backend/src/services/grc/grc.service.js
+backend/src/services/grc/grc.service.test.js
+backend/src/services/isoOperationalExecution.service.js
+backend/src/services/isoRecommendedActions.service.js
+backend/src/services/soaIntelligence.service.js
+docs/codex/ARCHITECTURE_MAP.md
+docs/codex/CONTRACTS_REGISTRY.md
+docs/codex/CURRENT_STATE.md
+docs/codex/DECISIONS.md
+docs/codex/WORK_QUEUE.md
+
+DB-N01 files present before DB-N02
+backend/src/routes/action-plans.routes.js
+backend/src/routes/controls.routes.js
+backend/src/routes/evidences.routes.js
+backend/src/routes/findings.routes.js
+backend/src/routes/controlIdentityRoutes.test.js
+backend/src/services/diagnosticAcceptance.service.js
+backend/src/services/grc/grc.service.js
+backend/src/services/grc/grc.service.test.js
+backend/src/services/isoOperationalExecution.service.js
+backend/src/services/isoRecommendedActions.service.js
+backend/src/services/soaIntelligence.service.js
+backend/src/utils/tenantControlIdentity.js
+backend/src/utils/tenantControlIdentity.test.js
+database/migrations/20260904_dbn01_control_identity_normalization.sql
+docs/codex/ARCHITECTURE_MAP.md
+docs/codex/CONTRACTS_REGISTRY.md
+docs/codex/CURRENT_STATE.md
+docs/codex/DECISIONS.md
+docs/codex/WORK_QUEUE.md
+docs/handoffs/DB-N01_CONTROL_IDENTITY_NORMALIZATION.md
+scripts/normalization/apply-db-n01-control-identity-migration.test.js
+scripts/normalization/db-n01-control-identity.postgres.test.js
