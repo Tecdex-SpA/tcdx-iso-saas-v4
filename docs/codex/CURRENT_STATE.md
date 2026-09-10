@@ -1,5 +1,19 @@
 # CURRENT_STATE — TCDX ISO SaaS V4
 
+## TCDX SaaSv2 GRC Runtime Contract Closeout V3 — 2026-09-10
+
+Status: `TCDX_SAASV2_GRC_RUNTIME_CONTRACT_V3_READY_FOR_CLONE_VALIDATION`.
+
+Local-only closeout on branch `fix/tcdx-saasv2-runtime-schema-closeout` / HEAD `f688249a64dcfabd1b17aec260a56fbf3da1a986`. No SQL was executed against `tcdx_saasv2`.
+
+Implemented `database/migrations/20260910_tcdx_saasv2_grc_runtime_contract_closeout_v3.sql`, mirrored the same structural contract into `database/baseline/production_schema_v1.sql`, and added only global deny-by-default GRC module catalog rows to `database/baseline/production_seed_v1.sql`.
+
+Validation command:
+
+`node scripts/normalization/apply-tcdx-saasv2-grc-runtime-contract-closeout-v3.test.js`
+
+Result: PASS for baseline fresh, V1+V2+V3 upgrade, V3 reapply/idempotence, Phase 1/2 scheduler discovery SQL, grants, no excessive privileges, critical tenant-aware FKs, cross-tenant negative check, zero fixed tenant seed, zero demo data and final tenants zero.
+
 Actualizado: 2026-09-09
 Repositorio: `Tecdex-SpA/tcdx-iso-saas-v4`
 Remote/base `main` verificado para F6.14-A: `e6b431df521300119efaf9194d3ff4d8e56d7004`
@@ -532,6 +546,30 @@ Real smoke ran against `tcdx_saasv2` on PostgreSQL 16.15 (`127.0.0.1:55432`, `po
 
 The inherited `formula_version_id` blocker was a `PRODUCT_DEFECT` and is resolved in `backend/src/services/math-governance/officialCalculationOrchestrator.service.js`: functional failures now preserve `formula.version` as `formula_version`. The follow-up Health blocker was classified as `HARNESS_DEFECT`: current official runtime persistence writes canonical calculation output to `calculation_outputs.output_value.value`; `calculation_outputs.numeric_value` is nullable and not written by the current official persistence path. The smoke harness now validates the real JSONB shape and preserves null for unmeasured Health.
 
+## TCDX SaaSv2 runtime contract closeout V2 — 2026-09-09
+
+Status: `TCDX_SAASV2_RUNTIME_CONTRACT_V2_READY_FOR_CLONE_VALIDATION` local on branch `fix/tcdx-saasv2-runtime-schema-closeout` at verified HEAD `f688249a64dcfabd1b17aec260a56fbf3da1a986`.
+
+Scope closed locally only: V2 aligns the fresh baseline and forward migration path with the confirmed active backend runtime contract for `tenant_standards`, `tenant_nonconformities`, `evidences`, Evidence AI runtime and standard lifecycle runtime. V1 `20260909_tcdx_saasv2_runtime_schema_privilege_closeout.sql` was not rewritten.
+
+Contract reconciliation: `tenant_nonconformities.control_id` remains catalog identity (`controls_catalog.id`) and `tenant_control_id` remains operational identity (`tenant_controls.id`). `evidences.control_id` and `evidences.catalog_control_id` are reconciled as catalog aliases. Titleless active inserts are valid; triggers populate compatibility `title` from `description`/`control_description`/`file_name` and block catalog/control divergence. No ambiguous tenant control candidate is selected arbitrarily.
+
+New migration: `database/migrations/20260909_tcdx_saasv2_runtime_contract_closeout_v2.sql`, transactional, idempotent, additive, safe over fresh baseline + V1, with explicit grants only to `tcdx_backend_runtime`. Baseline/seed were updated consistently; lifecycle stage catalog is system reference only.
+
+Validation local PASS: `node --check scripts/normalization/apply-tcdx-saasv2-runtime-contract-closeout-v2.test.js`; `node scripts/normalization/apply-tcdx-saasv2-runtime-contract-closeout-v2.test.js` using isolated PostgreSQL Docker `pgvector/pgvector:pg16`. The test covered fresh baseline objects, V1+V2, V2 reapply, columns, current views, enqueue function signature, tenant-aware FKs, effective grants, no excessive runtime privileges, insert reconciliation, divergence blocking and cleanup to zero tenants.
+
+No SQL was executed against `tcdx_saasv2`; no deploy, commit, push, merge, production backend start, frontend change or db-v4 write was performed. Next gate: human review and clone validation; do not declare production readiness from this local closeout.
+
 Final smoke evidence: preconditions PASS with 53 formula definitions, 53 formula versions, 53 valid formula-source links, 20 source contracts, 22 metric definitions, 22 metric source bindings, 61 ISO controls, 54 evidence expectations and 1000 knowledge items. Runtime formulas executed: `F5_5_COMPLIANCE_WEIGHTED`, `F5_5_COVERAGE`, `F5_5_RESIDUAL_RISK`, `F5_5_WEIGHTED_PROGRESS`, `F5_5_FRESHNESS_CONTINUOUS`, `F5_5_GRC_HEALTH`. Lineage counts: 18 runs, 18 outputs, 18 source snapshots, 6 metric snapshots. `FORMULA_CROSS_TENANT_LEAKAGE=0`. Tenant A Health is calculated/publicable at 95.8 from `output_value.value`; Tenant B Health is unmeasured with `FORMULA_INSUFFICIENT_COVERAGE`, no numeric score and no zero fabrication. Artifacts: `artifacts/db-integral/tcdx-saasv2-real-smoke/REAL_DB_SMOKE_RESULT.txt`, `artifacts/db-integral/tcdx-saasv2-real-smoke/REAL_DB_SMOKE_SUMMARY.md`. Handoff: `docs/codex/handoffs/TCDX-SAASV2-REAL-SMOKE.md`.
 
 No git add, commit, push, merge, deploy, create/drop database, baseline/seed/reference reload, `.env` edit, DB-V4 write or `tecdex_saas` write was performed.
+
+## TCDX SaaSv2 backend cutover review — 2026-09-09
+
+Status: `TCDX_SAASV2_BACKEND_CUTOVER_BLOCKED` on branch `main` at verified HEAD/origin `f688249a64dcfabd1b17aec260a56fbf3da1a986`.
+
+The inherited `RUNTIME_CREDENTIAL_ENV_MISSING` blocker is resolved in this run: presence-only env checks showed both `PG*` and `DB_*` runtime variables plus `JWT_SECRET` available without printing secrets. Direct `psql` and the real backend pool in `backend/src/config/db.js` both proved `database=tcdx_saasv2`, `current_user/session_user=tcdx_backend_app` and `member_of_tcdx_backend_runtime=true`.
+
+Temporary local backend startup on isolated port `43117` passed with `GRC_PHASE1_SCHEDULER_ENABLED=false` and `DISABLE_PHASE2_SCHEDULER=1`; `/live`, `/ready` and `/health` returned 200, scheduler counters stayed 0, and shutdown was clean. Startup was not promoted to READY because focused runtime probes then found blocking defects: `REAL_RUNTIME_SCHEMA_DEFECT` for missing tenant lifecycle columns used by auth, missing active runtime objects/views (`tenant_standard_operations`, `asset_risks`, `v_iso_risk_matrix_summary`, `v_iso_effective_kpi_summary`, `v_commercial_tenant_*`) and query-shape mismatches (`a.iso`, `op1.is_default`, `operation_id`); plus `REAL_RUNTIME_PRIVILEGE_DEFECT` for missing effective app-role access on `assets`, `risks`, `risk_control_relations` and `tenant_operations`.
+
+Focused API evidence recorded tenant logins returning 200 and bad password returning 401, but all tenant-authenticated probes failed as `401 INVALID_TOKEN` because auth validation hit `column "suspended_at" does not exist`; therefore `AUTH_RBAC` failed and `CROSS_TENANT_LEAKAGE` was not measurable. Platform probes surfaced 6 HTTP 5xx and SQL/runtime errors, so `CRITICAL_API_SMOKE`, `FORMULA_RUNTIME`, `GRC_HEALTH_CANONICAL`, `RISK_CANONICAL` and full `KNOWLEDGE_RUNTIME` are not PASS. Explicit prohibited zero-legacy runtime checks passed with `LEGACY_RUNTIME_REFERENCES=0`. Cleanup removed all synthetic rows and scratch secrets: `SYNTHETIC_TENANTS=0`, `SYNTHETIC_USERS=0`, `SYNTHETIC_RUNTIME_ROWS=0`. Handoff: `docs/codex/handoffs/TCDX-SAASV2-BACKEND-CUTOVER-REVIEW.md`; artifacts: `artifacts/db-integral/tcdx-saasv2-backend-cutover-review/`.

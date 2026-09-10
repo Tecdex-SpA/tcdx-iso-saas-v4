@@ -1,0 +1,22 @@
+TCDX_SAASV2_BACKEND_CUTOVER_CLEANUP_RESULTS
+DATE=2026-09-09
+
+SYNTHETIC_RUN
+run_id=cutover-1788977868634-ecba6d6b
+
+CLEANUP_ACTIONS
+deleted=action_plans,findings,evidences,control_soa,tenant_controls,tenant_standards,users,tenants
+deleted_tmp_password_file=true
+tokens_persisted=false
+backend_temporary_process_stopped=true
+
+FINAL_COUNTS
+SYNTHETIC_TENANTS=0
+SYNTHETIC_USERS=0
+SYNTHETIC_RUNTIME_ROWS=0
+
+CLEANUP=PASS
+
+NOTES
+- Catalogs, formulas and knowledge reference data were preserved.
+- No tecdex_saas write was executed.

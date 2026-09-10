@@ -1,0 +1,60 @@
+TCDX_SAASV2_BACKEND_CUTOVER_DATABASE_PREFLIGHT
+DATE=2026-09-09
+REPOSITORY=/Users/andresbarouh/repos/tcdx-iso-saas-v4
+BRANCH=main
+HEAD=f688249a64dcfabd1b17aec260a56fbf3da1a986
+ORIGIN_MAIN=f688249a64dcfabd1b17aec260a56fbf3da1a986
+
+GIT_PRECHECK
+branch=main
+HEAD=f688249a64dcfabd1b17aec260a56fbf3da1a986
+origin/main=f688249a64dcfabd1b17aec260a56fbf3da1a986
+git diff --check=PASS
+dirty_scope=docs/artifacts for backend cutover review
+GIT_PRECHECK=PASS
+
+ENVIRONMENT_IDENTITY_INPUTS
+PGHOST=127.0.0.1
+PGPORT=55432
+PGUSER=tcdx_backend_app
+PGDATABASE=tcdx_saasv2
+PGPASSWORD=SET
+DB_HOST=127.0.0.1
+DB_PORT=55432
+DB_USER=tcdx_backend_app
+DB_NAME=tcdx_saasv2
+DB_PASSWORD=SET
+JWT_SECRET=SET
+CREDENTIAL_ENV_CHECK=PASS
+
+DATABASE_IDENTITY_GUARD
+psql_identity=tcdx_saasv2|tcdx_backend_app|t
+backend_pool_identity=tcdx_saasv2|tcdx_backend_app|tcdx_backend_app|true
+DATABASE_IDENTITY_GUARD=PASS
+BACKEND_DB_CONNECTION=tcdx_saasv2
+
+READ_ONLY_REFERENCE_COUNTS
+tenants_initial=0
+official_formula_versions=53
+iso_controls=61
+knowledge_items=1000
+
+RUNTIME_SCHEMA_COMPATIBILITY_PROBES
+tenant_columns_required_by_auth=suspended_at,deleted_at,suspension_reason,deletion_reason
+tenant_columns_present=NONE
+tenant_standard_operations_present=false
+asset_risks_present=false
+v_commercial_tenant_subscription_present=false
+v_commercial_tenant_modules_present=false
+v_commercial_tenant_capabilities_present=false
+v_iso_effective_kpi_summary_present=false
+v_iso_risk_matrix_summary_present=false
+v_iso_control_effective_health_present=true
+
+DATABASE_PREFLIGHT=FAIL_REAL_RUNTIME_SCHEMA_COMPATIBILITY
+
+NOTES
+- Preflight was non-destructive.
+- Secrets and tokens were not printed or written.
+- The previous credential blocker is resolved in this Codex shell.
+- Current blocker is real backend/schema compatibility against tcdx_saasv2, not missing environment.

@@ -1,0 +1,26 @@
+TCDX_SAASV2_BACKEND_CUTOVER_ZERO_LEGACY_RUNTIME_RESULTS
+DATE=2026-09-09
+
+STATIC_RUNTIME_SEARCH
+scope=backend/src excluding *.test.js
+patterns=public.controls, FROM controls, JOIN controls, control_health_scores, KPI-HLT, refresh_control_health_scores_v2_1, v_latest_health_kpi_snapshots, tecdex_saas
+matches=0
+
+DATABASE_OBJECT_PROBES
+public.controls=false
+public.control_health_scores=false
+public.refresh_control_health_scores_v2_1=false
+public.v_latest_health_kpi_snapshots=false
+public.v_latest_health_kpi_snapshots_applicable=false
+public.control_health_scores_backup_history=false
+public.control_health_scores_v2_preview=false
+public.evidences_backup_history=false
+public.action_plans_backup_history=false
+qa_audit_schema=false
+
+LEGACY_RUNTIME_REFERENCES=0
+ZERO_LEGACY_RUNTIME=PASS_FOR_EXPLICIT_PROHIBITED_OBJECTS
+
+NOTES
+- Generic words such as preview/backup exist in valid feature names and documentation; they were not counted as prohibited legacy object dependencies without exact object evidence.
+- This gate does not override the API/schema/privilege blockers.

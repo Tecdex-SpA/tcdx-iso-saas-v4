@@ -1,0 +1,46 @@
+TCDX_SAASV2_BACKEND_CUTOVER_BACKEND_STARTUP_LOG
+DATE=2026-09-09
+
+TEMPORARY_STARTUP
+command=npm start
+cwd=/Users/andresbarouh/repos/tcdx-iso-saas-v4/backend
+PORT=43117
+DB_APPLICATION_NAME=tcdx_backend_cutover_review
+GRC_PHASE1_SCHEDULER_ENABLED=false
+DISABLE_PHASE2_SCHEDULER=1
+READINESS_DEPENDENCY_TIMEOUT_MS=500
+persistent_env_file_modified=false
+production_runtime_modified=false
+deploy=false
+
+STARTUP_EVIDENCE
+server_log=Server running on port 43117
+GET /live=200
+GET /ready=200
+GET /health=200
+initial_tcdx_http_errors_total=0
+initial_tcdx_grc_phase1_scheduler_runs_total=0
+initial_tcdx_grc_phase1_scheduler_retries_total=0
+
+RUNTIME_METRICS_AFTER_SMOKE
+tcdx_http_requests_total=53
+tcdx_http_errors_total=6
+tcdx_http_responses_total{status=200}=17
+tcdx_http_responses_total{status=401}=27
+tcdx_http_responses_total{status=403}=2
+tcdx_http_responses_total{status=400}=1
+tcdx_http_responses_total{status=500}=6
+tcdx_grc_phase1_scheduler_runs_total=0
+tcdx_grc_phase1_scheduler_retries_total=0
+
+SHUTDOWN
+signal=SIGINT
+after_stop_http=000
+shutdown_clean=true
+
+BACKEND_TEMPORARY_STARTUP=PASS
+BACKEND_DB_CONNECTION=tcdx_saasv2
+
+NOTES
+- PASS here means the temporary backend process started, readiness checked the DB dependency, schedulers stayed idle, and shutdown completed.
+- This does not imply API cutover readiness; authenticated tenant runtime and critical API smoke failed separately.
