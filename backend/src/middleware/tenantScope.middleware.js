@@ -1,20 +1,11 @@
+const {
+  isDealerRole,
+  isPlatformRole,
+  normalizeRoleKey,
+} = require('../services/auth/roleCompatibility.service');
+
 function normalizeRole(role) {
-  return String(role || '').toLowerCase().trim();
-}
-
-function isPlatformRole(role) {
-  return [
-    'superadmin',
-    'super_admin',
-    'platform_admin',
-    'admin_global',
-    'global_admin',
-    'owner',
-  ].includes(normalizeRole(role));
-}
-
-function isDealerRole(role) {
-  return normalizeRole(role) === 'dealer';
+  return normalizeRoleKey(role);
 }
 
 function getUserTenantId(user) {

@@ -1,3 +1,7 @@
+const {
+  isPlatformRole,
+} = require('../auth/roleCompatibility.service');
+
 const { calculateReadiness, nextOccurrence, scoreEvidence, validateWorkflowDraft } = require('./grcRules');
 const { APPROVAL_DECISIONS, assertApprovalActor, evaluateApproval } = require('./grcApprovalRules');
 const { ADAPTERS, readRuntimeEntity } = require('./grcRuntimeAdapters');
@@ -10,7 +14,6 @@ const { createGrcGapService } = require('./grcGap.service');
 const { createImpactGraphService } = require('./impactGraph.service');
 const { createPriorityEngineService } = require('./priorityEngine.service');
 
-const PLATFORM_ROLES = new Set(['superadmin', 'super_admin', 'platform_admin', 'admin_global', 'global_admin', 'owner']);
 const ESCALATION_ENTITY_TYPES = Object.freeze({
   evidence_request: { code: 'evidence-default', name: 'Política de evidencias' },
   action: { code: 'action-default', name: 'Política de acciones' },
@@ -262,7 +265,7 @@ function createGrcService(pool, asyncJobs) {
   }
 
   async function assertPermission({ userId, role, permission }) {
-    if (PLATFORM_ROLES.has(String(role || '').toLowerCase())) return;
+    if (isPlatformRole(String(role || '').toLowerCase())) return;
     if (!userId) throw new GrcError('GRC_USER_REQUIRED', 'Usuario no identificado.', 401);
     const result = await pool.query('SELECT user_has_permission($1::uuid, $2::text) AS allowed', [userId, permission]);
     if (result.rows[0]?.allowed !== true) {
@@ -280,7 +283,7 @@ function createGrcService(pool, asyncJobs) {
        WHERE sm.module_key = 'grc_phase1_core' AND sm.is_active = TRUE`,
       [tenantId]
     );
-    const permissions = PLATFORM_ROLES.has(String(role || '').toLowerCase())
+    const permissions = isPlatformRole(String(role || '').toLowerCase())
       ? { platform: true }
       : (await pool.query(
         `SELECT p.permission_key, user_has_permission($1::uuid, p.permission_key) AS allowed
@@ -788,8 +791,8 @@ function createGrcService(pool, asyncJobs) {
          FROM grc_workflow_transition_roles WHERE tenant_id = $1::uuid AND transition_id = $2::uuid`,
         [tenantId, row.transition_id, role]
       );
-      if (allowedRole.rows[0].configured > 0 && allowedRole.rows[0].matching === 0 && !PLATFORM_ROLES.has(role)) throw new GrcError('WORKFLOW_ROLE_DENIED', 'El rol no puede ejecutar esta transición.', 403);
-      if (!PLATFORM_ROLES.has(role)) {
+      if (allowedRole.rows[0].configured > 0 && allowedRole.rows[0].matching === 0 && !isPlatformRole(role)) throw new GrcError('WORKFLOW_ROLE_DENIED', 'El rol no puede ejecutar esta transición.', 403);
+      if (!isPlatformRole(role)) {
         const permission = await client.query('SELECT user_has_permission($1::uuid, $2::text) AS allowed', [userId, row.required_permission || 'workflow.transition']);
         if (permission.rows[0]?.allowed !== true) throw new GrcError('WORKFLOW_PERMISSION_DENIED', `Permiso requerido: ${row.required_permission}.`, 403);
       }
@@ -1613,7 +1616,7 @@ function createGrcService(pool, asyncJobs) {
       )).rows[0];
       if (!current) throw new GrcError('WORKFLOW_APPROVAL_NOT_FOUND', 'Aprobación no encontrada.', 404);
       const owns = [current.reviewer_id, current.assigned_reviewer_id, current.delegated_to].filter(Boolean).map(String).includes(String(userId));
-      if (!owns && !PLATFORM_ROLES.has(role)) throw new GrcError('WORKFLOW_APPROVAL_DELEGATION_DENIED', 'No puede delegar esta aprobación.', 403);
+      if (!owns && !isPlatformRole(role)) throw new GrcError('WORKFLOW_APPROVAL_DELEGATION_DENIED', 'No puede delegar esta aprobación.', 403);
       if (current.decision !== 'pending') throw new GrcError('WORKFLOW_APPROVAL_ALREADY_DECIDED', 'La aprobación ya fue resuelta.', 409);
       const updated = (await client.query(
         `UPDATE grc_workflow_approvals SET decision = $3, acted_by = $4::uuid,

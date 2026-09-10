@@ -1,5 +1,31 @@
 # CURRENT_STATE — TCDX ISO SaaS V4
 
+## TCDX Release RBAC / Capabilities Final Pre-Deploy — 2026-09-10
+
+Status: `TCDX_RELEASE_RBAC_CAPABILITY_FINAL_PREDEPLOY_READY_FOR_HUMAN_REVIEW`.
+
+Continuation over branch `main` / HEAD `ba3fc889e916c5a4601c15f96373e24321cefd5d`, preserving the intentionally dirty RBAC/capability closeout work. Codex did not commit, push, merge, deploy, edit `.env`, connect to `tcdx_saasv2`, or write to any real database.
+
+Closed the human-review residual authority gate by adding `artifacts/release-rbac/RESIDUAL_ROLE_AUTHORITY_CLASSIFICATION.md` and executable checks in `scripts/release-rbac/check-residual-role-authority.js` plus alias-family checks in `scripts/release-rbac/check-role-alias-equivalence.js`. Current classification: `CENTRAL_AUTHORITY_CONSUMER=41`, `PRESENTATION_ONLY=2`, `BUSINESS_ROLE_SEMANTICS=6`, `COMPATIBILITY_ONLY=8`, `RESIDUAL_AUTHORIZATION_AUTHORITY=0`, `UNCLASSIFIED_ROLE_CHECKS=0`.
+
+Centralized residual executable role decisions in RBAC middleware, audit/auditor/lifecycle/SoA/document integration/evidence/billing/user routes, and frontend mirror gates for lifecycle, audits, diagnostics, SoA, exports and quotes. Fixed a backend-suite regression in `backend/src/services/isoRiskMatrix.service.js` by restoring `canManageRiskMatrix`/tenant guard helpers on top of `ROLE_GROUPS` and `roleMatchesAny`.
+
+Final local validations PASS: `node scripts/release-rbac/build-release-rbac-artifacts.js`, `node scripts/release-rbac/check-release-rbac-contract.js`, `node scripts/release-rbac/check-frontend-backend-authorization-consistency.js`, `node scripts/release-rbac/apply-release-rbac-capability-closeout.js --checksum`, `node scripts/release-rbac/release-rbac-isolated-postgres.test.js`, `node scripts/release-rbac/check-role-alias-equivalence.js`, `node scripts/release-rbac/check-residual-role-authority.js`, `node backend/src/services/isoRiskMatrix.service.test.js`, `npm --prefix backend test`, `npm --prefix frontend run typecheck`, Node syntax over modified/new JS files, and `git diff --check`.
+
+## TCDX Release RBAC / Roles / Capabilities / Runtime — 2026-09-10
+
+Status: `TCDX_RELEASE_RBAC_CAPABILITY_SYSTEMIC_CLOSEOUT_READY_FOR_HUMAN_REVIEW`.
+
+Local-only systemic authorization closeout attempt on branch `main` / base HEAD `ba3fc889e916c5a4601c15f96373e24321cefd5d`. Codex did not commit, push, merge, deploy, edit `.env`, or connect/write to real databases. Existing local dirty work in `backend/src/routes/admin-saas.routes.js` and `backend/src/services/governance.service.js` was preserved and extended only where needed for authorization normalization.
+
+Implemented a canonical role normalization authority in `backend/src/services/auth/roleCompatibility.service.js` for the seven release roles: `platform_admin`, `tenant_admin`, `auditor`, `area_owner`, `executive`, `dealer`, `viewer`. Viewer is now a first-class canonical role; legacy `cliente/client/read_only/readonly/solo_lectura` resolve to `viewer`, `ejecutivo` resolves to `executive`, platform aliases resolve to `platform_admin`, and compliance/admin aliases resolve to `tenant_admin` without rewriting users.
+
+Added release RBAC artifacts under `artifacts/release-rbac/` and a forward-only migration candidate `database/migrations/20260910_release_rbac_capability_systemic_closeout.sql` with checksum `8265da4cbf70aa9b2222456e7cc23f9ff5f38cb4268b4a42f7feea836243091b`. The generated contract matrix covers 175 deliberate permission keys across the seven roles; artifact extraction detected 121 permission keys in active authorization contexts, catalog sources including migrations contain 203 keys, `RUNTIME_MISSING_IN_CATALOG=0`, `UNEXPECTED_RUNTIME_KEYS=0`, `CONTRACT_KEYS_NOT_SEEN=54`, and contract-permission `UNCLASSIFIED=0`.
+
+Continuation closed the prior blocker `RELEASE_RBAC_UNSAFE_LEGACY_PLATFORM_CHECKS=212` by centralizing executable platform-role decisions on `roleCompatibility.service.js`; current static gate reports zero unsafe executable legacy platform checks. Frontend role/capability gates now use the frontend mirror helpers from `mvpPermissions`/`auth` and continue to consume backend `/api/me/permissions`, `/api/me/modules` and capability entitlement decisions; dealer remains assignment-scoped and denied from internal tenant mutation surfaces.
+
+Local validations completed: `node scripts/release-rbac/check-release-rbac-contract.js` PASS, `node scripts/release-rbac/check-frontend-backend-authorization-consistency.js` PASS, `node scripts/release-rbac/release-rbac-isolated-postgres.test.js` PASS with disposable localhost-only PostgreSQL/pgvector, `npm --prefix frontend run typecheck` PASS, Node syntax PASS for 72 modified JS files, and `git diff --check` PASS. The isolated DB suite covered fresh baseline+migrations, candidate apply/reapply, checksum mismatch fail-closed, catalog/matrix/capability orphan checks, seven synthetic roles over tenant A/B, dealer assignment isolation, entitlement positive/negative combinations and `TENANT_A_TO_TENANT_B_LEAKAGE=PASS`. This is ready for human review only; Codex did not run full CI, deploy, or runtime QA against real services.
+
 ## TCDX SaaSv2 Fresh Deploy Architecture — 2026-09-10
 
 Status: `TCDX_SAASV2_FRESH_DEPLOY_ARCHITECTURE_READY_FOR_PRODUCTION`.

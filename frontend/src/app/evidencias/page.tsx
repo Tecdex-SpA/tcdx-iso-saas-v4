@@ -6,7 +6,7 @@ import { useSearchParams } from 'next/navigation';
 import AppLayout from '@/components/AppLayout';
 import EnterpriseDomainWorkspaceShell from '@/components/enterprise-domain/EnterpriseDomainWorkspaceShell';
 import GrcPhase1Panel from '@/components/grc/GrcPhase1Panel';
-import { getUserFromToken } from '@/utils/auth';
+import { getUserFromToken, isAuditorRole, isPlatformRole, isTenantAdminRole } from '@/utils/auth';
 import GoogleDriveSourcesPanel from '@/components/evidences/GoogleDriveSourcesPanel';
 import IntegratedEvidenceApprovalPanel from '@/components/evidences/IntegratedEvidenceApprovalPanel';
 import UnifiedEvidenceLibrary from '@/components/evidences/UnifiedEvidenceLibrary';
@@ -542,19 +542,12 @@ function EvidenciasPageContent() {
   };
 
   const role = String(user?.role || '').toLowerCase().trim();
-  const isAuditor = role === 'auditor';
-  const canManageEvidenceAssociations =
-    role === 'admin' ||
-    role === 'tenant_admin' ||
-    role === 'admin_cumplimiento' ||
-    role === 'compliance_admin';
+  const isAuditor = isAuditorRole(role);
+  const canManageEvidenceAssociations = isTenantAdminRole(role);
   const canReviewEvidence =
     isAuditor ||
-    role === 'admin' ||
-    role === 'tenant_admin' ||
-    role === 'superadmin' ||
-    role === 'super_admin' ||
-    role === 'owner';
+    isTenantAdminRole(role) ||
+    isPlatformRole(role);
 
   const isRemediationMode = Boolean(tenantControlIdFromUrl || actionPlanIdFromUrl);
   const tenantId = resolveTenantId(user);

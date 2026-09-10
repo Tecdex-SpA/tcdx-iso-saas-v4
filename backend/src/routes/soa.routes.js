@@ -17,22 +17,26 @@ const {
   buildSoAMetrics,
   withInconsistencies,
 } = require('../utils/soaMetrics');
-
-const READ_ONLY_ROLES = ['auditor'];
-const MANAGE_ROLES = ['admin', 'tenant_admin', 'superadmin'];
+const {
+  isAuditorUser,
+  isPlatformUser,
+  isTenantAdminUser,
+} = require('../services/auth/roleCompatibility.service');
 
 // =============================
 // 🔐 AUTORIZACIÓN BÁSICA
 // =============================
 const ensureTenantAccess = (req, tenantId) => {
-  if (req.user?.role === 'superadmin') return true;
+  if (isPlatformUser(req.user)) return true;
   return req.user?.tenant_id === tenantId;
 };
 
 const canManageSoA = (req, tenantId) => {
   if (!ensureTenantAccess(req, tenantId)) return false;
-  return MANAGE_ROLES.includes(String(req.user?.role || '').toLowerCase());
+  return isPlatformUser(req.user) || isTenantAdminUser(req.user);
 };
+
+const isReadOnlySoAUser = (user) => isAuditorUser(user);
 
 const getUserId = (req) => req.user?.id || req.user?.user_id || req.user?.sub || null;
 
@@ -385,7 +389,7 @@ router.post('/:tenant_id/initialize', auth, async (req, res) => {
       return res.status(403).json({ error: 'No autorizado para este tenant' });
     }
 
-    if (!canManageSoA(req, tenant_id) || READ_ONLY_ROLES.includes(String(req.user?.role || '').toLowerCase())) {
+    if (!canManageSoA(req, tenant_id) || isReadOnlySoAUser(req.user)) {
       return res.status(403).json({ error: 'No autorizado para inicializar SoA' });
     }
 
@@ -509,7 +513,7 @@ router.post('/:tenant_id/assessments/run', auth, async (req, res) => {
     const useAi = req.body?.use_ai === true;
 
     if (!ensureTenantAccess(req, tenant_id)) return res.status(403).json({ error: 'No autorizado para este tenant' });
-    if (!canManageSoA(req, tenant_id) || READ_ONLY_ROLES.includes(String(req.user?.role || '').toLowerCase())) {
+    if (!canManageSoA(req, tenant_id) || isReadOnlySoAUser(req.user)) {
       return res.status(403).json({ error: 'No autorizado para ejecutar evaluación SoA' });
     }
     if (!iso) return res.status(400).json({ error: 'iso es obligatoria' });
@@ -532,7 +536,7 @@ router.post('/:tenant_id/assessments/run-batch', auth, async (req, res) => {
     const useAi = req.body?.use_ai === true;
 
     if (!ensureTenantAccess(req, tenant_id)) return res.status(403).json({ error: 'No autorizado para este tenant' });
-    if (!canManageSoA(req, tenant_id) || READ_ONLY_ROLES.includes(String(req.user?.role || '').toLowerCase())) {
+    if (!canManageSoA(req, tenant_id) || isReadOnlySoAUser(req.user)) {
       return res.status(403).json({ error: 'No autorizado para ejecutar lote SoA' });
     }
     if (!iso) return res.status(400).json({ error: 'iso es obligatoria' });
@@ -549,7 +553,7 @@ router.post('/:tenant_id/assessments/:assessment_id/apply', auth, async (req, re
   try {
     const { tenant_id, assessment_id } = req.params;
     if (!ensureTenantAccess(req, tenant_id)) return res.status(403).json({ error: 'No autorizado para este tenant' });
-    if (!canManageSoA(req, tenant_id) || READ_ONLY_ROLES.includes(String(req.user?.role || '').toLowerCase())) {
+    if (!canManageSoA(req, tenant_id) || isReadOnlySoAUser(req.user)) {
       return res.status(403).json({ error: 'No autorizado para aplicar sugerencias SoA' });
     }
     const result = await soaIntelligence.applyAssessment({ tenantId: tenant_id, assessmentId: assessment_id, userId: getUserId(req) });
@@ -569,7 +573,7 @@ router.post('/:tenant_id/assessments/:assessment_id/reject', auth, async (req, r
   try {
     const { tenant_id, assessment_id } = req.params;
     if (!ensureTenantAccess(req, tenant_id)) return res.status(403).json({ error: 'No autorizado para este tenant' });
-    if (!canManageSoA(req, tenant_id) || READ_ONLY_ROLES.includes(String(req.user?.role || '').toLowerCase())) {
+    if (!canManageSoA(req, tenant_id) || isReadOnlySoAUser(req.user)) {
       return res.status(403).json({ error: 'No autorizado para rechazar sugerencias SoA' });
     }
     const assessment = await soaIntelligence.rejectAssessment({ tenantId: tenant_id, assessmentId: assessment_id, userId: getUserId(req) });
@@ -688,7 +692,7 @@ router.put('/:tenant_control_id', auth, async (req, res) => {
       return res.status(403).json({ error: 'No autorizado para este tenant' });
     }
 
-    if (!canManageSoA(req, control.tenant_id) || READ_ONLY_ROLES.includes(String(req.user?.role || '').toLowerCase())) {
+    if (!canManageSoA(req, control.tenant_id) || isReadOnlySoAUser(req.user)) {
       await client.query('ROLLBACK');
       return res.status(403).json({ error: 'No autorizado para modificar SoA' });
     }

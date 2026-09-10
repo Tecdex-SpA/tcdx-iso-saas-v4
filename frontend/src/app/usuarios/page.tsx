@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import AppLayout from '@/components/AppLayout';
 import { EnterpriseScrollPanel } from '@/components/ui/enterprise';
 import { useTranslation } from '@/hooks/useTranslation';
-import { getUserFromToken } from '@/utils/auth';
+import { getUserFromToken, isDealerRole, isPlatformRole, isTenantAdminRole } from '@/utils/auth';
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL || '';
@@ -170,26 +170,12 @@ function normalizeRole(role: unknown) {
   return String(role || '').toLowerCase().trim();
 }
 
-function isSuperAdminRole(role: unknown) {
-  const normalized = normalizeRole(role);
-
-  return [
-    'superadmin',
-    'super_admin',
-    'platform_admin',
-    'admin_global',
-    'global_admin',
-    'owner',
-  ].includes(normalized);
+function isPlatformUserRole(role: unknown) {
+  return isPlatformRole(normalizeRole(role));
 }
 
 function isAdminRole(role: unknown) {
-  const normalized = normalizeRole(role);
-
-  return [
-    'admin',
-    'tenant_admin', // compatibilidad temporal con tokens antiguos
-  ].includes(normalized);
+  return isTenantAdminRole(normalizeRole(role));
 }
 
 function normalizeAuthUser(value: unknown): AuthUser | null {
@@ -292,7 +278,7 @@ export default function UsuariosPage() {
   });
 
   const normalizedRole = normalizeRole(user?.role);
-  const isSuperAdmin = isSuperAdminRole(normalizedRole);
+  const isSuperAdmin = isPlatformUserRole(normalizedRole);
   const isAdmin = isAdminRole(normalizedRole);
 
   const roleOptions = getRoleOptions(copy, isSuperAdmin);
@@ -308,7 +294,7 @@ export default function UsuariosPage() {
     setToken(authToken);
     setUser(u);
 
-    if (!isSuperAdminRole(u?.role)) {
+    if (!isPlatformUserRole(u?.role)) {
       setSelectedTenantId(resolveTenantId(u));
     }
   }, []);
@@ -426,7 +412,7 @@ export default function UsuariosPage() {
 
     const targetTenantId = isSuperAdmin ? selectedTenantId : resolveTenantId(user);
 
-    if (!targetTenantId && form.role !== 'dealer' && form.role !== 'superadmin') {
+    if (!targetTenantId && !isDealerRole(form.role) && !isPlatformRole(form.role)) {
       alert(copy.chooseCompany);
       return;
     }
@@ -441,7 +427,7 @@ export default function UsuariosPage() {
       return;
     }
 
-    if (!isSuperAdmin && ['superadmin', 'dealer'].includes(form.role)) {
+    if (!isSuperAdmin && (isPlatformRole(form.role) || isDealerRole(form.role))) {
       alert(copy.cannotCreateRole);
       return;
     }
@@ -483,7 +469,7 @@ export default function UsuariosPage() {
   const updateUser = async (row: EditableUser) => {
     if (!token) return;
 
-    if (!isSuperAdmin && ['superadmin', 'dealer'].includes(row.role)) {
+    if (!isSuperAdmin && (isPlatformRole(row.role) || isDealerRole(row.role))) {
       alert(copy.cannotAssignRole);
       return;
     }
@@ -653,7 +639,7 @@ export default function UsuariosPage() {
 
           <button
             onClick={createUser}
-            disabled={isSuperAdmin && !selectedTenantId && !['superadmin', 'dealer'].includes(form.role)}
+            disabled={isSuperAdmin && !selectedTenantId && !isPlatformRole(form.role) && !isDealerRole(form.role)}
             className="rounded-lg bg-blue-600 px-4 py-2 font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:opacity-50"
           >
             {copy.createUser}

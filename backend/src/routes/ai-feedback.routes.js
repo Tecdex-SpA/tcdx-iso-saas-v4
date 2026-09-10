@@ -1,3 +1,7 @@
+const {
+  isPlatformRole,
+} = require('../services/auth/roleCompatibility.service');
+
 const express = require('express');
 const jwt = require('jsonwebtoken');
 const router = express.Router();
@@ -58,14 +62,7 @@ function getUserRole(user) {
 function isSuperAdmin(user) {
   const role = getUserRole(user);
 
-  return [
-    'superadmin',
-    'super_admin',
-    'admin_global',
-    'global_admin',
-    'platform_admin',
-    'owner',
-  ].includes(role);
+  return isPlatformRole(role);
 }
 
 function getUserId(user) {

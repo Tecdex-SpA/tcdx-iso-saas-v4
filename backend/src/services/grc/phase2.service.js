@@ -1,4 +1,8 @@
 const {
+  isPlatformRole,
+} = require('../auth/roleCompatibility.service');
+
+const {
   assertTransition,
   calculateIncidentSeverity,
   evaluateRules,
@@ -14,9 +18,6 @@ const {
 const { normalizeRecord, pullConnectorRecords } = require('./phase2ConnectorAdapters');
 const crypto = require('crypto');
 
-const PLATFORM_ROLES = new Set([
-  'superadmin', 'super_admin', 'platform_admin', 'admin_global', 'global_admin', 'owner',
-]);
 
 class Phase2Error extends Error {
   constructor(code, message, status = 400, details = null) {
@@ -112,7 +113,7 @@ function createPhase2Service(pool, { clock = Date.now, environment = process.env
   }
 
   async function assertPermission({ userId, role, permission }) {
-    if (PLATFORM_ROLES.has(String(role || '').toLowerCase())) return;
+    if (isPlatformRole(String(role || '').toLowerCase())) return;
     if (!userId) throw new Phase2Error('PHASE2_USER_REQUIRED', 'Usuario no identificado.', 401);
     const result = await pool.query(
       'SELECT user_has_permission($1::uuid, $2::text) AS allowed',
@@ -251,7 +252,7 @@ function createPhase2Service(pool, { clock = Date.now, environment = process.env
        WHERE sm.module_key='grc_phase2_integrated' AND sm.is_active=TRUE`,
       [tenantId]
     );
-    const permissions = PLATFORM_ROLES.has(String(role || '').toLowerCase())
+    const permissions = isPlatformRole(String(role || '').toLowerCase())
       ? { platform: true }
       : (await pool.query(
         `SELECT p.permission_key, user_has_permission($1::uuid,p.permission_key) AS allowed
@@ -1959,7 +1960,7 @@ function createPhase2Service(pool, { clock = Date.now, environment = process.env
   }
 
   async function listConnectors(tenantId, role) {
-    if (!PLATFORM_ROLES.has(String(role || '').toLowerCase())) return [];
+    if (!isPlatformRole(String(role || '').toLowerCase())) return [];
     const result = await pool.query(
       `SELECT * FROM grc_connector_instances WHERE tenant_id=$1::uuid ORDER BY updated_at DESC`,
       [tenantId]
@@ -1968,7 +1969,7 @@ function createPhase2Service(pool, { clock = Date.now, environment = process.env
   }
 
   async function createConnector({ tenantId, userId, role, body }) {
-    if (!PLATFORM_ROLES.has(String(role || '').toLowerCase())) {
+    if (!isPlatformRole(String(role || '').toLowerCase())) {
       throw new Phase2Error(
         'CONNECTOR_NOT_AVAILABLE',
         'Los conectores externos no están disponibles para tenants en esta fase.',
@@ -2015,7 +2016,7 @@ function createPhase2Service(pool, { clock = Date.now, environment = process.env
   async function updateConnector({
     tenantId, userId, role, id, body,
   }) {
-    if (!PLATFORM_ROLES.has(String(role || '').toLowerCase())) {
+    if (!isPlatformRole(String(role || '').toLowerCase())) {
       throw new Phase2Error(
         'CONNECTOR_NOT_AVAILABLE',
         'Los conectores externos no están disponibles para tenants en esta fase.',
@@ -2067,7 +2068,7 @@ function createPhase2Service(pool, { clock = Date.now, environment = process.env
   }
 
   async function prepareConnectorOAuth({ tenantId, role, id }) {
-    if (!PLATFORM_ROLES.has(String(role || '').toLowerCase())) {
+    if (!isPlatformRole(String(role || '').toLowerCase())) {
       throw new Phase2Error(
         'CONNECTOR_NOT_AVAILABLE',
         'La conexión OAuth externa no está disponible para tenants en esta fase.',
@@ -2249,7 +2250,7 @@ function createPhase2Service(pool, { clock = Date.now, environment = process.env
   }
 
   async function runConnector({ tenantId, userId, role, correlationId, id, idempotencyKey, runType = 'sync' }) {
-    if (!PLATFORM_ROLES.has(String(role || '').toLowerCase())) {
+    if (!isPlatformRole(String(role || '').toLowerCase())) {
       throw new Phase2Error(
         'CONNECTOR_NOT_AVAILABLE',
         'La sincronización externa no está disponible para tenants en esta fase.',
@@ -2384,7 +2385,7 @@ function createPhase2Service(pool, { clock = Date.now, environment = process.env
   }
 
   async function connector360(tenantId, id, role) {
-    if (!PLATFORM_ROLES.has(String(role || '').toLowerCase())) {
+    if (!isPlatformRole(String(role || '').toLowerCase())) {
       throw new Phase2Error(
         'CONNECTOR_NOT_AVAILABLE',
         'Los conectores externos no están disponibles para tenants en esta fase.',
@@ -2496,7 +2497,7 @@ function createPhase2Service(pool, { clock = Date.now, environment = process.env
   }
 
   async function listConnectorRuns(tenantId, filters = {}, role = null) {
-    if (role !== null && !PLATFORM_ROLES.has(String(role || '').toLowerCase())) return [];
+    if (role !== null && !isPlatformRole(String(role || '').toLowerCase())) return [];
     const result = await pool.query(
       `SELECT r.*,i.provider,i.display_name
        FROM grc_connector_runs r
@@ -2511,7 +2512,7 @@ function createPhase2Service(pool, { clock = Date.now, environment = process.env
   }
 
   async function integrationHealth(tenantId, role = null) {
-    if (role !== null && !PLATFORM_ROLES.has(String(role || '').toLowerCase())) {
+    if (role !== null && !isPlatformRole(String(role || '').toLowerCase())) {
       return {
         connectors: 0,
         healthy: 0,

@@ -7,6 +7,14 @@ const {
   validatePasswordStrength,
   getPasswordPolicyMessage,
 } = require('../utils/passwordPolicy');
+const {
+  ROLE_GROUPS,
+  isDealerRole,
+  isPlatformRole,
+  isTenantAdminRole,
+  normalizeRoleKey,
+  roleMatchesAny,
+} = require('../services/auth/roleCompatibility.service');
 
 function sendPasswordPolicyError(res) {
   return res.status(400).json({
@@ -18,12 +26,12 @@ function sendPasswordPolicyError(res) {
 }
 
 function getUserRole(req) {
-  return String(
+  return normalizeRoleKey(
     req.user?.role ||
       req.user?.user_role ||
       req.user?.userRole ||
       ''
-  ).toLowerCase();
+  );
 }
 
 function getUserTenantId(req) {
@@ -38,29 +46,15 @@ function getUserTenantId(req) {
 }
 
 const isSuperAdmin = (req) => {
-  const role = getUserRole(req);
-
-  return [
-    'superadmin',
-    'super_admin',
-    'platform_admin',
-    'admin_global',
-    'global_admin',
-    'owner',
-  ].includes(role);
+  return isPlatformRole(getUserRole(req));
 };
 
 const isDealer = (req) => {
-  return getUserRole(req) === 'dealer';
+  return isDealerRole(getUserRole(req));
 };
 
 const isAdmin = (req) => {
-  const role = getUserRole(req);
-
-  return [
-    'admin',
-    'tenant_admin',
-  ].includes(role);
+  return isTenantAdminRole(getUserRole(req));
 };
 
 const sanitizeUser = (row) => ({
@@ -78,20 +72,22 @@ const sanitizeUser = (row) => ({
 });
 
 const allowedRolesForAdmin = [
-  'admin',
-  'auditor',
-  'operativo',
-  'viewer',
+  ...ROLE_GROUPS.tenantAdmin,
+  ...ROLE_GROUPS.auditor,
+  ...ROLE_GROUPS.areaOwner,
+  ...ROLE_GROUPS.executive,
+  ...ROLE_GROUPS.viewer,
 ];
 
 const allowedRolesForSuperAdmin = [
-  'superadmin',
-  'dealer',
-  'admin',
-  'auditor',
-  'operativo',
-  'viewer',
+  ...ROLE_GROUPS.platform,
+  ...ROLE_GROUPS.dealer,
+  ...allowedRolesForAdmin,
 ];
+
+function roleAllowedForAssignment(role, allowedRoles) {
+  return roleMatchesAny(role, allowedRoles);
+}
 
 const canManageTenant = (req, tenantId) => {
   if (isSuperAdmin(req)) return true;
@@ -201,7 +197,7 @@ router.post('/', auth, async (req, res) => {
       ? allowedRolesForSuperAdmin
       : allowedRolesForAdmin;
 
-    if (!allowedRoles.includes(role)) {
+    if (!roleAllowedForAssignment(role, allowedRoles)) {
       return res.status(400).json({ error: 'Rol no permitido' });
     }
 
@@ -280,8 +276,8 @@ router.put('/:id', auth, async (req, res) => {
       return res.status(403).json({ error: 'No autorizado para editar este usuario' });
     }
 
-    if (!isSuperAdmin(req) && userRow.role === 'superadmin') {
-      return res.status(403).json({ error: 'No puedes editar un superadmin' });
+    if (!isSuperAdmin(req) && isPlatformRole(userRow.role)) {
+      return res.status(403).json({ error: 'No puedes editar un usuario de plataforma' });
     }
 
     const allowedRoles = isSuperAdmin(req)
@@ -290,7 +286,7 @@ router.put('/:id', auth, async (req, res) => {
 
     const nextRole = role ?? userRow.role;
 
-    if (!allowedRoles.includes(nextRole)) {
+    if (!roleAllowedForAssignment(nextRole, allowedRoles)) {
       return res.status(400).json({ error: 'Rol no permitido' });
     }
 

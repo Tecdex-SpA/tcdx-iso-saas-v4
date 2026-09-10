@@ -1,4 +1,8 @@
 const pool = require('../config/db');
+const {
+  isPlatformRole,
+  normalizeRoleKey,
+} = require('./auth/roleCompatibility.service');
 
 function getUserIdFromAuth(user) {
   return user?.user_id || user?.userId || user?.userID || user?.id || null;
@@ -16,24 +20,17 @@ function getUserTenantId(user) {
 }
 
 function getUserRole(user) {
-  return String(
+  return normalizeRoleKey(
     user?.role ||
       user?.user_role ||
       user?.userRole ||
       user?.profile ||
       ''
-  ).toLowerCase();
+  );
 }
 
 function isSuperAdminRole(role) {
-  return [
-    'superadmin',
-    'super_admin',
-    'admin_global',
-    'global_admin',
-    'platform_admin',
-    'owner',
-  ].includes(String(role || '').toLowerCase());
+  return isPlatformRole(role);
 }
 
 async function getDbUser(authUser) {
@@ -263,9 +260,78 @@ async function getTenantGovernanceSummary(tenantId) {
 
   const result = await pool.query(
     `
-    SELECT *
-    FROM v_tenant_governance_summary
-    WHERE tenant_id = $1
+    SELECT
+      t.id AS tenant_id,
+      t.name AS tenant_name,
+      t.service_status,
+      COALESCE(std.active_standards, 0)::int AS active_standards,
+      COALESCE(mods.enabled_modules, 0)::int AS enabled_modules,
+      COALESCE(users_count.active_users, 0)::int AS active_users,
+      COALESCE(dealers_count.active_dealers, 0)::int AS active_dealers,
+      contract.plan_key,
+      contract.contract_status,
+      contract.started_at,
+      contract.ends_at
+    FROM tenants t
+
+    LEFT JOIN (
+      SELECT
+        tenant_id,
+        COUNT(*) FILTER (
+          WHERE COALESCE(is_active, true) IS DISTINCT FROM false
+        )::int AS active_standards
+      FROM tenant_standards
+      GROUP BY tenant_id
+    ) std
+      ON std.tenant_id = t.id
+
+    LEFT JOIN (
+      SELECT
+        tenant_id,
+        COUNT(*) FILTER (
+          WHERE is_enabled = true
+        )::int AS enabled_modules
+      FROM v_tenant_modules
+      GROUP BY tenant_id
+    ) mods
+      ON mods.tenant_id = t.id
+
+    LEFT JOIN (
+      SELECT
+        tenant_id,
+        COUNT(*)::int AS active_users
+      FROM users
+      WHERE tenant_id IS NOT NULL
+        AND COALESCE(status, 'active') = 'active'
+      GROUP BY tenant_id
+    ) users_count
+      ON users_count.tenant_id = t.id
+
+    LEFT JOIN (
+      SELECT
+        tenant_id,
+        COUNT(*) FILTER (
+          WHERE status = 'active'
+        )::int AS active_dealers
+      FROM dealer_tenants
+      GROUP BY tenant_id
+    ) dealers_count
+      ON dealers_count.tenant_id = t.id
+
+    LEFT JOIN LATERAL (
+      SELECT
+        tc.plan_key,
+        tc.contract_status,
+        tc.started_at,
+        tc.ends_at
+      FROM tenant_contracts tc
+      WHERE tc.tenant_id = t.id
+      ORDER BY tc.created_at DESC
+      LIMIT 1
+    ) contract
+      ON true
+
+    WHERE t.id = $1::uuid
     LIMIT 1
     `,
     [tenantId]
@@ -344,7 +410,7 @@ async function buildGovernanceContext(authUser) {
     },
     scope: {
       is_superadmin: isSuperAdminRole(roleKey),
-      is_platform: ['superadmin', 'platform_admin'].includes(roleKey),
+      is_platform: isSuperAdminRole(roleKey),
       is_dealer: roleKey === 'dealer',
       has_tenant: !!tenantId,
       tenant_id: tenantId,

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import Image from 'next/image';
 import AppLayout from '@/components/AppLayout';
 import EnterpriseDomainWorkspaceShell from '@/components/enterprise-domain/EnterpriseDomainWorkspaceShell';
-import { getUserRoleFromToken } from '@/utils/auth';
+import { getUserRoleFromToken, isAreaOwnerRole, isExecutiveRole, isViewerRole } from '@/utils/auth';
 import TcdxIcon, { type TcdxIconName } from '@/components/icons/TcdxIcon';
 import { useTranslation } from '@/hooks/useTranslation';
 import { useTenantEntitlements } from '@/hooks/useTenantEntitlements';
@@ -465,14 +465,9 @@ export default function ExportesPage() {
   const currentRole = getUserRoleFromToken();
 
   const isReadOnlyReports =
-    currentRole === 'viewer' ||
-    currentRole === 'operativo' ||
-    currentRole === 'cliente' ||
-    currentRole === 'client' ||
-    currentRole === 'solo_lectura' ||
-    currentRole === 'read_only' ||
-    currentRole === 'readonly' ||
-    currentRole === 'ejecutivo';
+    isViewerRole(currentRole) ||
+    isExecutiveRole(currentRole) ||
+    isAreaOwnerRole(currentRole);
 
   const [exportsHistory, setExportsHistory] = useState<ReportExport[]>([]);
 

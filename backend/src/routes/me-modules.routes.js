@@ -3,6 +3,11 @@ const router = express.Router();
 const pool = require('../config/db');
 const auth = require('../middleware/auth');
 const { errorDetail } = require('../utils/errorResponse');
+const {
+  isDealerRole: isCanonicalDealerRole,
+  isPlatformRole: isCanonicalPlatformRole,
+  normalizeRoleKey,
+} = require('../services/auth/roleCompatibility.service');
 
 function getUserTenantId(user) {
   return (
@@ -20,24 +25,15 @@ function getUserId(user) {
 }
 
 function normalizeRole(role) {
-  return String(role || '').toLowerCase();
+  return normalizeRoleKey(role);
 }
 
 function isPlatformRole(role) {
-  const normalized = normalizeRole(role);
-
-  return [
-    'superadmin',
-    'super_admin',
-    'platform_admin',
-    'admin_global',
-    'global_admin',
-    'owner',
-  ].includes(normalized);
+  return isCanonicalPlatformRole(role);
 }
 
 function isDealerRole(role) {
-  return normalizeRole(role) === 'dealer';
+  return isCanonicalDealerRole(role);
 }
 
 function buildModuleMap(rows) {

@@ -1,3 +1,9 @@
+const {
+  isAuditorUser,
+  isPlatformUser,
+  isTenantAdminUser,
+} = require('../services/auth/roleCompatibility.service');
+
 const express = require('express')
 const router = express.Router()
 const auth = require('../middleware/auth')
@@ -21,35 +27,17 @@ function getUserId(user) {
   return user?.user_id || user?.userId || user?.id || null
 }
 
-function normalizeRole(user) {
-  return String(user?.role || user?.user_role || user?.userRole || '')
-    .toLowerCase()
-    .trim()
-}
-
-function isSuperAdmin(user) {
-  return [
-    'superadmin',
-    'super_admin',
-    'admin_global',
-    'global_admin',
-    'platform_admin',
-    'owner'
-  ].includes(normalizeRole(user))
-}
-
 function canAnalyzeDocuments(user) {
-  const role = normalizeRole(user)
-  return isSuperAdmin(user) || ['tenant_admin', 'admin', 'compliance_manager', 'auditor'].includes(role)
+  return isPlatformUser(user) || isTenantAdminUser(user) || isAuditorUser(user)
 }
 
 function ensureTenantAccess(req, tenantId) {
-  if (isSuperAdmin(req.user)) return true
+  if (isPlatformUser(req.user)) return true
   return String(getUserTenantId(req.user)) === String(tenantId)
 }
 
 function resolveTenantId(req) {
-  if (isSuperAdmin(req.user)) {
+  if (isPlatformUser(req.user)) {
     return req.query.tenant_id || req.body?.tenant_id || getUserTenantId(req.user)
   }
   return getUserTenantId(req.user)

@@ -4,7 +4,7 @@ import type { ReactNode } from 'react';
 import { useEffect, useState } from 'react';
 import AppLayout from '@/components/AppLayout';
 import { useTranslation } from '@/hooks/useTranslation';
-import { getUserFromToken } from '@/utils/auth';
+import { getUserFromToken, isDealerRole, isPlatformRole } from '@/utils/auth';
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL || '';
@@ -100,17 +100,6 @@ type PreinvoiceData = {
   commercial_note?: string | null;
 };
 
-function isPlatformRole(role: string) {
-  return [
-    'superadmin',
-    'super_admin',
-    'platform_admin',
-    'admin_global',
-    'global_admin',
-    'owner',
-  ].includes(role);
-}
-
 function translateCommercialNote(value: unknown, lang: 'es' | 'en') {
   const text = String(value || '').trim();
   if (!text || lang !== 'en') return text;
@@ -164,14 +153,14 @@ export default function PrefacturacionPage() {
     setTenantId(tid);
     setRole(role);
 
-    if (!tid && role !== 'dealer' && !isPlatformRole(role)) {
+    if (!tid && !isDealerRole(role) && !isPlatformRole(role)) {
       setMessage(copy.tenantRequired);
     }
   }, [copy.tenantRequired]);
 
   useEffect(() => {
     const loadDealerTenants = async () => {
-      if (!token || role !== 'dealer') return;
+      if (!token || !isDealerRole(role)) return;
 
       try {
         const res = await fetch(`${API_URL}/api/admin-saas/dealer/my-tenants`, {
@@ -324,7 +313,7 @@ export default function PrefacturacionPage() {
           </p>
 
           <div className="mt-6 flex flex-col gap-3 md:flex-row">
-            {role === 'dealer' && dealerTenants.length > 0 && (
+            {isDealerRole(role) && dealerTenants.length > 0 && (
               <select
                 value={tenantId}
                 onChange={(e) => setTenantId(e.target.value)}

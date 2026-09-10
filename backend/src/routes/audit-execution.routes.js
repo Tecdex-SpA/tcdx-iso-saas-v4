@@ -1,12 +1,16 @@
+const {
+  isAreaOwnerUser,
+  isAuditorUser,
+  isPlatformUser,
+  isTenantAdminUser,
+  isViewerUser,
+} = require('../services/auth/roleCompatibility.service');
+
 const express = require('express');
 const router = express.Router();
 const pool = require('../config/db');
 const auth = require('../middleware/auth');
 const { errorDetail } = require('../utils/errorResponse');
-
-function normalizeRole(user) {
-  return String(user?.role || user?.user_role || user?.userRole || '').toLowerCase();
-}
 
 function getUserId(user) {
   return user?.user_id || user?.userId || user?.id || null;
@@ -24,22 +28,15 @@ function getUserTenantId(user) {
 }
 
 function isPlatform(user) {
-  return [
-    'superadmin',
-    'super_admin',
-    'platform_admin',
-    'admin_global',
-    'global_admin',
-    'owner',
-  ].includes(normalizeRole(user));
+  return isPlatformUser(user);
 }
 
 function canManageAuditExecution(user) {
-  return ['admin', 'tenant_admin', 'auditor'].includes(normalizeRole(user)) || isPlatform(user);
+  return isPlatformUser(user) || isTenantAdminUser(user) || isAuditorUser(user);
 }
 
 function canReadAuditExecution(user) {
-  return ['admin', 'tenant_admin', 'auditor', 'operativo', 'viewer'].includes(normalizeRole(user)) || isPlatform(user);
+  return isPlatformUser(user) || isTenantAdminUser(user) || isAuditorUser(user) || isAreaOwnerUser(user) || isViewerUser(user);
 }
 
 function ensureTenantAccess(req, tenantId) {

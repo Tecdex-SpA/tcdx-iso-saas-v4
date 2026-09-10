@@ -2,13 +2,17 @@ const express = require('express');
 const router = express.Router();
 const service = require('../services/commercial/commercialAdmin.service');
 const pool = require('../config/db');
+const {
+  isPlatformUser,
+  normalizeRoleKey,
+} = require('../services/auth/roleCompatibility.service');
 
 function userId(user) {
   return user?.user_id || user?.userId || user?.id || null;
 }
 
 function roleOf(user) {
-  return String(user?.role || user?.user_role || user?.userRole || '').trim().toLowerCase();
+  return normalizeRoleKey(user?.role || user?.user_role || user?.userRole);
 }
 
 function tenantOf(user) {
@@ -16,7 +20,7 @@ function tenantOf(user) {
 }
 
 function isPlatform(user) {
-  return ['superadmin', 'super_admin', 'platform_admin', 'admin_global', 'global_admin', 'owner'].includes(roleOf(user));
+  return isPlatformUser(user);
 }
 
 async function assertTenantVisibility(req, tenantId) {

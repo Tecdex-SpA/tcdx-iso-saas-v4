@@ -6,7 +6,7 @@ import EnterpriseDomainWorkspaceShell from '@/components/enterprise-domain/Enter
 import { useTranslation } from '@/hooks/useTranslation';
 import { getComplianceStatusLabel } from '@/i18n/statusLabels';
 import { translateDisplayText, translateClauseLabel } from '@/i18n/displayText';
-import { getUserFromToken } from '@/utils/auth';
+import { getUserFromToken, isAuditorRole } from '@/utils/auth';
 
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL || '';
@@ -375,7 +375,7 @@ export default function DiagnosticoPage() {
 
   const tenantId = resolveTenantId(user);
   const role = resolveRole(user);
-  const isReadOnly = role === 'auditor';
+  const isReadOnly = isAuditorRole(role);
 
   const diagnosticStatusLabel = (status?: string | null) => {
     if (status === 'pendiente') return copy.pending;

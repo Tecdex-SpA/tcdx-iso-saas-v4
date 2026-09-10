@@ -1,5 +1,9 @@
 'use strict';
 
+const {
+  isPlatformRole,
+} = require('../auth/roleCompatibility.service');
+
 const crypto = require('crypto');
 const pool = require('../../config/db');
 const asyncJobs = require('../asyncJob.service');
@@ -9,7 +13,6 @@ const { stableHash, evaluateQuality, evaluateFreshness, evaluateSufficiency } = 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const IDENTIFIER_RE = /^[a-z_][a-z0-9_]*$/;
 const JOB_TYPES = new Set(['semantic_source.ingest','semantic_source.validate','semantic_source.snapshot','semantic_source.freshness','semantic_source.reconcile']);
-const PLATFORM_ROLES = new Set(['superadmin','super_admin','platform_admin','admin_global','global_admin','owner']);
 const MANUAL_OBSERVATION_CONTRACT_CODE = 'grc.manual_observations';
 
 class SemanticError extends Error {
@@ -37,7 +40,7 @@ function actorId(scope) {
 }
 
 function isPlatform(scope) {
-  return PLATFORM_ROLES.has(String(scope?.user?.role || scope?.user?.user_role || '').toLowerCase());
+  return isPlatformRole(String(scope?.user?.role || scope?.user?.user_role || '').toLowerCase());
 }
 
 function uuid(value, label = 'id') {

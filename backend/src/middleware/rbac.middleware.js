@@ -1,4 +1,5 @@
 const {
+  ROLE_GROUPS,
   isDealerRole,
   isPlatformRole,
   normalizeRoleKey,
@@ -22,44 +23,28 @@ function isReadMethod(req) {
   return ['GET', 'HEAD', 'OPTIONS'].includes(String(req.method || '').toUpperCase());
 }
 
-const PLATFORM_ROLES = [
-  'superadmin',
-  'super_admin',
-  'platform_admin',
-  'admin_global',
-  'global_admin',
-  'owner',
-];
-
-const EXECUTIVE_ROLES = ['viewer', 'cliente', 'client', 'read_only', 'readonly', 'solo_lectura', 'ejecutivo'];
-const AREA_OWNER_ROLES = ['operativo', 'responsable_area', 'area_owner'];
-const TENANT_READ_ROLES = ['admin', 'tenant_admin', 'auditor', ...AREA_OWNER_ROLES, ...EXECUTIVE_ROLES];
-const TENANT_OPERATE_ROLES = ['admin', 'tenant_admin', 'auditor', ...AREA_OWNER_ROLES];
-const TENANT_ADMIN_ROLES = ['admin', 'tenant_admin', 'admin_cumplimiento', 'compliance_admin'];
-const TENANT_AREA_WRITE_ROLES = ['admin', 'tenant_admin', ...AREA_OWNER_ROLES];
-const TENANT_AUDIT_WRITE_ROLES = ['admin', 'tenant_admin', 'auditor'];
-const REPORT_READ_ROLES = [
-  'admin',
-  'tenant_admin',
-  'admin_cumplimiento',
-  'compliance_admin',
-  'auditor',
-  ...AREA_OWNER_ROLES,
-  ...EXECUTIVE_ROLES,
-];
-const REPORT_GENERATE_ROLES = [
-  'admin',
-  'tenant_admin',
-  'admin_cumplimiento',
-  'compliance_admin',
-  'auditor',
-];
-const TENANT_DASHBOARD_ROLES = ['admin', 'tenant_admin', 'auditor', ...AREA_OWNER_ROLES, ...EXECUTIVE_ROLES];
-const IMPORT_READ_ROLES = [...TENANT_ADMIN_ROLES, 'auditor'];
+const PLATFORM_ROLES = [...ROLE_GROUPS.platform];
+const EXECUTIVE_ROLES = [...ROLE_GROUPS.executive];
+const VIEWER_ROLES = [...ROLE_GROUPS.viewer];
+const READ_ONLY_ROLES = [...EXECUTIVE_ROLES, ...VIEWER_ROLES];
+const AREA_OWNER_ROLES = [...ROLE_GROUPS.areaOwner];
+const TENANT_READ_ROLES = [...ROLE_GROUPS.tenantAdmin, ...ROLE_GROUPS.auditor, ...AREA_OWNER_ROLES, ...READ_ONLY_ROLES];
+const TENANT_OPERATE_ROLES = [...ROLE_GROUPS.tenantAdmin, ...ROLE_GROUPS.auditor, ...AREA_OWNER_ROLES];
+const TENANT_ADMIN_ROLES = [...ROLE_GROUPS.tenantAdmin];
+const TENANT_AREA_WRITE_ROLES = [...ROLE_GROUPS.tenantAdmin, ...ROLE_GROUPS.areaOwner];
+const TENANT_AUDIT_WRITE_ROLES = [...ROLE_GROUPS.tenantAdmin, ...ROLE_GROUPS.auditor];
+const REPORT_READ_ROLES = [...TENANT_READ_ROLES];
+const REPORT_GENERATE_ROLES = [...ROLE_GROUPS.tenantAdmin, ...ROLE_GROUPS.auditor];
+const TENANT_DASHBOARD_ROLES = [...TENANT_READ_ROLES];
+const IMPORT_READ_ROLES = [...ROLE_GROUPS.tenantAdmin, ...ROLE_GROUPS.auditor];
 const IMPORT_OPERATE_ROLES = [...TENANT_ADMIN_ROLES];
 const COMMERCIAL_ADMIN_READ_ROLES = PLATFORM_ROLES;
 const COMMERCIAL_ADMIN_MANAGE_ROLES = PLATFORM_ROLES;
-const COMMERCIAL_TENANT_READ_ROLES = [...TENANT_ADMIN_ROLES, 'dealer'];
+const COMMERCIAL_TENANT_READ_ROLES = [...ROLE_GROUPS.tenantAdmin, ...ROLE_GROUPS.dealer];
+const AI_TENANT_READ_ROLES = [...ROLE_GROUPS.tenantAdmin, ...ROLE_GROUPS.auditor, ...ROLE_GROUPS.areaOwner];
+const AI_TENANT_WRITE_ROLES = [...ROLE_GROUPS.tenantAdmin, ...ROLE_GROUPS.auditor, ...ROLE_GROUPS.areaOwner];
+const AI_COMPLIANCE_ROLES = [...ROLE_GROUPS.tenantAdmin, ...ROLE_GROUPS.auditor];
+const SURVEY_RESPONSE_WRITE_ROLES = [...TENANT_OPERATE_ROLES, ...READ_ONLY_ROLES];
 
 function roleIsPlatform(role) {
   return isPlatformRole(role);
@@ -225,8 +210,8 @@ const API_RULES = [
   // Perfil / contexto / módulos
   {
     prefix: '/api/me',
-    read: [...TENANT_READ_ROLES, 'dealer'],
-    write: [...TENANT_READ_ROLES, 'dealer'],
+    read: [...TENANT_READ_ROLES, ...ROLE_GROUPS.dealer],
+    write: [...TENANT_READ_ROLES, ...ROLE_GROUPS.dealer],
   },
   {
     prefix: '/api/user',
@@ -390,26 +375,26 @@ const API_RULES = [
   // Objetivos: viewer no entra
   {
     prefix: '/api/objectives',
-    read: ['admin', 'tenant_admin', 'auditor', 'operativo'],
-    write: ['admin', 'tenant_admin', 'operativo'],
+    read: [...ROLE_GROUPS.tenantAdmin, ...ROLE_GROUPS.auditor, ...ROLE_GROUPS.areaOwner],
+    write: TENANT_AREA_WRITE_ROLES,
   },
 
   // Salud ISO: viewer puede leer, no recalcular ni generar acciones
   {
     prefix: '/api/health',
     read: TENANT_READ_ROLES,
-    write: ['admin', 'tenant_admin', 'auditor'],
+    write: TENANT_AUDIT_WRITE_ROLES,
   },
   {
     prefix: '/health',
     read: TENANT_READ_ROLES,
-    write: ['admin', 'tenant_admin', 'auditor'],
+    write: TENANT_AUDIT_WRITE_ROLES,
   },
 
   {
     prefix: '/api/iso-scope',
-    read: [...TENANT_READ_ROLES, 'admin_cumplimiento', 'compliance_admin'],
-    write: [...TENANT_READ_ROLES, 'admin_cumplimiento', 'compliance_admin'],
+    read: TENANT_READ_ROLES,
+    write: TENANT_READ_ROLES,
   },
   {
     prefix: '/api/files/tenant',
@@ -431,7 +416,7 @@ const API_RULES = [
   {
     prefix: '/api/tenants',
     read: TENANT_READ_ROLES,
-    write: ['superadmin', 'platform_admin', 'admin_global', 'global_admin'],
+    write: PLATFORM_ROLES,
   },
 
   // Operación
@@ -448,42 +433,42 @@ const API_RULES = [
   {
     prefix: '/api/diagnostic/recommendations',
     read: TENANT_READ_ROLES,
-    write: [...TENANT_OPERATE_ROLES, 'admin_cumplimiento', 'compliance_admin'],
+    write: TENANT_OPERATE_ROLES,
   },
   {
     prefix: '/api/diagnostics/recommendations',
     read: TENANT_READ_ROLES,
-    write: [...TENANT_OPERATE_ROLES, 'admin_cumplimiento', 'compliance_admin'],
+    write: TENANT_OPERATE_ROLES,
   },
   {
     prefix: '/api/diagnostic/ai-contextual-recommendations',
     read: TENANT_READ_ROLES,
-    write: [...TENANT_OPERATE_ROLES, 'admin_cumplimiento', 'compliance_admin'],
+    write: TENANT_OPERATE_ROLES,
   },
   {
     prefix: '/api/diagnostics/ai-contextual-recommendations',
     read: TENANT_READ_ROLES,
-    write: [...TENANT_OPERATE_ROLES, 'admin_cumplimiento', 'compliance_admin'],
+    write: TENANT_OPERATE_ROLES,
   },
   {
     prefix: '/api/diagnostic/suggestions/accept-gap',
     read: TENANT_READ_ROLES,
-    write: [...TENANT_AUDIT_WRITE_ROLES, 'admin_cumplimiento', 'compliance_admin'],
+    write: TENANT_AUDIT_WRITE_ROLES,
   },
   {
     prefix: '/api/diagnostics/suggestions/accept-gap',
     read: TENANT_READ_ROLES,
-    write: [...TENANT_AUDIT_WRITE_ROLES, 'admin_cumplimiento', 'compliance_admin'],
+    write: TENANT_AUDIT_WRITE_ROLES,
   },
   {
     prefix: '/api/diagnostic/suggestions/accept-action',
     read: TENANT_READ_ROLES,
-    write: [...TENANT_AREA_WRITE_ROLES, 'admin_cumplimiento', 'compliance_admin'],
+    write: TENANT_AREA_WRITE_ROLES,
   },
   {
     prefix: '/api/diagnostics/suggestions/accept-action',
     read: TENANT_READ_ROLES,
-    write: [...TENANT_AREA_WRITE_ROLES, 'admin_cumplimiento', 'compliance_admin'],
+    write: TENANT_AREA_WRITE_ROLES,
   },
   {
     prefix: '/api/diagnostic',
@@ -522,8 +507,8 @@ const API_RULES = [
   },
   {
     prefix: '/api/evidence-library',
-    read: ['admin', 'tenant_admin', 'admin_cumplimiento', 'compliance_admin', 'auditor', ...AREA_OWNER_ROLES],
-    write: ['admin', 'tenant_admin', 'admin_cumplimiento', 'compliance_admin'],
+    read: TENANT_OPERATE_ROLES,
+    write: TENANT_ADMIN_ROLES,
   },
   {
     prefix: '/api/document-integrations',
@@ -545,31 +530,31 @@ const API_RULES = [
   {
     prefix: '/api/audit-execution',
     read: TENANT_READ_ROLES,
-    write: ['admin', 'tenant_admin', 'auditor'],
+    write: TENANT_AUDIT_WRITE_ROLES,
   },
   {
     prefix: '/api/audit-preparation',
     read: TENANT_READ_ROLES,
-    write: ['admin', 'tenant_admin', 'auditor'],
+    write: TENANT_AUDIT_WRITE_ROLES,
   },
   {
     prefix: '/api/ai-auditor',
     read: TENANT_READ_ROLES,
-    write: ['admin', 'tenant_admin', 'auditor'],
+    write: TENANT_AUDIT_WRITE_ROLES,
   },
 
   // Prefacturación SaaS
   {
     prefix: '/api/billing',
-    read: ['dealer'],
-    write: ['dealer'],
+    read: ROLE_GROUPS.dealer,
+    write: ROLE_GROUPS.dealer,
   },
 
   // Auditorías
   {
     prefix: '/api/audits',
     read: TENANT_READ_ROLES,
-    write: ['admin', 'tenant_admin', 'auditor'],
+    write: TENANT_AUDIT_WRITE_ROLES,
   },
 
   // IA
@@ -585,18 +570,18 @@ const API_RULES = [
   },
   {
     prefix: '/api/ai-compliance/tenant-search',
-    read: ['admin', 'tenant_admin', 'auditor'],
-    write: ['admin', 'tenant_admin', 'auditor'],
+    read: AI_COMPLIANCE_ROLES,
+    write: AI_COMPLIANCE_ROLES,
   },
   {
     prefix: '/api/ai-compliance',
-    read: ['admin', 'tenant_admin', 'auditor'],
-    write: ['admin', 'tenant_admin', 'auditor'],
+    read: AI_COMPLIANCE_ROLES,
+    write: AI_COMPLIANCE_ROLES,
   },
   {
     prefix: '/api/ai-feedback',
-    read: ['admin', 'tenant_admin', 'auditor', 'operativo'],
-    write: ['admin', 'tenant_admin', 'auditor', 'operativo'],
+    read: AI_TENANT_READ_ROLES,
+    write: AI_TENANT_WRITE_ROLES,
   },
   {
     prefix: '/api/ai-external-lookup',
@@ -605,8 +590,8 @@ const API_RULES = [
   },
   {
     prefix: '/ai-feedback',
-    read: ['admin', 'tenant_admin', 'auditor', 'operativo'],
-    write: ['admin', 'tenant_admin', 'auditor', 'operativo'],
+    read: AI_TENANT_READ_ROLES,
+    write: AI_TENANT_WRITE_ROLES,
   },
   {
     prefix: '/ai-external-lookup',
@@ -615,8 +600,8 @@ const API_RULES = [
   },
   {
     prefix: '/api/ai',
-    read: ['admin', 'tenant_admin', 'auditor', 'operativo'],
-    write: ['admin', 'tenant_admin', 'operativo'],
+    read: AI_TENANT_READ_ROLES,
+    write: [...ROLE_GROUPS.tenantAdmin, ...ROLE_GROUPS.areaOwner],
   },
   {
     prefix: '/api/ai-traces',
@@ -665,7 +650,7 @@ const API_RULES = [
   {
     prefix: '/api/survey-responses',
     read: TENANT_READ_ROLES,
-    write: [...TENANT_OPERATE_ROLES, ...EXECUTIVE_ROLES],
+    write: SURVEY_RESPONSE_WRITE_ROLES,
   },
   {
     prefix: '/api/assurance-tests',
@@ -696,8 +681,8 @@ const API_RULES = [
   // Dealer
   {
     prefix: '/api/quotes',
-    read: ['dealer'],
-    write: ['dealer'],
+    read: ROLE_GROUPS.dealer,
+    write: ROLE_GROUPS.dealer,
   },
 ];
 

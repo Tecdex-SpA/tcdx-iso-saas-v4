@@ -1,3 +1,7 @@
+const {
+  isPlatformRole,
+} = require('../services/auth/roleCompatibility.service');
+
 const express = require('express');
 const jwt = require('jsonwebtoken');
 
@@ -15,7 +19,7 @@ function normalizeRole(role) {
 
 function getHomePathByRole(role) {
   const normalizedRole = normalizeRole(role);
-  if (['superadmin','super_admin','platform_admin','admin_global','global_admin','owner'].includes(normalizedRole)) return '/admin-saas';
+  if (isPlatformRole(normalizedRole)) return '/admin-saas';
   if (normalizedRole === 'dealer') return '/dealer';
   return '/dashboard';
 }

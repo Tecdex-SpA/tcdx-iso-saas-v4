@@ -1,17 +1,13 @@
+const {
+  isPlatformRole,
+} = require('../services/auth/roleCompatibility.service');
+
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
 
 const router = express.Router();
 
-const PLATFORM_ROLES = new Set([
-  'superadmin',
-  'super_admin',
-  'platform_admin',
-  'admin_global',
-  'global_admin',
-  'owner',
-]);
 
 const TENANT_UPLOADS_ROOT = path.resolve(__dirname, '..', 'uploads', 'tenants');
 
@@ -20,7 +16,7 @@ function getUserRole(user) {
 }
 
 function isPlatformUser(user) {
-  return PLATFORM_ROLES.has(getUserRole(user));
+  return isPlatformRole(getUserRole(user));
 }
 
 function getUserTenantId(user) {

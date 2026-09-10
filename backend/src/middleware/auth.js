@@ -8,6 +8,11 @@ const {
   authenticatedRateLimit,
 } = require('./authenticatedRateLimit.middleware');
 const { withTenantTransaction } = require('../utils/dbTenantContext');
+const {
+  isDealerRole,
+  isPlatformRole,
+  normalizeRoleKey,
+} = require('../services/auth/roleCompatibility.service');
 
 function getBearerToken(req) {
   const header =
@@ -25,24 +30,7 @@ function getBearerToken(req) {
 }
 
 function normalizeRole(role) {
-  return String(role || '').toLowerCase();
-}
-
-function isPlatformRole(role) {
-  const normalized = normalizeRole(role);
-
-  return [
-    'superadmin',
-    'super_admin',
-    'platform_admin',
-    'admin_global',
-    'global_admin',
-    'owner',
-  ].includes(normalized);
-}
-
-function isDealerRole(role) {
-  return normalizeRole(role) === 'dealer';
+  return normalizeRoleKey(role);
 }
 
 function getUserTenantId(user) {

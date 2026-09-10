@@ -15,6 +15,7 @@ const {
   getPasswordPolicyMessage,
 } = require('../utils/passwordPolicy');
 const { safeErrorLog } = require('../utils/safeLogger');
+const { isPlatformUser } = require('../services/auth/roleCompatibility.service');
 
 const PROFILE_UPLOAD_DIR = path.join(__dirname, '..', '..', 'uploads', 'profiles');
 fs.mkdirSync(PROFILE_UPLOAD_DIR, { recursive: true });
@@ -220,7 +221,7 @@ router.get('/:id', auth, async (req, res) => {
   try {
     const { id } = req.params;
 
-    if (req.user.role !== 'superadmin' && req.user.user_id !== id) {
+    if (!isPlatformUser(req.user) && req.user.user_id !== id) {
       return res.status(403).json({ error: 'No autorizado' });
     }
 

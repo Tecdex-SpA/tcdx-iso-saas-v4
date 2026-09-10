@@ -1,13 +1,11 @@
+const {
+  ROLE_GROUPS,
+  isPlatformRole,
+  roleMatchesAny,
+} = require('./auth/roleCompatibility.service');
+
 const pool = require('../config/db');
 
-const PLATFORM_ROLES = new Set([
-  'superadmin',
-  'super_admin',
-  'platform_admin',
-  'admin_global',
-  'global_admin',
-  'owner',
-]);
 
 const ALLOWED_RUN_TYPES = new Set([
   'automated',
@@ -25,35 +23,16 @@ const ALLOWED_REVIEW_STATUS = new Set([
 ]);
 
 const RISK_MATRIX_WRITE_ROLES = new Set([
-  'superadmin',
-  'super_admin',
-  'platform_admin',
-  'admin_global',
-  'global_admin',
-  'owner',
-  'admin',
-  'tenant_admin',
-  'operativo',
-  'responsable_area',
-  'area_owner',
+  ...ROLE_GROUPS.platform,
+  ...ROLE_GROUPS.tenantAdmin,
+  ...ROLE_GROUPS.areaOwner,
 ]);
 
-function publicError(status, code, message) {
-  const error = new Error(message);
-  error.status = status;
-  error.code = code;
-  return error;
+function getUserRole(user = {}) {
+  return user?.role || user?.user_role || user?.userRole || '';
 }
 
-function normalizeRole(role) {
-  return String(role || '').toLowerCase().trim();
-}
-
-function isPlatformRole(role) {
-  return PLATFORM_ROLES.has(normalizeRole(role));
-}
-
-function getUserTenantId(user) {
+function getUserTenantId(user = {}) {
   return (
     user?.tenant_id ||
     user?.tenantId ||
@@ -64,64 +43,32 @@ function getUserTenantId(user) {
   );
 }
 
-function getUserId(user) {
+function getUserId(user = {}) {
   return user?.user_id || user?.userId || user?.id || null;
 }
 
-function assertTenantAccess(user, tenantId) {
-  const role = user?.role || user?.user_role || user?.userRole;
-  if (isPlatformRole(role)) return;
-
-  if (String(getUserTenantId(user) || '') !== String(tenantId || '')) {
-    throw publicError(403, 'TENANT_ACCESS_DENIED', 'No autorizado para este tenant');
-  }
+function publicError(statusCode, code, message) {
+  const error = new Error(message);
+  error.statusCode = statusCode;
+  error.status = statusCode;
+  error.code = code;
+  return error;
 }
 
-function canManageRiskMatrix(user) {
-  return RISK_MATRIX_WRITE_ROLES.has(normalizeRole(user?.role || user?.user_role || user?.userRole));
+function canManageRiskMatrix(user = {}) {
+  return roleMatchesAny(getUserRole(user), [...RISK_MATRIX_WRITE_ROLES]);
 }
 
-function assertCanManageRiskMatrix(user) {
+function assertCanManageRiskMatrix(user = {}) {
   if (!canManageRiskMatrix(user)) {
-    throw publicError(403, 'RISK_MATRIX_WRITE_DENIED', 'No autorizado para editar matriz de riesgos');
+    throw publicError(403, 'RBAC_DENIED', 'No autorizado para modificar la matriz de riesgo');
   }
 }
 
-function normalizeStandardCode(value) {
-  return String(value || '')
-    .trim()
-    .toUpperCase()
-    .replace(/\s+/g, '')
-    .replace('ISO/IEC', 'ISO')
-    .replace('ISO-', 'ISO');
-}
-
-function normalizeVersionCode(value) {
-  return String(value || '').trim().toUpperCase();
-}
-
-function normalizeRunType(value, standardCode, versionCode) {
-  const runType = String(value || '').trim() || (versionCode === '2026_FDIS' ? 'transition_readiness' : 'automated');
-
-  if (!ALLOWED_RUN_TYPES.has(runType)) {
-    throw publicError(400, 'INVALID_RUN_TYPE', 'run_type invalido');
-  }
-
-  if (standardCode === 'ISO9001' && versionCode === '2026_FDIS' && runType !== 'transition_readiness') {
-    throw publicError(
-      400,
-      'ISO9001_2026_TRANSITION_ONLY',
-      'ISO9001 2026_FDIS solo permite matriz de riesgos de preparacion/transicion'
-    );
-  }
-
-  return runType;
-}
-
-function boolValue(value, defaultValue = true) {
-  if (value === undefined || value === null) return defaultValue;
-  if (typeof value === 'boolean') return value;
-  return ['1', 'true', 'yes', 'si', 'sí'].includes(String(value).toLowerCase());
+function assertTenantAccess(user = {}, tenantId) {
+  if (isPlatformRole(getUserRole(user))) return;
+  if (String(getUserTenantId(user) || '') === String(tenantId || '')) return;
+  throw publicError(403, 'TENANT_DENIED', 'No autorizado para este tenant');
 }
 
 function numberValue(value, fallback = 0) {

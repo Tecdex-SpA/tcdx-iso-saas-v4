@@ -1,3 +1,11 @@
+const {
+  isAreaOwnerUser,
+  isAuditorUser,
+  isPlatformRole,
+  isPlatformUser,
+  isTenantAdminUser,
+} = require('../services/auth/roleCompatibility.service');
+
 const express = require('express')
 const router = express.Router()
 const pool = require('../config/db')
@@ -32,24 +40,15 @@ function normalizeRole(user) {
 }
 
 function isSuperAdmin(user) {
-  return [
-    'superadmin',
-    'super_admin',
-    'admin_global',
-    'global_admin',
-    'platform_admin',
-    'owner'
-  ].includes(normalizeRole(user))
+  return isPlatformUser(user)
 }
 
 function canManageDocumentIntegrations(user) {
-  const role = normalizeRole(user)
-  return isSuperAdmin(user) || ['tenant_admin', 'admin', 'compliance_manager'].includes(role)
+  return isPlatformUser(user) || isTenantAdminUser(user)
 }
 
 function canOperateDocumentIntegrations(user) {
-  const role = normalizeRole(user)
-  return isSuperAdmin(user) || ['tenant_admin', 'admin', 'compliance_manager', 'auditor', 'operativo'].includes(role)
+  return isPlatformUser(user) || isTenantAdminUser(user) || isAuditorUser(user) || isAreaOwnerUser(user)
 }
 
 function ensureTenantAccess(req, tenantId) {
@@ -1609,14 +1608,7 @@ function tcdxIntegratedNormalizeRole(user) {
 }
 
 function tcdxIntegratedIsSuperAdmin(user) {
-  return [
-    'superadmin',
-    'super_admin',
-    'admin_global',
-    'global_admin',
-    'platform_admin',
-    'owner'
-  ].includes(tcdxIntegratedNormalizeRole(user))
+  return isPlatformUser(user)
 }
 
 function tcdxIntegratedHasTenantAccess(req, tenantId) {

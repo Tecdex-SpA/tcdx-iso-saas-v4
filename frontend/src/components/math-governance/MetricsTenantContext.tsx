@@ -3,11 +3,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { clearTenantEntitlementsCache } from '@/hooks/useTenantEntitlements';
 import { ApiClientError, apiRequestJson, getActiveTenantId, setActiveTenantId } from '@/utils/apiClient';
-import { getTenantIdFromToken, getUserFromToken, getUserRoleFromToken } from '@/utils/auth';
+import { getTenantIdFromToken, getUserFromToken, getUserRoleFromToken, isPlatformRole } from '@/utils/auth';
 
 type TenantOption = { tenant_id: string; tenant_name: string; service_status?: string };
 type UnknownRecord = Record<string, unknown>;
-const PLATFORM_ROLES = new Set(['superadmin','super_admin','platform_admin','admin_global','global_admin','owner']);
 function isRecord(value: unknown): value is UnknownRecord { return typeof value === 'object' && value !== null && !Array.isArray(value); }
 function stringValue(value: unknown) { return typeof value === 'string' ? value.trim() : ''; }
 function normalizeTenantRows(payload: unknown): TenantOption[] { const root=isRecord(payload)?payload:{}; const raw=Array.isArray(root.data)?root.data:Array.isArray(payload)?payload:[]; return raw.filter(isRecord).map((row)=>({tenant_id:stringValue(row.tenant_id||row.id),tenant_name:stringValue(row.tenant_name||row.name||row.company_name)||'Empresa sin nombre',service_status:stringValue(row.service_status)})).filter((row)=>row.tenant_id); }
@@ -15,7 +14,7 @@ function tenantNameFromUnknown(payload: unknown) { const root=isRecord(payload)?
 function tokenTenantName(){ return tenantNameFromUnknown(getUserFromToken()); }
 
 export default function MetricsTenantContext(){
-  const role=getUserRoleFromToken(); const isPlatform=PLATFORM_ROLES.has(role); const tokenTenantId=stringValue(getTenantIdFromToken());
+  const role=getUserRoleFromToken(); const isPlatform=isPlatformRole(role); const tokenTenantId=stringValue(getTenantIdFromToken());
   const [tenants,setTenants]=useState<TenantOption[]>([]); const [selectedTenantId,setSelectedTenantId]=useState(()=>isPlatform?getActiveTenantId()||'':tokenTenantId); const [tenantName,setTenantName]=useState(tokenTenantName()); const [loading,setLoading]=useState(true); const [error,setError]=useState('');
   useEffect(()=>{ let cancelled=false; const request=isPlatform?apiRequestJson('/api/admin-saas/tenants',{tenantRequired:false,fallbackMessage:'No fue posible cargar las empresas disponibles.'}):apiRequestJson('/api/auth/validate',{fallbackMessage:'No fue posible resolver la empresa de la sesión.'}); request.then((payload)=>{ if(cancelled)return; if(isPlatform){const rows=normalizeTenantRows(payload);setTenants(rows);const current=getActiveTenantId()||'';setSelectedTenantId(rows.some((row)=>row.tenant_id===current)?current:'');}else{const resolved=tenantNameFromUnknown(payload)||tokenTenantName();setTenantName(resolved||`Empresa ${tokenTenantId.slice(0,8)}`);}}).catch((err)=>{if(cancelled)return;const message=err instanceof ApiClientError||err instanceof Error?err.message:'No fue posible resolver el contexto de empresa.';if(isPlatform)setError(message);else{setTenantName(tokenTenantName()||`Empresa ${tokenTenantId.slice(0,8)}`);setError('El nombre comercial no pudo validarse; el alcance tenant permanece activo y aislado.');}}).finally(()=>{if(!cancelled)setLoading(false);});return()=>{cancelled=true;};},[isPlatform,tokenTenantId]);
   const selectedTenant=useMemo(()=>tenants.find((tenant)=>tenant.tenant_id===selectedTenantId)||null,[selectedTenantId,tenants]);

@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useTenantEntitlements } from '@/hooks/useTenantEntitlements';
 import OfficialEvidenceDialog, { type EvidenceKind } from './OfficialEvidenceDialog';
 import { ApiClientError, apiRequestJson, apiRequestJsonSingleFlight, getActiveTenantId } from '@/utils/apiClient';
-import { getUserRoleFromToken } from '@/utils/auth';
+import { getUserRoleFromToken, isPlatformRole } from '@/utils/auth';
 import { DataTrustIndicator, UniversalStateBadge, UniversalStateBlock, type UniversalDataState } from '@/components/ui/enterprise';
 
 type UnknownRecord = Record<string, unknown>;
@@ -41,7 +41,6 @@ type RecalculationResult = { formula_code: string; display_name: string; domain:
 type RecalculationPayload = { status: string; period: { start: string|null; end: string|null; timezone: string|null }; summary: Record<string, number>; results: RecalculationResult[] };
 type EvidenceState = { kind: EvidenceKind; runId: string; formulaName: string } | null;
 
-const PLATFORM_ROLES = new Set(['superadmin','super_admin','platform_admin','admin_global','global_admin','owner']);
 const PAGE_SIZE = 10;
 function isRecord(value: unknown): value is UnknownRecord { return typeof value === 'object' && value !== null && !Array.isArray(value); }
 function stringValue(value: unknown, fallback = '') { if (typeof value === 'string') return value.trim() || fallback; if (typeof value === 'number' || typeof value === 'boolean') return String(value); return fallback; }
@@ -155,7 +154,7 @@ function DecisionBlock({ result }: { result: RecalculationResult }) {
 
 export default function FormulaCatalog() {
   const router = useRouter();
-  const now = new Date(); const yearStart = new Date(now.getFullYear(), 0, 1); const role = getUserRoleFromToken(); const isPlatform = PLATFORM_ROLES.has(role); const tenantReady = !isPlatform || Boolean(getActiveTenantId());
+  const now = new Date(); const yearStart = new Date(now.getFullYear(), 0, 1); const role = getUserRoleFromToken(); const isPlatform = isPlatformRole(role); const tenantReady = !isPlatform || Boolean(getActiveTenantId());
   const { loading: entitlementsLoading, entitlements } = useTenantEntitlements(); const engineDecision = entitlements.capabilities['metrics.engine']; const engineAllowed = !engineDecision || (engineDecision.enabled === true && engineDecision.read_only !== true);
   const [start,setStart] = useState(isoDate(yearStart)); const [end,setEnd] = useState(isoDate(now)); const [domain,setDomain] = useState(''); const [catalog,setCatalog] = useState<CatalogItem[]>([]); const [lastRun,setLastRun] = useState<RecalculationPayload|null>(null); const [loading,setLoading] = useState(true); const [running,setRunning] = useState(false); const [error,setError] = useState<string|null>(null); const [evidence,setEvidence] = useState<EvidenceState>(null); const [query,setQuery] = useState(''); const [statusFilter,setStatusFilter] = useState(''); const [page,setPage] = useState(1); const [selectedDecision,setSelectedDecision] = useState<string>('');
 

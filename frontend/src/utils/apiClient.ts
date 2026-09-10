@@ -1,4 +1,4 @@
-import { getStoredValidToken, getTenantIdFromToken, getUserRoleFromToken } from './auth';
+import { getStoredValidToken, getTenantIdFromToken, getUserRoleFromToken, isPlatformRole } from './auth';
 import { clearAccessBootstrapCache } from './accessBootstrap';
 
 export function getApiBaseUrl() {
@@ -11,7 +11,6 @@ export function getApiBaseUrl() {
 
 type ApiJsonObject = Record<string, unknown>;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const PLATFORM_ROLES = new Set(['superadmin', 'super_admin', 'platform_admin', 'admin_global', 'global_admin', 'owner']);
 const pendingJsonRequests = new Map<string, Promise<unknown>>();
 const TENANT_CONTEXT_EVENT = 'tcdx:tenant-context-changed';
 
@@ -145,7 +144,7 @@ export function resolveEffectiveTenantContext({ tenantRequired = true }: { tenan
 
   const role = getUserRoleFromToken();
   const tokenTenantId = getTenantIdFromToken();
-  const platform = PLATFORM_ROLES.has(role);
+  const platform = isPlatformRole(role);
 
   if (platform) {
     const activeTenantId = getActiveTenantId();

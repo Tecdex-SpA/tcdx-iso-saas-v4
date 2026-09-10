@@ -5,6 +5,7 @@ import ExecutiveIntelligenceBrief from '@/components/intelligence/ExecutiveIntel
 import { ActionableEmptyState } from '@/components/ui/enterprise';
 import useIntelligenceBrief from '@/hooks/useIntelligenceBrief';
 import { presentationLabel } from '@/utils/presentationLabels';
+import { isAuditorRole, isExecutiveRole as isCanonicalExecutiveRole, isPlatformRole, isTenantAdminRole, isViewerRole } from '@/utils/auth';
 import {
   asArray as intelligenceArray,
   collectKnowledgeBasis,
@@ -245,11 +246,11 @@ function getSessionIdentity() {
 }
 
 function isExecutiveRole(role: string) {
-  return ['viewer', 'cliente', 'client', 'read_only', 'readonly', 'solo_lectura', 'ejecutivo'].includes(role);
+  return isCanonicalExecutiveRole(role) || isViewerRole(role);
 }
 
 function canViewTechnicalDetail(role: string) {
-  return ['admin', 'admin_cumplimiento', 'compliance_admin', 'auditor', 'auditor_iso', 'superadmin'].includes(role);
+  return isPlatformRole(role) || isTenantAdminRole(role) || isAuditorRole(role);
 }
 
 function toArray(value: unknown): unknown[] {

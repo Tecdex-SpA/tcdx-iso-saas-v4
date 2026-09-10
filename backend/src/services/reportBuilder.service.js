@@ -1,5 +1,9 @@
 'use strict';
 
+const {
+  isPlatformRole: isCanonicalPlatformRole,
+} = require('./auth/roleCompatibility.service');
+
 const pool = require('../config/db');
 const healthService = require('./health.service');
 const diagnosticService = require('./diagnostic.service');
@@ -9,7 +13,6 @@ const reportIntelligenceBrief = require('./reportIntelligenceBrief.service');
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const EXECUTIVE_ROLES = new Set(['ejecutivo_cliente', 'viewer', 'cliente', 'client', 'read_only', 'readonly', 'solo_lectura', 'ejecutivo']);
-const PLATFORM_ROLES = new Set(['superadmin', 'super_admin', 'platform_admin', 'admin_global', 'global_admin', 'owner']);
 
 function publicError(status, code, message, details = null) {
   const error = new Error(message);
@@ -36,7 +39,7 @@ function getUserId(user = {}) {
 }
 
 function isPlatformRole(role) {
-  return PLATFORM_ROLES.has(role);
+  return isPlatformRole(role);
 }
 
 function isExecutiveRole(role) {

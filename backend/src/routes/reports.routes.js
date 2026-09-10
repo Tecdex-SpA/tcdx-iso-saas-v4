@@ -1,3 +1,7 @@
+const {
+  isPlatformRole: isCanonicalPlatformRole,
+} = require('../services/auth/roleCompatibility.service');
+
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
@@ -264,7 +268,7 @@ function getUserTenantId(user) {
 }
 
 function isPlatformRole(role) {
-  return ['superadmin', 'platform_admin'].includes(normalizeRole(role));
+  return isCanonicalPlatformRole(normalizeRole(role));
 }
 
 function isDealerRole(role) {

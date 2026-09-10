@@ -1,11 +1,7 @@
-const PLATFORM_ROLES = new Set([
-  'superadmin',
-  'super_admin',
-  'platform_admin',
-  'admin_global',
-  'global_admin',
-  'owner',
-]);
+const {
+  isPlatformRole: isCanonicalPlatformRole,
+} = require('./auth/roleCompatibility.service');
+
 
 const WRITE_ROLES = new Set([
   'admin',
@@ -45,7 +41,7 @@ function normalizeRole(role) {
 }
 
 function isPlatformRole(role) {
-  return PLATFORM_ROLES.has(normalizeRole(role));
+  return isCanonicalPlatformRole(normalizeRole(role));
 }
 
 function getUserRole(user) {

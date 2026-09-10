@@ -1,5 +1,9 @@
 'use strict';
 
+const {
+  isPlatformRole,
+} = require('./auth/roleCompatibility.service');
+
 const crypto = require('crypto');
 const pool = require('../config/db');
 const aiEngineClient = require('./aiEngineClient.service');
@@ -11,7 +15,6 @@ const reportTemplates = require('./reportTemplates.service');
 const DISCLAIMER = 'Esta recomendación no define automáticamente el alcance de certificación. Debe ser revisada por la organización y el auditor.';
 const CERTIFICATION_SCOPE_NOTE = 'La certificación aplica al sistema de gestión definido en un alcance. Según el contexto disponible, estos procesos, operaciones o áreas se recomiendan para evaluar su inclusión en el alcance.';
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const PLATFORM_ROLES = new Set(['superadmin', 'super_admin', 'platform_admin', 'admin_global', 'global_admin', 'owner']);
 const EXECUTIVE_ROLES = new Set(['ejecutivo_cliente', 'viewer', 'cliente', 'client', 'read_only', 'readonly', 'solo_lectura', 'ejecutivo']);
 const AREA_ROLES = new Set(['responsable_area', 'operativo', 'area_owner']);
 const ALLOWED_ROLES = new Set([
@@ -220,7 +223,7 @@ function assertAccess({ user, requestedTenantId = null }) {
     throw publicError(403, 'ISO_SCOPE_RBAC_DENIED', 'Rol no autorizado para recomendaciones de alcance ISO.');
   }
 
-  const tenantId = PLATFORM_ROLES.has(role) && requestedTenantId ? requestedTenantId : userTenantId;
+  const tenantId = isPlatformRole(role) && requestedTenantId ? requestedTenantId : userTenantId;
   if (!tenantId) {
     throw publicError(403, 'ISO_SCOPE_TENANT_REQUIRED', 'Tenant no identificado para recomendaciones de alcance ISO.');
   }

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import Link from 'next/link';
 import { apiRequestJson, ApiClientError } from '@/utils/apiClient';
-import { getUserRoleFromToken } from '@/utils/auth';
+import { getUserRoleFromToken, isPlatformRole, isTenantAdminRole } from '@/utils/auth';
 import { DataTrustIndicator, UniversalStateBadge, UniversalStateBlock, type UniversalDataState } from '@/components/ui/enterprise';
 
 type ContractVersion = {
@@ -54,7 +54,6 @@ type Observation = {
 };
 type Reconciliation = { status: string; total: number; equivalent: number; adapted: number; missing: number };
 
-const ADMIN_ROLES = new Set(['admin', 'tenant_admin', 'admin_cumplimiento', 'compliance_admin', 'superadmin', 'super_admin', 'platform_admin']);
 const TRANSFORMATIONS = ['direct','trim','lowercase','uppercase','date_parse','timezone_normalize','status_map','severity_map','unit_convert','boolean_map','numeric_parse','enum_map','coalesce_controlled'];
 
 function unwrap<T>(payload: unknown): T {
@@ -116,7 +115,7 @@ export default function SemanticLayerWorkspace({ compactHeader = false }: { comp
   const [versionForm, setVersionForm] = useState({ physical_table: '', required_fields: 'value, observed_at', timestamp_field: 'observed_at', minimum_coverage: '0.8', maximum_age_seconds: '2592000' });
   const [mappingForm, setMappingForm] = useState({ physical_table: '', physical_column: '', canonical_field: '', transformation_type: 'direct', required: false });
 
-  const canManage = useMemo(() => ADMIN_ROLES.has(role), [role]);
+  const canManage = useMemo(() => isPlatformRole(role) || isTenantAdminRole(role), [role]);
   const versions = selected?.versions || [];
   const currentVersion = versions.find((item) => item.id === versionId) || null;
 

@@ -15,9 +15,14 @@ const {
   TenantResolutionError,
   resolveEffectiveTenant,
 } = require('../utils/effectiveTenant');
+const {
+  isDealerRole,
+  isPlatformRole: isCanonicalPlatformRole,
+  normalizeRoleKey,
+} = require('../services/auth/roleCompatibility.service');
 
 function normalizeRole(role) {
-  return String(role || '').trim().toLowerCase();
+  return normalizeRoleKey(role);
 }
 
 function getUserId(user) {
@@ -38,18 +43,11 @@ function getUserTenantId(user) {
 function getHomePathByRole(role) {
   const normalizedRole = normalizeRole(role);
 
-  if (
-    normalizedRole === 'superadmin' ||
-    normalizedRole === 'super_admin' ||
-    normalizedRole === 'platform_admin' ||
-    normalizedRole === 'admin_global' ||
-    normalizedRole === 'global_admin' ||
-    normalizedRole === 'owner'
-  ) {
+  if (isPlatformRole(normalizedRole)) {
     return '/admin-saas';
   }
 
-  if (normalizedRole === 'dealer') {
+  if (isDealerRole(normalizedRole)) {
     return '/dealer';
   }
 
@@ -57,15 +55,7 @@ function getHomePathByRole(role) {
 }
 
 function isPlatformRole(role) {
-  const normalizedRole = normalizeRole(role);
-  return (
-    normalizedRole === 'superadmin' ||
-    normalizedRole === 'super_admin' ||
-    normalizedRole === 'platform_admin' ||
-    normalizedRole === 'admin_global' ||
-    normalizedRole === 'global_admin' ||
-    normalizedRole === 'owner'
-  );
+  return isCanonicalPlatformRole(role);
 }
 
 function capabilityEnabled(commercial, capabilityKey) {

@@ -3,7 +3,7 @@
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import AppLayout from '@/components/AppLayout';
-import { getUserFromToken } from '@/utils/auth';
+import { getUserFromToken, isAreaOwnerRole, isPlatformRole, isTenantAdminRole } from '@/utils/auth';
 import TcdxIcon from '@/components/icons/TcdxIcon';
 import { useTranslation } from '@/hooks/useTranslation';
 import { translateClauseLabel, translateStandardLabel } from '@/i18n/displayText';
@@ -318,37 +318,13 @@ function resolveRole(user: AuthUser | null): string {
 }
 
 function canCreateOperationalSimulation(user: AuthUser | null) {
-  return [
-    'superadmin',
-    'super_admin',
-    'platform_admin',
-    'admin_global',
-    'global_admin',
-    'owner',
-    'admin',
-    'tenant_admin',
-    'admin_cumplimiento',
-    'compliance_admin',
-    'operativo',
-    'responsable_area',
-    'area_owner',
-  ].includes(resolveRole(user));
+  const role = resolveRole(user);
+  return isPlatformRole(role) || isTenantAdminRole(role) || isAreaOwnerRole(role);
 }
 
 function canEditIsoRiskMatrix(user: AuthUser | null) {
-  return [
-    'superadmin',
-    'super_admin',
-    'platform_admin',
-    'admin_global',
-    'global_admin',
-    'owner',
-    'admin',
-    'tenant_admin',
-    'operativo',
-    'responsable_area',
-    'area_owner',
-  ].includes(resolveRole(user));
+  const role = resolveRole(user);
+  return isPlatformRole(role) || isTenantAdminRole(role) || isAreaOwnerRole(role);
 }
 
 function buildRiskInputDrafts(items: IsoRiskMatrixItem[]) {

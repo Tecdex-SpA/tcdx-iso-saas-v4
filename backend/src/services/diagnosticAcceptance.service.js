@@ -1,16 +1,12 @@
 'use strict';
 
+const {
+  isPlatformRole: isCanonicalPlatformRole,
+} = require('./auth/roleCompatibility.service');
+
 const pool = require('../config/db');
 const diagnosticService = require('./diagnostic.service');
 
-const PLATFORM_ROLES = new Set([
-  'superadmin',
-  'super_admin',
-  'platform_admin',
-  'admin_global',
-  'global_admin',
-  'owner',
-]);
 
 const GAP_ACCEPT_ROLES = new Set([
   'admin',
@@ -56,7 +52,7 @@ function getUserId(user = {}) {
 }
 
 function isPlatformRole(role) {
-  return PLATFORM_ROLES.has(String(role || '').toLowerCase().trim());
+  return isPlatformRole(String(role || '').toLowerCase().trim());
 }
 
 function assertAcceptRole(user, action) {

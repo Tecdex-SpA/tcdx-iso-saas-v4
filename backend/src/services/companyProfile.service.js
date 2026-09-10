@@ -1,5 +1,9 @@
 'use strict';
 
+const {
+  isPlatformRole,
+} = require('./auth/roleCompatibility.service');
+
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
@@ -27,7 +31,7 @@ function normalizeRole(user = {}) {
 }
 
 function isPlatform(user = {}) {
-  return ['superadmin', 'super_admin', 'platform_admin', 'admin_global', 'global_admin', 'owner'].includes(normalizeRole(user));
+  return isPlatformRole(normalizeRole(user));
 }
 
 function safeObject(value) {

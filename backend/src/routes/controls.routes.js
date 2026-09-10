@@ -1,3 +1,8 @@
+const {
+  isAuditorUser,
+  isPlatformUser,
+} = require('../services/auth/roleCompatibility.service');
+
 const express = require('express');
 const router = express.Router();
 const pool = require('../config/db');
@@ -157,38 +162,19 @@ function getUserId(user) {
   return user?.user_id || user?.userId || user?.id || null;
 }
 
-function isSuperAdmin(req) {
-  const role = normalizeRole(
-    req.user?.role || req.user?.user_role || req.user?.userRole
-  );
-
-  return [
-    'superadmin',
-    'super_admin',
-    'platform_admin',
-    'admin_global',
-    'global_admin',
-    'owner',
-  ].includes(role);
-}
-
-function isAuditor(req) {
-  const role = normalizeRole(
-    req.user?.role || req.user?.user_role || req.user?.userRole
-  );
-
-  return role === 'auditor';
+function isPlatformRequest(req) {
+  return isPlatformUser(req.user);
 }
 
 function canAccessTenant(req, tenantId) {
-  if (isSuperAdmin(req)) return true;
+  if (isPlatformRequest(req)) return true;
 
   const userTenantId = getUserTenantId(req.user);
   return Boolean(userTenantId && tenantId && String(userTenantId) === String(tenantId));
 }
 
 function canManageControls(req, tenantId) {
-  if (isAuditor(req)) return false;
+  if (isAuditorUser(req.user)) return false;
   return canAccessTenant(req, tenantId);
 }
 
@@ -1083,7 +1069,7 @@ router.get('/workbench/:tenant_id/:iso', auth, async (req, res) => {
       };
     });
 
-    const items = isSuperAdmin(req) && req.query.include_exclusions === 'true'
+    const items = isPlatformRequest(req) && req.query.include_exclusions === 'true'
       ? rawItems
       : await filterApplicableControls(rawItems, tenant_id, { standardCode: iso });
 
@@ -1724,7 +1710,7 @@ router.get('/catalog/:tenant_id/:iso', auth, async (req, res) => {
       [tenant_id, operation.id, iso, catalogMode]
     );
 
-    const allRows = isSuperAdmin(req) && req.query.include_exclusions === 'true'
+    const allRows = isPlatformRequest(req) && req.query.include_exclusions === 'true'
       ? controlsResult.rows
       : await filterApplicableControls(controlsResult.rows, tenant_id, { standardCode: iso });
     const genericControls = allRows.filter((row) => row.source_type === 'generic');
@@ -2423,7 +2409,7 @@ router.put('/:id', auth, async (req, res) => {
     const { id } = req.params;
     const { status, score } = req.body;
 
-    if (isAuditor(req)) {
+    if (isAuditorUser(req.user)) {
       return res.status(403).json({ error: 'Sin permisos' });
     }
 

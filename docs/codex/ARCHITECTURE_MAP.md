@@ -14,8 +14,20 @@ Frontend (`frontend/src/app`, `frontend/src/components`)
 Backend Node/Express
         +--> Auth/RBAC
         |      + canonical/compatibility role resolver (`roleCompatibility.service.js`)
+        |      + release RBAC closeout: seven canonical roles including
+        |        `viewer`; platform/dealer/admin/auditor/area_owner/executive/
+        |        viewer detection resolves centrally through
+        |        `roleCompatibility.service.js`
+        |      + authorization target contract is user -> canonical role -> RBAC
+        |        permission -> tenant scope -> commercial entitlement/capability
         |      + raw legacy effective role preserved for permission checks
-        |      + API RBAC middleware remains backend authority
+        |      + API RBAC middleware remains backend authority; frontend gates
+        |        mirror effective permissions/modules/capabilities and are not
+        |        authorization authority
+        |      + final pre-deploy residual role authority gate requires
+        |        RESIDUAL_AUTHORIZATION_AUTHORITY=0 and classifies local role
+        |        mentions as central consumer, presentation, business semantics
+        |        or compatibility only
         |      + commercial gates evaluate entitlement + module active + permission
         |      + RBAC-02 strict base capability exception only for `core.dashboard`
         |        on active commercial tenants with `dashboards.read`; no generic

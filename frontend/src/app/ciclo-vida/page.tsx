@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import AppLayout from '@/components/AppLayout';
 import EnterpriseDomainWorkspaceShell from '@/components/enterprise-domain/EnterpriseDomainWorkspaceShell';
-import { getUserFromToken } from '@/utils/auth';
+import { getUserFromToken, isAuditorRole, isExecutiveRole, isTenantAdminRole, isViewerRole } from '@/utils/auth';
 import ObjectivesPanel from '@/components/objectives/ObjectivesPanel';
 import { useTranslation } from '@/hooks/useTranslation';
 
@@ -316,19 +316,12 @@ export default function CicloVidaPage() {
   const [historyRows, setHistoryRows] = useState<LifecycleHistoryRow[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
 
-  const isAuditor = userRole === 'auditor';
+  const isAuditor = isAuditorRole(userRole);
 
-  const isViewer =
-    userRole === 'viewer' ||
-    userRole === 'cliente' ||
-    userRole === 'client' ||
-    userRole === 'solo_lectura' ||
-    userRole === 'read_only' ||
-    userRole === 'readonly' ||
-    userRole === 'ejecutivo';
+  const isViewer = isViewerRole(userRole) || isExecutiveRole(userRole);
 
   const canUseObjectives = !isViewer;
-  const canRequestLifecycleMove = userRole === 'admin' || userRole === 'tenant_admin';
+  const canRequestLifecycleMove = isTenantAdminRole(userRole);
 
   const canReviewLifecycleMove = isAuditor;
 

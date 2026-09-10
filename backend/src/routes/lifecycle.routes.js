@@ -1,3 +1,9 @@
+const {
+  isAuditorUser,
+  isPlatformUser,
+  isTenantAdminUser,
+} = require('../services/auth/roleCompatibility.service');
+
 const express = require('express');
 const router = express.Router();
 const pool = require('../config/db');
@@ -19,10 +25,6 @@ const auditsColumnsCache = {
   columns: new Set()
 };
 
-function normalizeRole(role) {
-  return String(role || '').toLowerCase().trim();
-}
-
 function getUserTenantId(user) {
   return (
     user?.tenant_id ||
@@ -38,36 +40,18 @@ function getUserId(user) {
   return user?.user_id || user?.userId || user?.id || null;
 }
 
-function isSuperAdmin(req) {
-  const role = normalizeRole(req.user?.role || req.user?.user_role || req.user?.userRole);
-  return [
-    'superadmin',
-    'super_admin',
-    'platform_admin',
-    'admin_global',
-    'global_admin',
-    'owner'
-  ].includes(role);
-}
-
-function isAuditor(req) {
-  const role = normalizeRole(req.user?.role || req.user?.user_role || req.user?.userRole);
-  return role === 'auditor';
-}
-
 function canAccessTenant(req, tenantId) {
-  if (isSuperAdmin(req)) return true;
+  if (isPlatformUser(req.user)) return true;
   return String(getUserTenantId(req.user) || '') === String(tenantId || '');
 }
 
 function canRequestLifecycleChange(req, tenantId) {
   if (!canAccessTenant(req, tenantId)) return false;
-  const role = normalizeRole(req.user?.role || req.user?.user_role || req.user?.userRole);
-  return role === 'admin' || role === 'tenant_admin';
+  return isTenantAdminUser(req.user);
 }
 
 function canReviewLifecycleChange(req, tenantId) {
-  return canAccessTenant(req, tenantId) && isAuditor(req);
+  return canAccessTenant(req, tenantId) && isAuditorUser(req.user);
 }
 
 function pct(part, total) {

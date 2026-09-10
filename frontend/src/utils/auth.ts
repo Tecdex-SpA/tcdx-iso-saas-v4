@@ -1,4 +1,13 @@
-import { getMvpHomePathByRole } from './mvpPermissions';
+import {
+  getMvpHomePathByRole,
+  isMvpAreaOwnerRole,
+  isMvpAuditorRole,
+  isMvpDealerRole,
+  isMvpExecutiveRole,
+  isMvpPlatformRole,
+  isMvpTenantAdminRole,
+  isMvpViewerRole,
+} from './mvpPermissions';
 import { clearAccessBootstrapCache } from './accessBootstrap';
 
 const AUTH_CONTEXT_EVENT = 'tcdx:auth-context-changed';
@@ -103,6 +112,34 @@ export function getUserIdFromToken() {
 
 export function getHomePathByRole(role?: string | null) {
   return getMvpHomePathByRole(normalizeRole(role));
+}
+
+export function isPlatformRole(role?: string | null) {
+  return isMvpPlatformRole(normalizeRole(role));
+}
+
+export function isDealerRole(role?: string | null) {
+  return isMvpDealerRole(normalizeRole(role));
+}
+
+export function isTenantAdminRole(role?: string | null) {
+  return isMvpTenantAdminRole(normalizeRole(role));
+}
+
+export function isAuditorRole(role?: string | null) {
+  return isMvpAuditorRole(normalizeRole(role));
+}
+
+export function isAreaOwnerRole(role?: string | null) {
+  return isMvpAreaOwnerRole(normalizeRole(role));
+}
+
+export function isExecutiveRole(role?: string | null) {
+  return isMvpExecutiveRole(normalizeRole(role));
+}
+
+export function isViewerRole(role?: string | null) {
+  return isMvpViewerRole(normalizeRole(role));
 }
 
 export function getHomePathFromToken() {

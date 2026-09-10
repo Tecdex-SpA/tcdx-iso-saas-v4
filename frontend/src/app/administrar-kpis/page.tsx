@@ -11,7 +11,7 @@ import {
   EnterprisePageHeader,
   EnterpriseScrollPanel,
 } from '@/components/ui/enterprise';
-import { getUserFromToken } from '@/utils/auth';
+import { getUserFromToken, isPlatformRole as isAuthPlatformRole } from '@/utils/auth';
 import { canAccessMvpFeature } from '@/utils/mvpPermissions';
 import { useTranslation } from '@/hooks/useTranslation';
 
@@ -21,7 +21,7 @@ const API_URL =
 function isPlatformRole(user: unknown) {
   const record = user && typeof user === 'object' ? user as Record<string, unknown> : {};
   const role = String(record.role || record.user_role || record.userRole || '').toLowerCase();
-  return ['superadmin', 'super_admin', 'platform_admin', 'admin_global', 'global_admin', 'owner'].includes(role);
+  return isAuthPlatformRole(role);
 }
 
 type LatestSnapshot = {

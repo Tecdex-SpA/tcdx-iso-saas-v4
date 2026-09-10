@@ -10,7 +10,7 @@ import {
 } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { getUserFromToken, getUserRoleFromToken } from '@/utils/auth';
+import { getUserFromToken, getUserRoleFromToken, isPlatformRole, isTenantAdminRole } from '@/utils/auth';
 import AppLayout from '@/components/AppLayout';
 import GrcPhase1Panel from '@/components/grc/GrcPhase1Panel';
 import GrcDecisionCenter from '@/components/math-governance/GrcDecisionCenter';
@@ -957,16 +957,7 @@ function DashboardPageContent() {
         asRecord(currentUserRecord.tenant).name
     ) || 'Organización';
 
-  const canManageKpis = [
-    'superadmin',
-    'super_admin',
-    'platform_admin',
-    'admin_global',
-    'global_admin',
-    'owner',
-    'admin',
-    'tenant_admin',
-  ].includes(currentRole);
+  const canManageKpis = isPlatformRole(currentRole) || isTenantAdminRole(currentRole);
   const canShowIsoHealth = !entitlementsLoading && canShowCapability('iso.health');
   const canShowAdvancedMetrics =
     !entitlementsLoading &&

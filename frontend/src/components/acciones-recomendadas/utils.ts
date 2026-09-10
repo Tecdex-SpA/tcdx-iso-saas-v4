@@ -1,4 +1,5 @@
 import type { RecommendedAction } from './types';
+import { isDealerRole, isExecutiveRole, isViewerRole } from '@/utils/auth';
 
 export function label(value?: string | null) {
   return String(value || 'sin dato')
@@ -108,14 +109,6 @@ export function relatedLinks(action: RecommendedAction) {
 }
 
 export function canMutate(role?: string | null) {
-  const value = String(role || '').toLowerCase();
-  return ![
-    'viewer',
-    'cliente',
-    'client',
-    'read_only',
-    'readonly',
-    'solo_lectura',
-    'ejecutivo',
-  ].includes(value);
+  const value = String(role || '').toLowerCase().trim();
+  return !isExecutiveRole(value) && !isViewerRole(value) && !isDealerRole(value);
 }

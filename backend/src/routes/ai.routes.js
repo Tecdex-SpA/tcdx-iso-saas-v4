@@ -1,3 +1,9 @@
+const {
+  isAreaOwnerUser,
+  isPlatformUser,
+  isTenantAdminUser,
+} = require('../services/auth/roleCompatibility.service');
+
 const express = require('express');
 const router = express.Router();
 const pool = require('../config/db');
@@ -22,25 +28,13 @@ const isUUID = (str) => {
   return regex.test(str);
 };
 
-const normalizeRole = (role) => String(role || '').toLowerCase().trim();
-
-const isPlatformRole = (role) => [
-  'superadmin',
-  'super_admin',
-  'platform_admin',
-  'admin_global',
-  'global_admin',
-  'owner',
-].includes(normalizeRole(role));
-
 const ensureTenantAccess = (req, tenantId) => {
-  if (isPlatformRole(req.user?.role || req.user?.user_role || req.user?.userRole)) return true;
+  if (isPlatformUser(req.user)) return true;
   return req.user?.tenant_id === tenantId;
 };
 
 const canCreateAiActionDraft = (user) => {
-  const role = normalizeRole(user?.role || user?.user_role || user?.userRole);
-  return isPlatformRole(role) || ['admin', 'tenant_admin', 'operativo'].includes(role);
+  return isPlatformUser(user) || isTenantAdminUser(user) || isAreaOwnerUser(user);
 };
 
 const getUserId = (user) => user?.user_id || user?.userId || user?.id || null;

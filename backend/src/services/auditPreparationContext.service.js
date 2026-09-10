@@ -1,20 +1,16 @@
+const {
+  isPlatformRole,
+} = require('./auth/roleCompatibility.service');
+
 const pool = require('../config/db');
 
-const PLATFORM_ROLES = new Set([
-  'superadmin',
-  'super_admin',
-  'platform_admin',
-  'admin_global',
-  'global_admin',
-  'owner',
-]);
 
 function normalizeRole(user) {
   return String(user?.role || user?.user_role || user?.userRole || '').toLowerCase().trim();
 }
 
 function isPlatform(user) {
-  return PLATFORM_ROLES.has(normalizeRole(user));
+  return isPlatformRole(normalizeRole(user));
 }
 
 function getUserTenantId(user) {

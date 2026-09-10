@@ -1,3 +1,7 @@
+const {
+  isPlatformRole,
+} = require('../services/auth/roleCompatibility.service');
+
 const express = require('express');
 const router = express.Router();
 const pool = require('../config/db');
@@ -30,14 +34,7 @@ function isSuperAdmin(user) {
     user?.role || user?.user_role || user?.userRole || ''
   ).toLowerCase();
 
-  return [
-    'superadmin',
-    'super_admin',
-    'admin_global',
-    'global_admin',
-    'platform_admin',
-    'owner',
-  ].includes(role);
+  return isPlatformRole(role);
 }
 
 const ensureTenantAccess = (req, tenantId) => {

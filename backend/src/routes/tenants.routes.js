@@ -1,3 +1,7 @@
+const {
+  isPlatformRole,
+} = require('../services/auth/roleCompatibility.service');
+
 const express = require('express');
 const router = express.Router();
 const pool = require('../config/db');
@@ -28,14 +32,7 @@ function getUserTenantId(user) {
 }
 
 function isPlatform(user) {
-  return [
-    'superadmin',
-    'super_admin',
-    'platform_admin',
-    'admin_global',
-    'global_admin',
-    'owner',
-  ].includes(normalizeRole(user));
+  return isPlatformRole(normalizeRole(user));
 }
 
 const logoUploadDir = path.join(__dirname, '..', '..', 'uploads', 'logos');

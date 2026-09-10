@@ -1,3 +1,8 @@
+const {
+  isPlatformUser,
+  isTenantAdminUser,
+} = require('../services/auth/roleCompatibility.service');
+
 const express = require('express');
 const crypto = require('crypto');
 const pool = require('../config/db');
@@ -19,16 +24,12 @@ function getUserId(user) {
   return user?.user_id || user?.userId || user?.id || null;
 }
 
-function role(user) {
-  return String(user?.role || user?.user_role || user?.userRole || '').toLowerCase().trim();
-}
-
 function isSuperAdmin(user) {
-  return ['superadmin', 'super_admin', 'admin_global', 'global_admin', 'platform_admin', 'owner'].includes(role(user));
+  return isPlatformUser(user);
 }
 
 function canManage(user) {
-  return isSuperAdmin(user) || ['tenant_admin', 'admin', 'admin_cumplimiento', 'compliance_admin', 'compliance_manager'].includes(role(user));
+  return isPlatformUser(user) || isTenantAdminUser(user);
 }
 
 function ensureTenantAccess(req, tenantId) {

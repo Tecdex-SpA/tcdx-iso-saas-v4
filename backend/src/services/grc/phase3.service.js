@@ -1,9 +1,10 @@
+const {
+  isPlatformRole,
+} = require('../auth/roleCompatibility.service');
+
 const { assertTransition, evaluatePhase3Rules } = require('./phase3Rules');
 const { createPhase2Service } = require('./phase2.service');
 
-const PLATFORM_ROLES = new Set([
-  'superadmin', 'super_admin', 'platform_admin', 'admin_global', 'global_admin', 'owner',
-]);
 
 class Phase3Error extends Error {
   constructor(code, message, status = 400, details = null) {
@@ -387,7 +388,7 @@ function createPhase3Service(pool, { clock = Date.now } = {}) {
   }
 
   async function assertPermission({ userId, role, permission }) {
-    if (PLATFORM_ROLES.has(String(role || '').toLowerCase())) return;
+    if (isPlatformRole(String(role || '').toLowerCase())) return;
     if (!userId) throw new Phase3Error('PHASE3_USER_REQUIRED', 'Usuario no identificado.', 401);
     const result = await pool.query(
       'SELECT user_has_permission($1::uuid,$2::text) AS allowed',
@@ -602,7 +603,7 @@ function createPhase3Service(pool, { clock = Date.now } = {}) {
          WHERE sm.module_key='grc_phase3_operations' AND sm.is_active=TRUE`,
         [tenantId]
       ),
-      PLATFORM_ROLES.has(String(role || '').toLowerCase())
+      isPlatformRole(String(role || '').toLowerCase())
         ? Promise.resolve({ rows: [{ permission_key: 'platform', allowed: true }] })
         : pool.query(
           `SELECT p.permission_key,user_has_permission($1::uuid,p.permission_key) AS allowed

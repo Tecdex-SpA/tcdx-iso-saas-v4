@@ -5,17 +5,7 @@ import DashboardBuilderGuide from '@/components/math-governance/DashboardBuilder
 import GrcDecisionCenter from '@/components/math-governance/GrcDecisionCenter';
 import Phase5Workspace from '@/components/phase5/Phase5Workspace';
 import { getUserRoleFromToken } from '@/utils/auth';
-
-const DASHBOARD_MANAGER_ROLES = new Set([
-  'admin',
-  'tenant_admin',
-  'superadmin',
-  'super_admin',
-  'platform_admin',
-  'admin_global',
-  'global_admin',
-  'owner',
-]);
+import { roleHasAnyMvpGroup } from '@/utils/mvpPermissions';
 
 export default function DashboardBuilder() {
   const role = useSyncExternalStore<string | null>(
@@ -28,7 +18,7 @@ export default function DashboardBuilder() {
     return <div className="p-6 text-sm text-slate-600">Validando acceso al cockpit BI…</div>;
   }
 
-  const canManageDashboards = DASHBOARD_MANAGER_ROLES.has(role);
+  const canManageDashboards = roleHasAnyMvpGroup(role, ['platform', 'admin']);
 
   return (
     <Phase5Workspace

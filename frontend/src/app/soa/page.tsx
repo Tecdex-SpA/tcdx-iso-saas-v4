@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react
 import AppLayout from '@/components/AppLayout';
 import EnterpriseDomainWorkspaceShell from '@/components/enterprise-domain/EnterpriseDomainWorkspaceShell';
 import { useLanguage } from '@/context/LanguageContext';
-import { getUserFromToken } from '@/utils/auth';
+import { getUserFromToken, isAuditorRole } from '@/utils/auth';
 import { translateDisplayText, translateClauseLabel, translateStatusLabel } from '@/i18n/displayText';
 
 const SOA_STANDARDS = [
@@ -231,7 +231,7 @@ export default function SoAPage() {
     issue: 'all'
   });
 
-  const isReadOnly = user?.role === 'auditor';
+  const isReadOnly = isAuditorRole(user?.role);
 
   useEffect(() => {
     const authToken = localStorage.getItem('token');

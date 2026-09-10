@@ -1,3 +1,9 @@
+const {
+  isAuditorUser,
+  isPlatformUser,
+  isTenantAdminUser,
+} = require('../services/auth/roleCompatibility.service');
+
 const express = require('express')
 const router = express.Router()
 const pool = require('../config/db')
@@ -40,32 +46,16 @@ function getUserId(user) {
   return user?.user_id || user?.userId || user?.id || null
 }
 
-function normalizeRole(user) {
-  return String(
-    user?.role || user?.user_role || user?.userRole || ''
-  ).toLowerCase().trim()
-}
-
 function isSuperAdmin(user) {
-  const role = normalizeRole(user)
-
-  return [
-    'superadmin',
-    'super_admin',
-    'admin_global',
-    'global_admin',
-    'platform_admin',
-    'owner'
-  ].includes(role)
+  return isPlatformUser(user)
 }
 
 function isAuditor(user) {
-  return normalizeRole(user) === 'auditor'
+  return isAuditorUser(user)
 }
 
 function isTenantAdmin(user) {
-  const role = normalizeRole(user)
-  return ['tenant_admin', 'admin'].includes(role)
+  return isTenantAdminUser(user)
 }
 
 const ensureTenantAccess = (req, tenantId) => {

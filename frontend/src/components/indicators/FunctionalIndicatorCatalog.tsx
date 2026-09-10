@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { ApiClientError, apiRequestJson, apiRequestJsonSingleFlight } from '@/utils/apiClient';
 import { getUserRoleFromToken } from '@/utils/auth';
+import { roleHasAnyMvpGroup } from '@/utils/mvpPermissions';
 import { ActionableEmptyState, DataTrustIndicator, ResponsiveChartFrame, UniversalStateBadge, UniversalStateBlock, type UniversalDataState } from '@/components/ui/enterprise';
 import { presentationLabel } from '@/utils/presentationLabels';
 import { CartesianGrid, Line, LineChart, Tooltip, XAxis, YAxis } from 'recharts';
@@ -16,8 +17,6 @@ type Snapshot = { snapshot_id:string;period?:{key?:string;start?:string;end?:str
 type CatalogItem = { definition:Definition;latest_snapshot:Snapshot|null };
 type Comparison = { id?:string;comparison_type?:string;status?:string;absolute_change?:number|null;percentage_change?:number|null;methodology_compatible?:boolean;compatibility_reason?:string|null;created_at?:string };
 
-const ADMIN_ROLES=new Set(['admin','tenant_admin','superadmin','super_admin','platform_admin','admin_global','global_admin','owner','data_steward']);
-const TECHNICAL_ROLES=new Set([...ADMIN_ROLES,'auditor']);
 function record(value:unknown):UnknownRecord{return typeof value==='object'&&value!==null&&!Array.isArray(value)?value as UnknownRecord:{}}
 function data<T>(payload:unknown):T{const root=record(payload);return (root.data??payload) as T}
 function formatValue(snapshot:Snapshot|null){if(!snapshot)return 'Sin datos';if(snapshot.state!=='calculated')return universalSnapshotLabel(snapshot);if(snapshot.value===null)return 'No calculable';return `${new Intl.NumberFormat('es-CL',{maximumFractionDigits:2}).format(snapshot.value)}${snapshot.unit==='%'?' %':snapshot.unit?` ${snapshot.unit}`:''}`}
@@ -72,7 +71,7 @@ function fallbackActionable(snapshot:Snapshot|null):ActionableState|null{if(!sna
 function actionable(snapshot:Snapshot|null){return snapshot?.actionable_state||fallbackActionable(snapshot)}
 
 export default function FunctionalIndicatorCatalog({ metricCode }: { metricCode?:string }){
-  const role=getUserRoleFromToken();const canOperate=ADMIN_ROLES.has(role);const canTechnical=TECHNICAL_ROLES.has(role);
+  const role=getUserRoleFromToken();const canOperate=roleHasAnyMvpGroup(role,['platform','admin']);const canTechnical=roleHasAnyMvpGroup(role,['platform','admin','auditor']);
   const [items,setItems]=useState<CatalogItem[]>([]);const [selected,setSelected]=useState<CatalogItem|null>(null);const [technical,setTechnical]=useState<UnknownRecord|null>(null);const [history,setHistory]=useState<Snapshot[]>([]);const [comparisons,setComparisons]=useState<Comparison[]>([]);const [draftSnapshotId,setDraftSnapshotId]=useState('');const [loading,setLoading]=useState(true);const [busy,setBusy]=useState('');const [error,setError]=useState('');const [search,setSearch]=useState('');
   const load=useCallback(async()=>{setLoading(true);setError('');try{if(metricCode){const encoded=encodeURIComponent(metricCode);const [itemPayload,historyPayload,comparisonPayload]=await Promise.all([apiRequestJsonSingleFlight(`/api/metrics/official/${encoded}`,{fallbackMessage:'No fue posible cargar el indicador oficial.'}),apiRequestJsonSingleFlight(`/api/metrics/official/${encoded}/history?limit=24`,{fallbackMessage:'No fue posible cargar el historial oficial.'}),apiRequestJsonSingleFlight(`/api/metrics/official/${encoded}/comparisons?limit=24`,{fallbackMessage:'No fue posible cargar las comparaciones.'})]);const item=data<CatalogItem>(itemPayload);setItems([item]);setSelected(item);const historic=data<Snapshot[]>(historyPayload);const compared=data<Comparison[]>(comparisonPayload);setHistory(Array.isArray(historic)?historic:[]);setComparisons(Array.isArray(compared)?compared:[]);}else{const rows=data<CatalogItem[]>(await apiRequestJsonSingleFlight('/api/metrics/official/catalog',{fallbackMessage:'No fue posible cargar el catálogo funcional.'}));setItems(Array.isArray(rows)?rows:[]);}}catch(err){setError(err instanceof ApiClientError||err instanceof Error?err.message:'No fue posible cargar indicadores.');}finally{setLoading(false)}},[metricCode]);
   useEffect(()=>{void load()},[load]);

@@ -1,3 +1,7 @@
+const {
+  isPlatformRole: isCanonicalPlatformRole,
+} = require('../services/auth/roleCompatibility.service');
+
 const express = require('express');
 const router = express.Router();
 const pool = require('../config/db');
@@ -19,14 +23,7 @@ function getUserTenantId(user) {
 }
 
 function isPlatformRole(role) {
-  return [
-    'superadmin',
-    'super_admin',
-    'platform_admin',
-    'admin_global',
-    'global_admin',
-    'owner',
-  ].includes(normalizeRole(role));
+  return isCanonicalPlatformRole(normalizeRole(role));
 }
 
 function canAccessTenant(req, tenantId) {

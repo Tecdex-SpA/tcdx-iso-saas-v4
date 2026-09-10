@@ -1,5 +1,9 @@
 const db = require('../config/db');
 const { filterApplicableKpis } = require('../services/applicabilityScope.service');
+const {
+  isPlatformUser,
+  normalizeRoleKey,
+} = require('../services/auth/roleCompatibility.service');
 
 const KPI_CODES = {
   OBJECTIVES: 'KPI-01',
@@ -95,13 +99,13 @@ function isHealthKpiCode(code) {
 }
 
 function getUserRole(user) {
-  return String(
+  return normalizeRoleKey(
     user?.role ||
       user?.user_role ||
       user?.userRole ||
       user?.profile ||
       ''
-  ).toLowerCase();
+  );
 }
 
 function getUserTenantId(user) {
@@ -116,16 +120,7 @@ function getUserTenantId(user) {
 }
 
 function isSuperAdmin(user) {
-  const role = getUserRole(user);
-
-  return [
-    'superadmin',
-    'super_admin',
-    'admin_global',
-    'global_admin',
-    'platform_admin',
-    'owner'
-  ].includes(role);
+  return isPlatformUser(user);
 }
 
 function canAccessTenant(req, tenantId) {

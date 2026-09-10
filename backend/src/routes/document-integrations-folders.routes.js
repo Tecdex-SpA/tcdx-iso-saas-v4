@@ -1,3 +1,7 @@
+const {
+  isPlatformUser,
+} = require('../services/auth/roleCompatibility.service');
+
 const express = require('express');
 const router = express.Router();
 const auth = require('../middleware/auth');
@@ -16,21 +20,8 @@ function getUserTenantId(user) {
   );
 }
 
-function normalizeRole(user) {
-  return String(user?.role || user?.user_role || user?.userRole || '')
-    .toLowerCase()
-    .trim();
-}
-
 function isSuperAdmin(user) {
-  return [
-    'superadmin',
-    'super_admin',
-    'admin_global',
-    'global_admin',
-    'platform_admin',
-    'owner',
-  ].includes(normalizeRole(user));
+  return isPlatformUser(user);
 }
 
 function ensureTenantAccess(req, tenantId) {

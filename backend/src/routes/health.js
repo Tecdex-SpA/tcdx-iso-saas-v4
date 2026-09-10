@@ -16,6 +16,10 @@ const {
   buildTenantApplicabilityUniverse,
 } = require('../services/companyProfileApplicabilityEngine.service');
 const sprintHealthService = require('../services/health.service');
+const {
+  isPlatformUser,
+  normalizeRoleKey,
+} = require('../services/auth/roleCompatibility.service');
 
 // =====================================================
 // Middleware local de autenticación para rutas Health
@@ -60,13 +64,13 @@ function authenticateHealth(req, res, next) {
 // Helpers multitenant
 // =====================================================
 function getUserRole(user) {
-  return String(
+  return normalizeRoleKey(
     user?.role ||
       user?.user_role ||
       user?.userRole ||
       user?.profile ||
       ''
-  ).toLowerCase();
+  );
 }
 
 function getUserId(user) {
@@ -85,16 +89,7 @@ function getUserTenantId(user) {
 }
 
 function isSuperAdmin(user) {
-  const role = getUserRole(user);
-
-  return [
-    'superadmin',
-    'super_admin',
-    'admin_global',
-    'global_admin',
-    'platform_admin',
-    'owner',
-  ].includes(role);
+  return isPlatformUser(user);
 }
 
 function resolveTenantScope(req) {

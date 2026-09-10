@@ -22,6 +22,11 @@ const {
   safeUploadError,
 } = require('../utils/secureUpload');
 const { safeErrorLog, safeWarnLog } = require('../utils/safeLogger');
+const {
+  isDealerRole,
+  isPlatformRole: isCanonicalPlatformRole,
+  normalizeRoleKey,
+} = require('../services/auth/roleCompatibility.service');
 
 
 const logoUploadDir = path.join(__dirname, '..', '..', 'uploads', 'logos');
@@ -64,11 +69,11 @@ function getUserEmail(user) {
 }
 
 function normalizeRole(role) {
-  return String(role || '').toLowerCase();
+  return normalizeRoleKey(role);
 }
 
 function isPlatformRole(role) {
-  return ['superadmin', 'platform_admin'].includes(normalizeRole(role));
+  return isCanonicalPlatformRole(role);
 }
 
 async function getCurrentDbUser(req) {
@@ -143,7 +148,7 @@ async function getAdminContext(req) {
 
   const role = normalizeRole(user.role);
   const isPlatform = isPlatformRole(role);
-  const isDealer = role === 'dealer';
+  const isDealer = isDealerRole(role);
 
   const [canViewAdminSaas, canManageAdminSaas] = await Promise.all([
     userHasPermission(user.id, 'admin_saas.view'),
@@ -342,9 +347,72 @@ async function getTenantDetail(tenantId) {
 
     pool.query(
       `
-      SELECT *
-      FROM v_tenant_governance_summary
-      WHERE tenant_id = $1::uuid
+      SELECT
+        t.id AS tenant_id,
+        t.name AS tenant_name,
+        t.service_status,
+        COALESCE(std.active_standards, 0)::int AS active_standards,
+        COALESCE(mods.enabled_modules, 0)::int AS enabled_modules,
+        COALESCE(users_count.active_users, 0)::int AS active_users,
+        COALESCE(dealers_count.active_dealers, 0)::int AS active_dealers,
+        contract.plan_key,
+        contract.contract_status,
+        contract.started_at,
+        contract.ends_at
+      FROM tenants t
+      LEFT JOIN (
+        SELECT
+          tenant_id,
+          COUNT(*) FILTER (
+            WHERE COALESCE(is_active, true) IS DISTINCT FROM false
+          )::int AS active_standards
+        FROM tenant_standards
+        GROUP BY tenant_id
+      ) std
+        ON std.tenant_id = t.id
+      LEFT JOIN (
+        SELECT
+          tenant_id,
+          COUNT(*) FILTER (
+            WHERE is_enabled = true
+          )::int AS enabled_modules
+        FROM v_tenant_modules
+        GROUP BY tenant_id
+      ) mods
+        ON mods.tenant_id = t.id
+      LEFT JOIN (
+        SELECT
+          tenant_id,
+          COUNT(*)::int AS active_users
+        FROM users
+        WHERE tenant_id IS NOT NULL
+          AND COALESCE(status, 'active') = 'active'
+        GROUP BY tenant_id
+      ) users_count
+        ON users_count.tenant_id = t.id
+      LEFT JOIN (
+        SELECT
+          tenant_id,
+          COUNT(*) FILTER (
+            WHERE status = 'active'
+          )::int AS active_dealers
+        FROM dealer_tenants
+        GROUP BY tenant_id
+      ) dealers_count
+        ON dealers_count.tenant_id = t.id
+      LEFT JOIN LATERAL (
+        SELECT
+          tc.plan_key,
+          tc.contract_status,
+          tc.started_at,
+          tc.ends_at
+        FROM tenant_contracts tc
+        WHERE tc.tenant_id = t.id
+        ORDER BY tc.created_at DESC
+        LIMIT 1
+      ) contract
+        ON true
+      WHERE t.id = $1::uuid
       LIMIT 1
       `,
       [tenantId]
@@ -4702,14 +4770,7 @@ function getDealerPortalRole(req) {
 
 function isDealerPortalPlatform(req) {
   const role = getDealerPortalRole(req);
-
-  return [
-    'superadmin',
-    'super_admin',
-    'platform_admin',
-    'admin_global',
-    'global_admin',
-  ].includes(role);
+  return isCanonicalPlatformRole(role);
 }
 
 function isDealerPortalDealer(req) {
@@ -5153,7 +5214,7 @@ router.put('/tenants/:tenant_id/modules/:module_key/contract-toggle', auth, asyn
 // =====================================================
 // TENANT_SERVICE_GOVERNANCE_STEP_53
 // Gobierno manual de servicio: suspender, reactivar y eliminar lógicamente.
-// Solo superadmin.
+// Solo plataforma.
 // =====================================================
 function getAdminSaasUserIdFromReq(req) {
   return req.user?.id || req.user?.user_id || req.user?.userId || null;
@@ -5165,7 +5226,7 @@ function getAdminSaasRoleFromReq(req) {
 
 function isSuperadminReq(req) {
   const role = getAdminSaasRoleFromReq(req);
-  return role === 'superadmin' || role === 'super_admin' || role === 'platform_admin' || role === 'global_admin';
+  return isCanonicalPlatformRole(role);
 }
 
 async function getLatestTenantContract(client, tenantId) {

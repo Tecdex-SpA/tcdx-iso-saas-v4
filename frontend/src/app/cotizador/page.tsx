@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import AppLayout from '@/components/AppLayout';
 import { useTranslation } from '@/hooks/useTranslation';
-import { getUserFromToken } from '@/utils/auth';
+import { getUserFromToken, isDealerRole, isPlatformRole } from '@/utils/auth';
 import { translateStatusLabel } from '@/i18n/displayText';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
@@ -252,7 +252,7 @@ export default function CotizadorPage() {
   });
 
   const role = String(user?.role || '').toLowerCase();
-  const canUse = role === 'superadmin' || role === 'dealer';
+  const canUse = isPlatformRole(role) || isDealerRole(role);
 
   const quotePayload = useMemo(() => {
     return {
@@ -337,7 +337,7 @@ export default function CotizadorPage() {
   }
 
   async function convertQuoteToTenant(quote: SavedQuote) {
-    if (role !== 'superadmin') {
+    if (!isPlatformRole(role)) {
       alert(copy.onlySuperadminConvert);
       return;
     }
@@ -694,7 +694,7 @@ export default function CotizadorPage() {
                 <div>
                   <h2 className="text-lg font-bold text-slate-900">{copy.savedQuotes}</h2>
                   <p className="text-sm text-slate-500">
-                    {role === 'dealer' ? copy.dealerListHelp : copy.superadminListHelp}
+                    {isDealerRole(role) ? copy.dealerListHelp : copy.superadminListHelp}
                   </p>
                 </div>
 
@@ -739,7 +739,7 @@ export default function CotizadorPage() {
                             <option value="expired">{copy.expired}</option>
                           </select>
 
-                          {role === 'superadmin' && (
+                          {isPlatformRole(role) && (
                             <button
                               type="button"
                               onClick={() => convertQuoteToTenant(quote)}

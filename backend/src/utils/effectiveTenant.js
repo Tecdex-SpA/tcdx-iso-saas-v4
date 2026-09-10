@@ -1,9 +1,9 @@
 'use strict';
 
 const pool = require('../config/db');
+const { isPlatformUser, normalizeRoleKey } = require('../services/auth/roleCompatibility.service');
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const PLATFORM_ROLES = new Set(['superadmin', 'super_admin', 'platform_admin', 'admin_global', 'global_admin', 'owner']);
 
 class TenantResolutionError extends Error {
   constructor(code, message, status = 403, details = null) {
@@ -16,11 +16,7 @@ class TenantResolutionError extends Error {
 }
 
 function normalizeRole(role) {
-  return String(role || '').trim().toLowerCase();
-}
-
-function isPlatformUser(user) {
-  return PLATFORM_ROLES.has(normalizeRole(user?.role || user?.user_role || user?.userRole));
+  return normalizeRoleKey(role);
 }
 
 function getUserTenantId(user) {
@@ -117,7 +113,6 @@ async function resolveEffectiveTenant(req, options = {}) {
 }
 
 module.exports = {
-  PLATFORM_ROLES,
   TenantResolutionError,
   cleanTenantId,
   getUserId,

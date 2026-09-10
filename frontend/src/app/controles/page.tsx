@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import AppLayout from '@/components/AppLayout';
 import GrcPhase1Panel from '@/components/grc/GrcPhase1Panel';
 import CompanyProfileImpactPanel from '@/components/company-profile/CompanyProfileImpactPanel';
-import { getUserFromToken } from '@/utils/auth';
+import { getUserFromToken, isAuditorRole, isPlatformRole, isTenantAdminRole } from '@/utils/auth';
 import { useTranslation } from '@/hooks/useTranslation';
 import { translateDisplayText, translateClauseLabel, translateControlLabel, translateStatusLabel } from '@/i18n/displayText';
 import RiskControlWorkspaceShell from '@/components/risk-control/RiskControlWorkspaceShell';
@@ -540,14 +540,11 @@ function ControlesPageContent() {
 
   const tenantId = resolveTenantId(user);
   const role = String(user?.role || '').toLowerCase().trim();
-  const isReadOnly = role === 'auditor';
+  const isReadOnly = isAuditorRole(role);
   const canReviewEvidence =
-    role === 'auditor' ||
-    role === 'superadmin' ||
-    role === 'super_admin' ||
-    role === 'owner' ||
-    role === 'tenant_admin' ||
-    role === 'admin';
+    isAuditorRole(role) ||
+    isPlatformRole(role) ||
+    isTenantAdminRole(role);
 
   useEffect(() => {
     const authToken = localStorage.getItem('token');

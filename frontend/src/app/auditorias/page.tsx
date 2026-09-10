@@ -10,7 +10,7 @@ import IsoAuditorPreview from '@/components/auditor-iso/IsoAuditorPreview';
 import AuditPreparationPanel from '@/components/auditorias/AuditPreparationPanel';
 import IaAuditorPanel from '@/components/auditorias/IaAuditorPanel';
 import { EnterpriseScrollPanel } from '@/components/ui/enterprise';
-import { getUserFromToken } from '@/utils/auth';
+import { getUserFromToken, isAreaOwnerRole, isExecutiveRole, isViewerRole } from '@/utils/auth';
 import { useTranslation } from '@/hooks/useTranslation';
 import { useTenantEntitlements } from '@/hooks/useTenantEntitlements';
 import { translateDisplayText, translateStatusLabel, translatePriorityLabel, translateSeverityLabel, translateStandardLabel } from '@/i18n/displayText';
@@ -397,16 +397,9 @@ function AuditProgramPanel() {
 
   const currentRole = resolveRole(user);
 
-  const isViewer =
-    currentRole === 'viewer' ||
-    currentRole === 'cliente' ||
-    currentRole === 'client' ||
-    currentRole === 'solo_lectura' ||
-    currentRole === 'read_only' ||
-    currentRole === 'readonly' ||
-    currentRole === 'ejecutivo';
+  const isViewer = isViewerRole(currentRole) || isExecutiveRole(currentRole);
 
-  const isOperativo = currentRole === 'operativo';
+  const isOperativo = isAreaOwnerRole(currentRole);
 
   const isReadOnly = isViewer || isOperativo;
 

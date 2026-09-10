@@ -2,17 +2,23 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../config/db');
 const auth = require('../middleware/auth');
+const {
+  ROLE_GROUPS,
+  isPlatformRole,
+  normalizeRoleKey,
+} = require('../services/auth/roleCompatibility.service');
 
-const isSuperAdmin = (req) => req.user?.role === 'superadmin';
-const isAdmin = (req) => req.user?.role === 'admin' || req.user?.role === 'tenant_admin';
+const roleOf = (req) => normalizeRoleKey(req.user?.role || req.user?.user_role || req.user?.userRole);
+const isPlatform = (req) => isPlatformRole(roleOf(req));
+const isAdmin = (req) => ROLE_GROUPS.tenantAdmin.includes(roleOf(req));
 
 const canAccessTenant = (req, tenantId) => {
-  if (isSuperAdmin(req)) return true;
+  if (isPlatform(req)) return true;
   return req.user?.tenant_id === tenantId;
 };
 
 const canManageTenant = (req, tenantId) => {
-  if (isSuperAdmin(req)) return true;
+  if (isPlatform(req)) return true;
   if (isAdmin(req) && req.user?.tenant_id === tenantId) return true;
   return false;
 };

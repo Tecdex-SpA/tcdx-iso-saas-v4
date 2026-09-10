@@ -1,15 +1,15 @@
 'use strict';
 
 const { AsyncLocalStorage } = require('async_hooks');
+const {
+  ROLE_GROUPS,
+  isPlatformRole: isCanonicalPlatformRole,
+  normalizeRoleKey,
+} = require('../services/auth/roleCompatibility.service');
 
 const tenantContextStorage = new AsyncLocalStorage();
-const PLATFORM_ROLES = new Set([
-  'superadmin',
-  'super_admin',
-  'platform_admin',
-  'admin_global',
-  'global_admin',
-  'owner',
+const PLATFORM_CONTEXT_ROLES = new Set([
+  ...ROLE_GROUPS.platform,
   'platform_scheduler',
   'platform_worker',
   'migration_runner',
@@ -43,8 +43,8 @@ function assertTenantContext(context = {}) {
 
 function assertPlatformContext(context = {}) {
   const role = String(context.role || 'platform_admin').trim() || 'platform_admin';
-  const normalizedRole = role.toLowerCase();
-  if (!PLATFORM_ROLES.has(normalizedRole)) {
+  const normalizedRole = normalizeRoleKey(role);
+  if (!PLATFORM_CONTEXT_ROLES.has(normalizedRole)) {
     const error = new Error('platform DB context requires an explicit platform role');
     error.code = 'PLATFORM_CONTEXT_ROLE_REQUIRED';
     throw error;
@@ -142,7 +142,7 @@ function getUserTenantId(user) {
 }
 
 function isPlatformRole(role) {
-  return PLATFORM_ROLES.has(String(role || '').trim().toLowerCase());
+  return isCanonicalPlatformRole(role);
 }
 
 function tenantContextMiddleware(req, _res, next) {

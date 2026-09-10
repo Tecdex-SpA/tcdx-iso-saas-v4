@@ -30,6 +30,12 @@ Este archivo registra comandos reutilizables. Codex NO ejecuta automáticamente 
 | F6.11 post-deploy preflight/apply | `MIGRATION_DATABASE_URL="$DATABASE_URL" node scripts/f6-11/apply-f6-11-migration.js --preflight` then `--apply` then `--preflight` | deployed backend host | MANUAL |
 | F6.13 migration checksum | `node scripts/f6-13/apply-f6-13-migration.js --checksum` | repo root | VERIFIED/F6.13-A |
 | F6.13 post-deploy preflight/apply | `MIGRATION_DATABASE_URL="$DATABASE_URL" node scripts/f6-13/apply-f6-13-migration.js --preflight` then `--apply` then reapply `--apply` then `--preflight` | deployed backend host | MANUAL |
+| Release RBAC static contract | `node scripts/release-rbac/check-release-rbac-contract.js` | repo root | VERIFIED_LOCAL/TCDX-RELEASE-RBAC-CAPABILITY-SYSTEMIC-CLOSEOUT |
+| Release RBAC residual role authority | `node scripts/release-rbac/check-residual-role-authority.js` | repo root | VERIFIED_LOCAL/TCDX-RELEASE-RBAC-CAPABILITY-FINAL-PREDEPLOY |
+| Release RBAC role alias equivalence | `node scripts/release-rbac/check-role-alias-equivalence.js` | repo root | VERIFIED_LOCAL/TCDX-RELEASE-RBAC-CAPABILITY-FINAL-PREDEPLOY |
+| Release RBAC frontend/backend consistency | `node scripts/release-rbac/check-frontend-backend-authorization-consistency.js` | repo root | VERIFIED_LOCAL/TCDX-RELEASE-RBAC-CAPABILITY-SYSTEMIC-CLOSEOUT |
+| Release RBAC isolated PostgreSQL | `node scripts/release-rbac/release-rbac-isolated-postgres.test.js` | repo root | VERIFIED_LOCAL/TCDX-RELEASE-RBAC-CAPABILITY-SYSTEMIC-CLOSEOUT |
+| Release RBAC migration checksum | `node scripts/release-rbac/apply-release-rbac-capability-closeout.js --checksum` | repo root | VERIFIED_LOCAL/TCDX-RELEASE-RBAC-CAPABILITY-SYSTEMIC-CLOSEOUT |
 
 Regla de ahorro:
 - máximo 1 test focal rápido por prompt cuando aporte valor;

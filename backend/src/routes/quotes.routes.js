@@ -3,25 +3,30 @@ const router = express.Router();
 const pool = require('../config/db');
 const auth = require('../middleware/auth');
 const { errorDetail } = require('../utils/errorResponse');
+const {
+  isDealerRole,
+  isPlatformRole,
+  normalizeRoleKey,
+} = require('../services/auth/roleCompatibility.service');
 
 function getUserId(req) {
   return req.user?.id || req.user?.user_id || req.user?.userId || null;
 }
 
 function getRole(req) {
-  return String(req.user?.role || '').toLowerCase();
+  return normalizeRoleKey(req.user?.role || req.user?.user_role || req.user?.userRole);
 }
 
-function isSuperAdmin(req) {
-  return getRole(req) === 'superadmin';
+function isPlatform(req) {
+  return isPlatformRole(getRole(req));
 }
 
 function isDealer(req) {
-  return getRole(req) === 'dealer';
+  return isDealerRole(getRole(req));
 }
 
 function canUseQuotes(req) {
-  return isSuperAdmin(req) || isDealer(req);
+  return isPlatform(req) || isDealer(req);
 }
 
 function money(value) {
@@ -206,7 +211,7 @@ router.get('/', auth, async (req, res) => {
     const params = [];
     const where = [];
 
-    if (isDealer(req) && !isSuperAdmin(req)) {
+    if (isDealer(req) && !isPlatform(req)) {
       params.push(getUserId(req));
       where.push(`q.dealer_user_id = $${params.length}::uuid`);
     }
@@ -287,7 +292,7 @@ router.get('/:id', auth, async (req, res) => {
       });
     }
 
-    if (isDealer(req) && !isSuperAdmin(req) && String(quote.dealer_user_id) !== String(getUserId(req))) {
+    if (isDealer(req) && !isPlatform(req) && String(quote.dealer_user_id) !== String(getUserId(req))) {
       return res.status(403).json({
         ok: false,
         error: 'No autorizado para ver esta cotización',
@@ -568,7 +573,7 @@ router.put('/:id/status', auth, async (req, res) => {
       });
     }
 
-    if (isDealer(req) && !isSuperAdmin(req) && String(quote.dealer_user_id) !== String(getUserId(req))) {
+    if (isDealer(req) && !isPlatform(req) && String(quote.dealer_user_id) !== String(getUserId(req))) {
       return res.status(403).json({
         ok: false,
         error: 'No autorizado para modificar esta cotización',
@@ -605,7 +610,7 @@ router.put('/:id/status', auth, async (req, res) => {
 // =====================================================
 // POST /api/quotes/:id/convert-to-tenant
 // Convierte una cotización aceptada en tenant + contrato SaaS.
-// Solo superadmin.
+// Solo plataforma.
 // Modos:
 // - create_new: crea tenant nuevo; falla si nombre/RUT ya existen.
 // - use_existing: usa tenant_id enviado o tenant_id ya asociado a la cotización.
@@ -615,10 +620,10 @@ router.post('/:id/convert-to-tenant', auth, async (req, res) => {
   const client = await pool.connect();
 
   try {
-    if (!isSuperAdmin(req)) {
+    if (!isPlatform(req)) {
       return res.status(403).json({
         ok: false,
-        error: 'Solo superadmin puede convertir cotizaciones en empresas/contratos',
+        error: 'Solo plataforma puede convertir cotizaciones en empresas/contratos',
       });
     }
 

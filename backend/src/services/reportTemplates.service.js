@@ -1,5 +1,9 @@
 'use strict';
 
+const {
+  isPlatformRole,
+} = require('./auth/roleCompatibility.service');
+
 const TEMPLATE_DEFINITIONS = [
   {
     code: 'executive_compliance',
@@ -150,7 +154,7 @@ function normalizeRole(role) {
 function roleCanUseTemplate(role, template) {
   const normalized = normalizeRole(role);
   if (!normalized || normalized === 'partner') return false;
-  if (['superadmin', 'super_admin', 'platform_admin', 'admin_global', 'global_admin', 'owner'].includes(normalized)) {
+  if (isPlatformRole(normalized)) {
     return true;
   }
   return template.allowed_roles.includes(normalized);

@@ -1,13 +1,15 @@
+const {
+  isDealerUser,
+  isPlatformUser,
+  isTenantAdminUser,
+} = require('../services/auth/roleCompatibility.service');
+
 const express = require('express');
 const router = express.Router();
 const pool = require('../config/db');
 const auth = require('../middleware/auth');
 const { errorDetail } = require('../utils/errorResponse');
 const { renderAiAuditorPremiumTemplate } = require('../reports/templates/aiAuditorPremium.template');
-
-function normalizeRole(user) {
-  return String(user?.role || user?.user_role || user?.userRole || '').toLowerCase();
-}
 
 function getUserId(user) {
   return user?.user_id || user?.userId || user?.id || null;
@@ -18,15 +20,15 @@ function getUserTenantId(user) {
 }
 
 function isPlatform(user) {
-  return ['superadmin', 'super_admin', 'platform_admin', 'admin_global', 'global_admin', 'owner'].includes(normalizeRole(user));
+  return isPlatformUser(user);
 }
 
 function isTenantAdmin(user) {
-  return ['admin', 'tenant_admin'].includes(normalizeRole(user));
+  return isTenantAdminUser(user);
 }
 
 function isDealer(user) {
-  return normalizeRole(user) === 'dealer';
+  return isDealerUser(user);
 }
 
 async function dealerHasTenantAccess(userId, tenantId) {

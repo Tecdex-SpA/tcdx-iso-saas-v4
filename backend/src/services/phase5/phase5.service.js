@@ -1,5 +1,9 @@
 'use strict';
 
+const {
+  isPlatformRole,
+} = require('../auth/roleCompatibility.service');
+
 const crypto = require('crypto');
 const fs = require('fs');
 const os = require('os');
@@ -81,7 +85,7 @@ function tenantIdFrom(reqOrScope) {
 }
 
 function isPlatform(user) {
-  return ['superadmin', 'super_admin', 'platform_admin', 'admin_global', 'global_admin', 'owner'].includes(String(user?.role || user?.user_role || '').toLowerCase());
+  return isPlatformRole(String(user?.role || user?.user_role || '').toLowerCase());
 }
 
 function periodKeyFromDates(start, end) {
