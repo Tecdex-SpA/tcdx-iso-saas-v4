@@ -258,6 +258,7 @@ async function setTenantAddonStatus({ tenantId, addonKey = ADDONS.AI, status = '
     const result = await client.query(
       `
       INSERT INTO tenant_subscription_addons (
+        tenant_id,
         tenant_subscription_id,
         addon_key,
         status,
@@ -265,7 +266,7 @@ async function setTenantAddonStatus({ tenantId, addonKey = ADDONS.AI, status = '
         ended_at,
         created_by
       )
-      VALUES ($1::uuid, $2, $3, now(), $4::timestamptz, $5::uuid)
+      VALUES ($1::uuid, $2::uuid, $3, $4, now(), $5::timestamptz, $6::uuid)
       ON CONFLICT (tenant_subscription_id, addon_key)
       DO UPDATE SET
         status = EXCLUDED.status,
@@ -273,7 +274,7 @@ async function setTenantAddonStatus({ tenantId, addonKey = ADDONS.AI, status = '
         updated_at = now()
       RETURNING *
       `,
-      [subscription.rows[0].id, key, nextStatus, endedAt, actor]
+      [tenantId, subscription.rows[0].id, key, nextStatus, endedAt, actor]
     );
 
     await recordCommercialEvent(client, {

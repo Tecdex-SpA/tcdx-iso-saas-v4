@@ -36,6 +36,8 @@ Este archivo registra comandos reutilizables. Codex NO ejecuta automáticamente 
 | Release RBAC frontend/backend consistency | `node scripts/release-rbac/check-frontend-backend-authorization-consistency.js` | repo root | VERIFIED_LOCAL/TCDX-RELEASE-RBAC-CAPABILITY-SYSTEMIC-CLOSEOUT |
 | Release RBAC isolated PostgreSQL | `node scripts/release-rbac/release-rbac-isolated-postgres.test.js` | repo root | VERIFIED_LOCAL/TCDX-RELEASE-RBAC-CAPABILITY-SYSTEMIC-CLOSEOUT |
 | Release RBAC migration checksum | `node scripts/release-rbac/apply-release-rbac-capability-closeout.js --checksum` | repo root | VERIFIED_LOCAL/TCDX-RELEASE-RBAC-CAPABILITY-SYSTEMIC-CLOSEOUT |
+| Commercial runtime integral isolated PostgreSQL | `node scripts/normalization/apply-tcdx-commercial-runtime-integral-closeout.test.js` | repo root | VERIFIED_LOCAL/TCDX-COMMERCIAL-RUNTIME-INTEGRAL-CLOSEOUT |
+| Commercial runtime integral migration checksum | `node scripts/normalization/apply-tcdx-commercial-runtime-integral-closeout.js --checksum` | repo root | VERIFIED_LOCAL/TCDX-COMMERCIAL-RUNTIME-INTEGRAL-CLOSEOUT |
 
 Regla de ahorro:
 - máximo 1 test focal rápido por prompt cuando aporte valor;

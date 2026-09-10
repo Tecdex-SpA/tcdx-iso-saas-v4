@@ -33,6 +33,10 @@ function isDealerRole(role) {
   return normalizeRole(role) === 'dealer';
 }
 
+function isMissingRelationError(error) {
+  return error?.code === '42P01' || /relation "search_history" does not exist/i.test(String(error?.message || ''));
+}
+
 async function dealerHasTenantAccess(userId, tenantId) {
   if (!userId || !tenantId) return false;
 
@@ -553,7 +557,10 @@ async function getRecentSearchHistory(req, res) {
       LIMIT 8
     `;
 
-    const { rows } = await db.query(query, params);
+    const { rows } = await db.query(query, params).catch((error) => {
+      if (isMissingRelationError(error)) return { rows: [] };
+      throw error;
+    });
     return res.json(rows);
   } catch (err) {
     console.error('SEARCH HISTORY ERROR:', err);
@@ -607,7 +614,10 @@ async function trackSearchClick(req, res) {
         resultTitle || null,
         resultHref || null,
       ]
-    );
+    ).catch((error) => {
+      if (isMissingRelationError(error)) return null;
+      throw error;
+    });
 
     return res.json({ ok: true });
   } catch (err) {

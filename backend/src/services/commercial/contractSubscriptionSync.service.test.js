@@ -70,11 +70,12 @@ function fakeClient({ current = null, existingSynced = null, currentAddons = [] 
 
       if (/INSERT INTO tenant_subscription_addons/i.test(text)) {
         return rows([{
-          tenant_subscription_id: params[0],
-          addon_key: params[1],
-          status: params[2],
-          started_at: params[3],
-          ended_at: params[4],
+          tenant_id: params[0],
+          tenant_subscription_id: params[1],
+          addon_key: params[2],
+          status: params[3],
+          started_at: params[4],
+          ended_at: params[5],
         }]);
       }
 
@@ -149,6 +150,7 @@ async function run() {
   const replaceClient = fakeClient({
     current: replacedCurrent,
     currentAddons: [{
+      tenant_id: tenantId,
       addon_key: 'ai',
       status: 'active',
       started_at: '2026-08-01T00:00:00.000Z',

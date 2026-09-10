@@ -456,6 +456,7 @@ run_phase_migration() {
 FRESH_PRODUCTION_MIGRATION_RUNNERS=(
   "Fresh runtime contract closeout|scripts/normalization/apply-tcdx-saasv2-fresh-runtime-contract-closeout.js"
   "Release RBAC capability systemic closeout|scripts/release-rbac/apply-release-rbac-capability-closeout.js"
+  "Commercial runtime integral closeout|scripts/normalization/apply-tcdx-commercial-runtime-integral-closeout.js"
 )
 
 HISTORICAL_MIGRATION_RUNNERS=(

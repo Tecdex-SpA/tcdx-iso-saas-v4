@@ -53,7 +53,7 @@ function getUserId(user = {}) {
 }
 
 function isPlatformRole(role) {
-  return isPlatformRole(String(role || '').toLowerCase().trim());
+  return isCanonicalPlatformRole(String(role || '').toLowerCase().trim());
 }
 
 function isUuid(value) {

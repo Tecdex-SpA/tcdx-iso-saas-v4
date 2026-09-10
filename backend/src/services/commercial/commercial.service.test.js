@@ -1,5 +1,5 @@
 const assert = require('assert');
-const path = require('path');
+const { Readable } = require('stream');
 
 const tenantId = '70000000-0000-0000-0000-000000000701';
 const userId = '70000000-0000-0000-0000-000000000799';
@@ -20,6 +20,7 @@ const state = {
   insertedSubscriptions: 0,
   sourceSubscriptionAddons: [
     {
+      tenant_id: tenantId,
       addon_key: 'ai',
       status: 'active',
       started_at: '2026-08-31T00:00:00.000Z',
@@ -143,11 +144,12 @@ async function query(sql, params = []) {
   }
   if (/INSERT INTO tenant_subscription_addons/i.test(text)) {
     const copied = {
-      tenant_subscription_id: params[0],
-      addon_key: params[1],
-      status: params[2],
-      started_at: params[3],
-      ended_at: params[4],
+      tenant_id: params[0],
+      tenant_subscription_id: params[1],
+      addon_key: params[2],
+      status: params[3],
+      started_at: params[4],
+      ended_at: params[5],
     };
     state.copiedAddonInserts.push(copied);
     return rows([copied]);
@@ -191,52 +193,64 @@ const {
   changePlan,
 } = require('./commercialAdmin.service');
 const { normalizeKey, resolveCapability, resolveTenantEntitlements } = require('./entitlementResolver.service');
-const express = require('express');
 const commercialRouter = require('../../routes/admin-saas-commercial.routes');
 
-async function withTestServer(callback) {
-  const app = express();
-  app.use(express.json());
-  app.use((req, _res, next) => {
-    req.requestId = 'phase4-commercial-schema-regression';
-    req.user = { id: userId, role: 'platform_admin', tenant_id: tenantId };
-    next();
-  });
-  app.use('/api/admin-saas', commercialRouter);
-  const server = await new Promise((resolve, reject) => {
-    const instance = app.listen(0, '127.0.0.1', () => {
-      const address = instance.address();
-      if (!address || typeof address === 'string') {
-        reject(new Error('Commercial test server did not bind to a TCP port'));
-        return;
-      }
-      resolve(instance);
-    });
-    instance.on('error', reject);
-  });
-  try {
-    const address = server.address();
-    if (!address || typeof address === 'string') throw new Error('Commercial test server address unavailable');
-    await callback(`http://127.0.0.1:${address.port}`);
-  } finally {
-    await new Promise((resolve, reject) => {
-      if (!server.listening) return resolve();
-      return server.close((error) => (error ? reject(error) : resolve()));
-    });
-  }
+function normalizeHeaders(headers = {}) {
+  return Object.fromEntries(Object.entries(headers).map(([key, value]) => [String(key).toLowerCase(), value]));
 }
 
-async function requestJson(baseUrl, path, options = {}) {
-  const response = await fetch(`${baseUrl}${path}`, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(options.headers || {}),
+async function invokeJson(routePath, options = {}) {
+  const body = typeof options.body === 'string' ? JSON.parse(options.body) : {};
+  const request = new Readable({
+    read() {
+      this.push(null);
     },
   });
-  const payload = await response.json();
-  assert.strictEqual(response.status, 200, `${options.method || 'GET'} ${path} expected 200: ${JSON.stringify(payload)}`);
-  assert.strictEqual(payload.ok, true, `${options.method || 'GET'} ${path} returned ok=false`);
+  request.method = options.method || 'GET';
+  request.url = routePath.replace(/^\/api\/admin-saas/, '') || '/';
+  request.originalUrl = routePath;
+  request.baseUrl = '/api/admin-saas';
+  request.path = request.url.split('?')[0];
+  request.query = {};
+  request.params = {};
+  request.body = body;
+  request.requestId = 'phase4-commercial-schema-regression';
+  request.user = { id: userId, role: 'platform_admin', tenant_id: tenantId };
+  request.headers = normalizeHeaders({
+    'content-type': 'application/json',
+    ...(options.headers || {}),
+  });
+
+  const response = {
+    statusCode: 200,
+    locals: {},
+    headers: {},
+    status(code) {
+      this.statusCode = code;
+      return this;
+    },
+    setHeader(key, value) {
+      this.headers[String(key).toLowerCase()] = value;
+      return this;
+    },
+    getHeader(key) {
+      return this.headers[String(key).toLowerCase()];
+    },
+    json(payload) {
+      this._resolve({ statusCode: this.statusCode, payload });
+      return this;
+    },
+  };
+
+  const { statusCode, payload } = await new Promise((resolve, reject) => {
+    response._resolve = resolve;
+    commercialRouter.handle(request, response, (error) => {
+      if (error) reject(error);
+      else resolve({ statusCode: 404, payload: { ok: false, error: 'Route not found' } });
+    });
+  });
+  assert.strictEqual(statusCode, 200, `${request.method} ${routePath} expected 200: ${JSON.stringify(payload)}`);
+  assert.strictEqual(payload.ok, true, `${request.method} ${routePath} returned ok=false: ${JSON.stringify(payload)}`);
   return payload.data;
 }
 
@@ -322,8 +336,8 @@ async function run() {
   assert.strictEqual(state.insertedSubscriptions, 1);
   assert.strictEqual(state.events.length, 1);
 
-  await withTestServer(async (baseUrl) => {
-    const catalog = await requestJson(baseUrl, '/api/admin-saas/catalog');
+  {
+    const catalog = await invokeJson('/api/admin-saas/catalog');
     assert.ok(Array.isArray(catalog.plans));
     assert.ok(Array.isArray(catalog.standard_plans));
     assert.strictEqual(catalog.standard_plans.find((plan) => plan.plan_key === 'pyme')?.display_name, 'ISO');
@@ -354,20 +368,20 @@ async function run() {
     assert.equal(modulesFor('empresa').includes('metrics_bi'), false);
     assert.equal(modulesFor('empresa').includes('integrated_grc'), false);
 
-    const endpointEntitlements = await requestJson(baseUrl, `/api/admin-saas/tenants/${tenantId}/entitlements`);
+    const endpointEntitlements = await invokeJson(`/api/admin-saas/tenants/${tenantId}/entitlements`);
     assert.strictEqual(endpointEntitlements.subscription.plan_key, 'enterprise');
     assert.ok(endpointEntitlements.capabilities['tprm.suppliers']);
     assert.ok(endpointEntitlements.limits.active_users);
     assert.strictEqual(endpointEntitlements.health.status, 'healthy');
 
-    const endpointPreview = await requestJson(baseUrl, `/api/admin-saas/tenants/${tenantId}/change-preview`, {
+    const endpointPreview = await invokeJson(`/api/admin-saas/tenants/${tenantId}/change-preview`, {
       method: 'POST',
       body: JSON.stringify({ target_plan_key: 'enterprise' }),
     });
     assert.strictEqual(endpointPreview.target_plan_key, 'enterprise');
 
     const beforeEndpointEvents = state.events.length;
-    const endpointChange = await requestJson(baseUrl, `/api/admin-saas/tenants/${tenantId}/change-plan`, {
+    const endpointChange = await invokeJson(`/api/admin-saas/tenants/${tenantId}/change-plan`, {
       method: 'POST',
       headers: { 'Idempotency-Key': 'phase4-endpoint-idempotency' },
       body: JSON.stringify({ target_plan_key: 'enterprise', idempotency_key: 'phase4-endpoint-idempotency' }),
@@ -376,14 +390,14 @@ async function run() {
     assert.strictEqual(state.subscription.plan_key, 'enterprise');
     assert.strictEqual(state.events.length, beforeEndpointEvents + 1);
 
-    const endpointReplay = await requestJson(baseUrl, `/api/admin-saas/tenants/${tenantId}/change-plan`, {
+    const endpointReplay = await invokeJson(`/api/admin-saas/tenants/${tenantId}/change-plan`, {
       method: 'POST',
       headers: { 'Idempotency-Key': 'phase4-endpoint-idempotency' },
       body: JSON.stringify({ target_plan_key: 'enterprise', idempotency_key: 'phase4-endpoint-idempotency' }),
     });
     assert.strictEqual(endpointReplay.replayed, true);
     assert.strictEqual(state.events.length, beforeEndpointEvents + 1);
-  });
+  }
 
   assert.deepStrictEqual(state.badSqlReferences, []);
 

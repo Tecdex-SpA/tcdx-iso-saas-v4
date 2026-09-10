@@ -57,7 +57,7 @@ async function copyOpenSubscriptionAddons(client, { fromSubscriptionId, toSubscr
 
   const currentAddons = await client.query(
     `
-    SELECT addon_key, status, started_at, ended_at, created_by
+    SELECT tenant_id, addon_key, status, started_at, ended_at, created_by
     FROM tenant_subscription_addons
     WHERE tenant_subscription_id = $1::uuid
       AND status IN ('active', 'suspended')
@@ -73,6 +73,7 @@ async function copyOpenSubscriptionAddons(client, { fromSubscriptionId, toSubscr
     const result = await client.query(
       `
       INSERT INTO tenant_subscription_addons (
+        tenant_id,
         tenant_subscription_id,
         addon_key,
         status,
@@ -82,11 +83,12 @@ async function copyOpenSubscriptionAddons(client, { fromSubscriptionId, toSubscr
       )
       VALUES (
         $1::uuid,
-        $2::text,
+        $2::uuid,
         $3::text,
-        COALESCE($4::timestamptz, now()),
-        $5::timestamptz,
-        $6::uuid
+        $4::text,
+        COALESCE($5::timestamptz, now()),
+        $6::timestamptz,
+        $7::uuid
       )
       ON CONFLICT (tenant_subscription_id, addon_key)
       DO UPDATE SET
@@ -97,6 +99,7 @@ async function copyOpenSubscriptionAddons(client, { fromSubscriptionId, toSubscr
       RETURNING *
       `,
       [
+        addon.tenant_id,
         toSubscriptionId,
         addon.addon_key,
         addon.status,

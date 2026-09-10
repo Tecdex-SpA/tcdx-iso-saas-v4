@@ -80,6 +80,18 @@ function denyManageAudits(res) {
   });
 }
 
+function auditStatusSql(expression = 'a.status') {
+  return `
+    CASE
+      WHEN lower(coalesce(${expression}, 'pendiente')) IN ('completada','completado','completed','cerrada','cerrado','closed','resuelta','resuelto')
+        THEN 'completada'
+      WHEN lower(coalesce(${expression}, 'pendiente')) IN ('en_ejecucion','en ejecución','en curso','in_progress','running','abierta','abierto','open')
+        THEN 'en_ejecucion'
+      ELSE 'pendiente'
+    END
+  `;
+}
+
 function normalizeAuditStatusForSql(status) {
   const raw = String(status || '').toLowerCase().trim();
 
@@ -762,7 +774,7 @@ router.get('/summary/:tenant_id', auth, async (req, res) => {
           a.status,
           a.report_file,
           a.created_at,
-          normalize_status_for_audits(a.status) AS normalized_status
+          ${auditStatusSql('a.status')} AS normalized_status
         FROM audits a
         JOIN tenant_standards ts
           ON ts.tenant_id = a.tenant_id
@@ -819,7 +831,7 @@ router.get('/summary/:tenant_id', auth, async (req, res) => {
       `
       SELECT
         a.*,
-        normalize_status_for_audits(a.status) AS normalized_status
+        ${auditStatusSql('a.status')} AS normalized_status
       FROM audits a
       JOIN tenant_standards ts
         ON ts.tenant_id = a.tenant_id
@@ -827,7 +839,7 @@ router.get('/summary/:tenant_id', auth, async (req, res) => {
        AND ts.is_active = TRUE
       WHERE a.tenant_id = $1
         ${isoFilterSql}
-        AND normalize_status_for_audits(a.status) != 'completada'
+        AND ${auditStatusSql('a.status')} != 'completada'
         AND EXISTS (
           SELECT 1
           FROM tenant_standard_operations tso
@@ -849,7 +861,7 @@ router.get('/summary/:tenant_id', auth, async (req, res) => {
       `
       SELECT
         a.*,
-        normalize_status_for_audits(a.status) AS normalized_status
+        ${auditStatusSql('a.status')} AS normalized_status
       FROM audits a
       JOIN tenant_standards ts
         ON ts.tenant_id = a.tenant_id
@@ -927,7 +939,7 @@ router.get('/next-all/:tenant_id', auth, async (req, res) => {
        AND ts.standard_code = a.iso
        AND ts.is_active = TRUE
       WHERE a.tenant_id = $1
-        AND normalize_status_for_audits(a.status) != 'completada'
+        AND ${auditStatusSql('a.status')} != 'completada'
         AND EXISTS (
           SELECT 1
           FROM tenant_standard_operations tso

@@ -1,5 +1,19 @@
 # CURRENT_STATE — TCDX ISO SaaS V4
 
+## TCDX Commercial Runtime Integral Closeout — 2026-09-10
+
+Status: `TCDX_COMMERCIAL_RUNTIME_INTEGRAL_CLOSEOUT_READY_FOR_HUMAN_REVIEW`.
+
+Local-only continuation on branch `main` / HEAD `6bf346ebe20dfb7d554c018f50e1a3dbb962338a`, preserving the intentionally dirty commercial runtime work. Codex did not commit, push, merge, deploy, edit `.env`, connect to `tcdx_saasv2`, or write to any real database.
+
+Closed the commercial harness blocker `Commercial test server did not bind to a TCP port`: the test harness depended on `app.listen(0, '127.0.0.1')` and `server.address()` for Express route assertions. In the managed backend cwd this can fail with local TCP `EPERM`, while the custom message masked the underlying socket failure. `backend/src/services/commercial/commercial.service.test.js` now invokes the mounted commercial router in memory with parsed JSON request objects and minimal response assertions, preserving the endpoint assertions without a fixed port, sleeps or skipped checks.
+
+Commercial runtime contracts are now covered by forward-only migration `database/migrations/20260910_tcdx_commercial_runtime_integral_closeout.sql` and runner `scripts/normalization/apply-tcdx-commercial-runtime-integral-closeout.js`, registered in `FRESH_PRODUCTION_MIGRATION_RUNNERS`. Checksum: `4310372bbd795eef116b14110283d16e0ef7a247ee81d51b54de7d4a6debe51d`.
+
+Contract classification: `tenant_standard_audit`, `tenant_applicable_controls`, `tenant_company_profiles`, `tenant_document_object_links`, `findings.due_date` and `tenant_subscription_addons.tenant_id` are physical runtime contracts required and covered; `normalize_status_for_audits(text)` runtime dependency was eliminated through inline SQL normalization; `search_history` remains an optional feature with safe degradation on missing relation.
+
+Validation PASS: commercial focal tests from repo root and `backend/`, `npm --prefix backend test` exit code 0, `npm --prefix frontend run typecheck`, release RBAC alias/residual/frontend-backend/static gates, `node scripts/deploy-vms-strategy.test.js`, isolated PostgreSQL commercial migration test, checksum, `bash -n scripts/deploy-vms.sh`, and `git diff --check`.
+
 ## TCDX Release RBAC / Capabilities Final Pre-Deploy — 2026-09-10
 
 Status: `TCDX_RELEASE_RBAC_CAPABILITY_FINAL_PREDEPLOY_READY_FOR_HUMAN_REVIEW`.

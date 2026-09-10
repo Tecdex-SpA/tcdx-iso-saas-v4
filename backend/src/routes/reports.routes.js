@@ -70,6 +70,18 @@ function isPremiumReportTypeCode(reportTypeCode) {
   return Object.values(REPORT_TYPE_ALIASES).includes(String(reportTypeCode || '').trim());
 }
 
+function auditStatusSql(expression = 'a.status') {
+  return `
+    CASE
+      WHEN lower(coalesce(${expression}, 'pendiente')) IN ('completada','completado','completed','cerrada','cerrado','closed','resuelta','resuelto')
+        THEN 'completada'
+      WHEN lower(coalesce(${expression}, 'pendiente')) IN ('en_ejecucion','en ejecución','en curso','in_progress','running','abierta','abierto','open')
+        THEN 'en_ejecucion'
+      ELSE 'pendiente'
+    END
+  `;
+}
+
 const reportRuntimeJobs = new Map();
 const REPORT_JOB_TTL_MS = Number(process.env.REPORT_JOB_TTL_MS || 1000 * 60 * 60 * 6);
 const REPORT_DEEP_MIN_TIMEOUT_MS = 600000;
@@ -2725,7 +2737,7 @@ async function getAuditSummaryForReport(tenantId) {
       WITH base AS (
         SELECT
           a.*,
-          normalize_status_for_audits(a.status) AS normalized_status
+          ${auditStatusSql('a.status')} AS normalized_status
         FROM audits a
         JOIN tenant_standards ts
           ON ts.tenant_id = a.tenant_id
@@ -2779,14 +2791,14 @@ async function getAuditSummaryForReport(tenantId) {
       `
       SELECT
         a.*,
-        normalize_status_for_audits(a.status) AS normalized_status
+        ${auditStatusSql('a.status')} AS normalized_status
       FROM audits a
       JOIN tenant_standards ts
         ON ts.tenant_id = a.tenant_id
        AND ts.standard_code = a.iso
        AND ts.is_active = TRUE
       WHERE a.tenant_id = $1::uuid
-        AND normalize_status_for_audits(a.status) != 'completada'
+        AND ${auditStatusSql('a.status')} != 'completada'
         AND EXISTS (
           SELECT 1
           FROM tenant_standard_operations tso
@@ -2808,7 +2820,7 @@ async function getAuditSummaryForReport(tenantId) {
       `
       SELECT
         a.*,
-        normalize_status_for_audits(a.status) AS normalized_status
+        ${auditStatusSql('a.status')} AS normalized_status
       FROM audits a
       JOIN tenant_standards ts
         ON ts.tenant_id = a.tenant_id
