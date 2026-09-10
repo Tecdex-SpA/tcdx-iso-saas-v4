@@ -613,10 +613,7 @@ WHERE grantee = 'ai_reader'
 	  SELECT table_name || '.' || column_name AS name
 	  FROM information_schema.columns
 	  WHERE table_schema = 'public'
-	    AND (
-	      column_name IN ('legacy_control_id', 'controls_id_legacy')
-	      OR (table_name = 'evidences' AND column_name = 'control_id')
-	    )
+	    AND column_name IN ('legacy_control_id', 'controls_id_legacy')
 	),
 	forbidden_metrics AS (
 	  SELECT metric_code AS name

@@ -22,6 +22,10 @@ REMOTE_BACKEND_DIR="${REMOTE_REPO_DIR}/backend"
 REMOTE_FRONTEND_DIR="${REMOTE_REPO_DIR}/frontend"
 REMOTE_AI_ENGINE_DIR="${REMOTE_REPO_DIR}/ai-engine"
 REMOTE_MIGRATION_ENV_FILE="${TCDX_MIGRATION_ENV_FILE:-/home/tecdex/.config/tcdx/migration.env}"
+REMOTE_BACKEND_ENV_FILE="${TCDX_BACKEND_ENV_FILE:-${REMOTE_BACKEND_DIR}/.env}"
+
+DB_DEPLOY_STRATEGY="${TCDX_DB_DEPLOY_STRATEGY:-}"
+FRESH_PRODUCTION_DB_NAME="${TCDX_FRESH_PRODUCTION_DB_NAME:-tcdx_saasv2}"
 
 BACKEND_WRAPPER="/home/tecdex/deploy-backend.sh"
 FRONTEND_WRAPPER="/home/tecdex/deploy-frontend.sh"
@@ -143,6 +147,151 @@ deploy_remote() {
   run_ssh "$host" "$wrapper"
 }
 
+validate_db_deploy_strategy() {
+  if [[ -z "$DB_DEPLOY_STRATEGY" ]]; then
+    echo "ERROR: TCDX_DB_DEPLOY_STRATEGY no definida."
+    echo "Valores permitidos: fresh-baseline, historical-upgrade."
+    exit 1
+  fi
+
+  case "$DB_DEPLOY_STRATEGY" in
+    fresh-baseline|historical-upgrade)
+      ;;
+    *)
+      echo "ERROR: TCDX_DB_DEPLOY_STRATEGY invalida: ${DB_DEPLOY_STRATEGY}"
+      echo "Valores permitidos: fresh-baseline, historical-upgrade"
+      exit 1
+      ;;
+  esac
+}
+
+assert_database_strategy_identity() {
+  local source_label="$1"
+  local database_name="$2"
+
+  if [[ -z "$database_name" ]]; then
+    echo "ERROR: no se pudo resolver current_database() para ${source_label}."
+    exit 1
+  fi
+
+  case "$DB_DEPLOY_STRATEGY" in
+    fresh-baseline)
+      if [[ "$database_name" != "$FRESH_PRODUCTION_DB_NAME" ]]; then
+        echo "ERROR: estrategia fresh-baseline requiere database=${FRESH_PRODUCTION_DB_NAME}."
+        echo "${source_label} actual: ${database_name}"
+        echo "Accion humana requerida: corrige el archivo protegido de migracion y/o backend .env para apuntar a ${FRESH_PRODUCTION_DB_NAME}; este deploy no modifica secretos."
+        exit 1
+      fi
+      ;;
+    historical-upgrade)
+      if [[ "$database_name" == "$FRESH_PRODUCTION_DB_NAME" ]]; then
+        echo "ERROR: ${FRESH_PRODUCTION_DB_NAME} no puede usar estrategia historical-upgrade."
+        echo "Usa TCDX_DB_DEPLOY_STRATEGY=fresh-baseline para esa base."
+        exit 1
+      fi
+      ;;
+  esac
+}
+
+assert_backend_runtime_identity() {
+  local configured_db="$1"
+  local database_name="$2"
+
+  if [[ -z "$configured_db" || -z "$database_name" ]]; then
+    echo "ERROR: no se pudo resolver identidad DB runtime backend."
+    exit 1
+  fi
+
+  if [[ "$configured_db" != "$database_name" ]]; then
+    echo "ERROR: backend .env DB_NAME=${configured_db}, pero current_database()=${database_name}."
+    exit 1
+  fi
+
+  assert_database_strategy_identity "backend runtime DB_NAME" "$database_name"
+}
+
+build_backend_runtime_identity_node() {
+  cat <<'NODE'
+const { Pool } = require('./backend/node_modules/pg');
+const dotenv = require('./backend/node_modules/dotenv');
+
+const envFile = process.env.TCDX_BACKEND_ENV_FILE_TO_VALIDATE;
+if (!envFile) {
+  console.error('ERROR: TCDX_BACKEND_ENV_FILE_TO_VALIDATE no esta definido.');
+  process.exit(1);
+}
+
+const parsed = dotenv.config({ path: envFile, quiet: true });
+if (parsed.error) {
+  console.error('ERROR: backend .env no pudo leerse: ' + parsed.error.message);
+  process.exit(1);
+}
+
+const env = parsed.parsed || {};
+if (!env.DB_NAME || !env.DB_USER) {
+  console.error('ERROR: backend .env no define DB_NAME/DB_USER.');
+  process.exit(1);
+}
+
+const pool = new Pool({
+  host: env.DB_HOST,
+  port: env.DB_PORT,
+  user: env.DB_USER,
+  password: env.DB_PASSWORD,
+  database: env.DB_NAME,
+  max: 1,
+  connectionTimeoutMillis: Number(env.DB_CONNECTION_TIMEOUT_MS || 5000),
+  ssl: String(env.DB_SSL || '').toLowerCase() === 'true'
+    ? { rejectUnauthorized: String(env.DB_SSL_REJECT_UNAUTHORIZED || '').toLowerCase() !== 'false' }
+    : undefined,
+});
+
+pool.query('SELECT current_database() AS database_name, current_user AS user_name, inet_server_addr()::text AS server_addr, inet_server_port()::int AS server_port')
+  .then(result => {
+    const row = result.rows[0];
+    console.log([env.DB_NAME, row.database_name, row.user_name, row.server_addr || 'local', row.server_port || ''].join('|'));
+  })
+  .catch(error => {
+    console.error('ERROR: no se pudo validar identidad DB runtime backend: ' + error.message);
+    process.exitCode = 1;
+  })
+  .finally(() => pool.end());
+NODE
+}
+
+build_backend_env_parse_node() {
+  cat <<'NODE'
+const dotenv = require('./backend/node_modules/dotenv');
+
+const envFile = process.env.TCDX_BACKEND_ENV_FILE_TO_VALIDATE;
+if (!envFile) {
+  console.error('ERROR: TCDX_BACKEND_ENV_FILE_TO_VALIDATE no esta definido.');
+  process.exit(1);
+}
+
+const parsed = dotenv.config({ path: envFile, quiet: true });
+if (parsed.error) {
+  console.error('ERROR: backend .env no pudo leerse: ' + parsed.error.message);
+  process.exit(1);
+}
+
+console.log((parsed.parsed || {}).DB_NAME || '');
+NODE
+}
+
+selected_migration_runners() {
+  case "$DB_DEPLOY_STRATEGY" in
+    fresh-baseline)
+      if [[ "${#FRESH_PRODUCTION_MIGRATION_RUNNERS[@]}" -gt 0 ]]; then
+        printf '%s\n' "${FRESH_PRODUCTION_MIGRATION_RUNNERS[@]}"
+      fi
+      ;;
+    historical-upgrade)
+      printf '%s\n' "${HISTORICAL_MIGRATION_RUNNERS[@]}"
+      ;;
+  esac
+}
+
 sync_backend_source_for_migrations() {
   local expected_sha="$1"
 
@@ -172,11 +321,8 @@ sync_backend_source_for_migrations() {
   "
 }
 
-run_phase_migration() {
-  local phase="$1"
-  local mode="$2"
-  local script_path="$3"
-
+with_remote_migration_env() {
+  local remote_body="$1"
   run_ssh "$BACKEND_HOST" "
     set -Eeuo pipefail
     migration_env_file='${REMOTE_MIGRATION_ENV_FILE}'
@@ -211,6 +357,92 @@ run_phase_migration() {
 
     cd '${REMOTE_REPO_DIR}'
 
+    ${remote_body}
+
+    unset MIGRATION_DATABASE_URL
+  "
+}
+
+query_migration_database_identity() {
+  with_remote_migration_env "
+    node -e \"
+      const { Pool } = require('./backend/node_modules/pg');
+      const pool = new Pool({ connectionString: process.env.MIGRATION_DATABASE_URL, max: 1 });
+      pool.query('SELECT current_database() AS database_name, current_user AS user_name, inet_server_addr()::text AS server_addr, inet_server_port()::int AS server_port')
+        .then(result => {
+          const row = result.rows[0];
+          console.log([row.database_name, row.user_name, row.server_addr || 'local', row.server_port || ''].join('|'));
+        })
+        .catch(error => {
+          console.error('ERROR: no se pudo validar identidad DB de migracion: ' + error.message);
+          process.exitCode = 1;
+        })
+        .finally(() => pool.end());
+    \"
+  "
+}
+
+validate_migration_database_identity() {
+  echo ""
+  echo "Validando identidad DB de migracion (${DB_DEPLOY_STRATEGY})"
+
+  local identity
+  identity="$(query_migration_database_identity)"
+  local database_name="${identity%%|*}"
+  local rest="${identity#*|}"
+  local user_name="${rest%%|*}"
+  rest="${rest#*|}"
+  local server_addr="${rest%%|*}"
+  local server_port="${rest#*|}"
+
+  assert_database_strategy_identity "MIGRATION_DATABASE_URL" "$database_name"
+
+  echo "Migration DB OK: database=${database_name} user=${user_name} server=${server_addr}:${server_port}"
+}
+
+validate_backend_runtime_database() {
+  local phase="$1"
+
+  echo ""
+  echo "Validando runtime DB backend (${phase})"
+
+  local identity
+  identity="$(run_ssh "$BACKEND_HOST" "
+    set -Eeuo pipefail
+    backend_env_file='${REMOTE_BACKEND_ENV_FILE}'
+
+    if [[ ! -r \"\$backend_env_file\" ]]; then
+      echo 'ERROR: backend .env ausente o no legible.'
+      echo 'Ruta esperada: ${REMOTE_BACKEND_ENV_FILE}'
+      exit 1
+    fi
+
+    cd '${REMOTE_REPO_DIR}'
+    TCDX_BACKEND_ENV_FILE_TO_VALIDATE=\"\$backend_env_file\" node <<'NODE'
+$(build_backend_runtime_identity_node)
+NODE
+  ")"
+
+  local configured_db="${identity%%|*}"
+  local rest="${identity#*|}"
+  local database_name="${rest%%|*}"
+  rest="${rest#*|}"
+  local user_name="${rest%%|*}"
+  rest="${rest#*|}"
+  local server_addr="${rest%%|*}"
+  local server_port="${rest#*|}"
+
+  assert_backend_runtime_identity "$configured_db" "$database_name"
+
+  echo "Backend runtime DB OK: database=${database_name} user=${user_name} server=${server_addr}:${server_port}"
+}
+
+run_phase_migration() {
+  local phase="$1"
+  local mode="$2"
+  local script_path="$3"
+
+  with_remote_migration_env "
     if [[ ! -f '${script_path}' ]]; then
       echo 'ERROR: script de migracion no encontrado: ${script_path}'
       exit 1
@@ -218,11 +450,13 @@ run_phase_migration() {
 
     echo 'Ejecutando migracion ${phase}: ${script_path} ${mode}'
     node '${script_path}' '${mode}'
-    unset MIGRATION_DATABASE_URL
   "
 }
 
-MIGRATION_RUNNERS=(
+FRESH_PRODUCTION_MIGRATION_RUNNERS=(
+)
+
+HISTORICAL_MIGRATION_RUNNERS=(
   "Fase 3|scripts/phase3/apply-phase3-migration.js"
   "Fase 4|scripts/phase4/apply-phase4-migration.js"
   "Fase 5|scripts/phase5/apply-phase5-migration.js"
@@ -251,7 +485,19 @@ run_registered_migrations() {
   echo "======================================"
   sync_backend_source_for_migrations "$expected_sha"
 
-  for entry in "${MIGRATION_RUNNERS[@]}"; do
+  local selected_runners=()
+  local entry
+  while IFS= read -r entry; do
+    [[ -n "$entry" ]] && selected_runners+=("$entry")
+  done < <(selected_migration_runners)
+
+  if [[ "${#selected_runners[@]}" -eq 0 ]]; then
+    echo "Estrategia ${DB_DEPLOY_STRATEGY}: no hay migraciones forward-only pendientes registradas."
+    echo "No se ejecuta baseline, seed, loader ni cadena historica en deploy normal."
+    return 0
+  fi
+
+  for entry in "${selected_runners[@]}"; do
     local phase="${entry%%|*}"
     local script_path="${entry#*|}"
 
@@ -267,6 +513,98 @@ run_registered_migrations() {
     echo "======================================"
     run_phase_migration "$phase" "--apply" "$script_path"
   done
+}
+
+run_deploy_guard_self_test() {
+  local output
+  local temp_dir
+  local fixture_env
+
+  temp_dir="$(mktemp -d)"
+  fixture_env="${temp_dir}/backend.env"
+  trap 'rm -rf "$temp_dir"' RETURN
+
+  if (DB_DEPLOY_STRATEGY="" validate_db_deploy_strategy) >/dev/null 2>&1; then
+    echo "STRATEGY_MISSING_ABORTS=FAIL"
+    exit 1
+  fi
+  echo "STRATEGY_MISSING_ABORTS=PASS"
+
+  DB_DEPLOY_STRATEGY="fresh-baseline"
+  FRESH_PRODUCTION_DB_NAME="tcdx_saasv2"
+  assert_database_strategy_identity "test" "tcdx_saasv2"
+  echo "FRESH_MODE_ACCEPTS_TCDX_SAASV2=PASS"
+
+  output="$(selected_migration_runners)"
+  [[ -z "$output" ]] || { echo "FRESH_DB_DOES_NOT_RUN_HISTORICAL_MIGRATIONS=FAIL"; exit 1; }
+  echo "FRESH_DB_DOES_NOT_RUN_HISTORICAL_MIGRATIONS=PASS"
+
+  DB_DEPLOY_STRATEGY="historical-upgrade"
+  assert_database_strategy_identity "test" "tecdex_saas"
+  echo "HISTORICAL_MODE_ACCEPTS_LEGACY_DB=PASS"
+
+  if (assert_database_strategy_identity "test" "tcdx_saasv2") >/dev/null 2>&1; then
+    echo "TCDX_SAASV2_REJECTS_HISTORICAL_UPGRADE=FAIL"
+    exit 1
+  fi
+  echo "TCDX_SAASV2_REJECTS_HISTORICAL_UPGRADE=PASS"
+
+  DB_DEPLOY_STRATEGY="fresh-baseline"
+  if (assert_database_strategy_identity "test" "tecdex_saas") >/dev/null 2>&1; then
+    echo "FRESH_MODE_REQUIRES_TCDX_SAASV2=FAIL"
+    exit 1
+  fi
+  echo "FRESH_MODE_REQUIRES_TCDX_SAASV2=PASS"
+
+  if (assert_database_strategy_identity "MIGRATION_DATABASE_URL" "tecdex_saas") >/dev/null 2>&1; then
+    echo "WRONG_MIGRATION_DATABASE_ABORTS=FAIL"
+    exit 1
+  fi
+  echo "WRONG_MIGRATION_DATABASE_ABORTS=PASS"
+
+  if (assert_backend_runtime_identity "tecdex_saas" "tecdex_saas") >/dev/null 2>&1; then
+    echo "WRONG_BACKEND_RUNTIME_DATABASE_ABORTS=FAIL"
+    exit 1
+  fi
+  echo "WRONG_BACKEND_RUNTIME_DATABASE_ABORTS=PASS"
+
+  cat >"$fixture_env" <<'EOF'
+DB_HOST=127.0.0.1
+DB_PORT=5432
+DB_NAME=tcdx_saasv2
+DB_USER=test_user
+DB_PASSWORD=test_password
+DB_APPLICATION_NAME=TCDX ISO SAAS backend
+GOOGLE_DRIVE_SCOPES=https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/userinfo.email
+EOF
+  output="$(TCDX_BACKEND_ENV_FILE_TO_VALIDATE="$fixture_env" node -e "$(build_backend_env_parse_node)")"
+  if [[ "$output" != "tcdx_saasv2" ]]; then
+    echo "BACKEND_DOTENV_PARSER_SPACES=FAIL"
+    exit 1
+  fi
+  echo "BACKEND_DOTENV_PARSER_SPACES=PASS"
+
+  DB_DEPLOY_STRATEGY="fresh-baseline"
+  output="$( (assert_database_strategy_identity "MIGRATION_DATABASE_URL" "tecdex_saas") 2>&1 || true)"
+  output="${output}
+$( (assert_backend_runtime_identity "tecdex_saas" "tcdx_saasv2") 2>&1 || true)"
+  if [[ "$output" == *"DB_PASSWORD"* || "$output" == *"test_password"* || "$output" == *"postgres://"* || "$output" == *"postgresql://"* || "$output" == *"MIGRATION_DATABASE_URL="* || "$output" == *"JWT_SECRET"* || "$output" == *"CLIENT_SECRET"* || "$output" == *"TOKEN_ENCRYPTION_KEY"* ]]; then
+    echo "SECRETS_NOT_PRINTED=FAIL"
+    exit 1
+  fi
+  echo "SECRETS_NOT_PRINTED=PASS"
+
+  [[ "$(selected_migration_runners)" != *"production_schema_v1.sql"* ]] || { echo "NO_BOOTSTRAP_ON_NORMAL_DEPLOY=FAIL"; exit 1; }
+  [[ "$(selected_migration_runners)" != *"production_seed_v1.sql"* ]] || { echo "NO_BOOTSTRAP_ON_NORMAL_DEPLOY=FAIL"; exit 1; }
+  [[ "$(selected_migration_runners)" != *"load-production-reference-catalogs.js"* ]] || { echo "NO_BOOTSTRAP_ON_NORMAL_DEPLOY=FAIL"; exit 1; }
+  echo "NO_BOOTSTRAP_ON_NORMAL_DEPLOY=PASS"
+
+  output="$(selected_migration_runners)"
+  [[ "$output" != *"scripts/phase"* ]] || { echo "NO_HISTORICAL_PHASE_RUNNER_ON_FRESH_DEPLOY=FAIL"; exit 1; }
+  echo "NO_HISTORICAL_PHASE_RUNNER_ON_FRESH_DEPLOY=PASS"
+
+  [[ -z "$output" ]] || { echo "DEPLOY_CONTINUES_WITH_ZERO_PENDING_FORWARD_MIGRATIONS=FAIL"; exit 1; }
+  echo "DEPLOY_CONTINUES_WITH_ZERO_PENDING_FORWARD_MIGRATIONS=PASS"
 }
 
 validate_backend() {
@@ -349,6 +687,13 @@ validate_frontend() {
   }
 }
 
+if [[ "${TCDX_DEPLOY_GUARD_SELF_TEST:-}" == "1" ]]; then
+  run_deploy_guard_self_test
+  exit 0
+fi
+
+validate_db_deploy_strategy
+
 echo ""
 echo "======================================"
 echo " PREFLIGHT DEPLOY TCDX ISO SAAS"
@@ -363,6 +708,8 @@ echo "Origin actual:     ${ORIGIN_URL:-no-detectado}"
 echo "Origin esperado:   ${EXPECTED_ORIGIN_URL}"
 echo "Usuario deploy:    ${DEPLOY_USER}"
 echo "Deploy mode:       v4 only"
+echo "DB strategy:       ${DB_DEPLOY_STRATEGY}"
+echo "Fresh DB guard:    ${FRESH_PRODUCTION_DB_NAME}"
 echo "Backend host:      ${BACKEND_HOST}"
 echo "AI Engine host:    ${AI_HOST}"
 echo "Frontend host:     ${FRONTEND_HOST}"
@@ -371,10 +718,17 @@ echo "Backend dir:       ${REMOTE_BACKEND_DIR}"
 echo "Frontend dir:      ${REMOTE_FRONTEND_DIR}"
 echo "AI engine dir:     ${REMOTE_AI_ENGINE_DIR}"
 echo "Migration env:     ${REMOTE_MIGRATION_ENV_FILE}"
+echo "Backend env:       ${REMOTE_BACKEND_ENV_FILE}"
 
 if [[ ! "$REMOTE_MIGRATION_ENV_FILE" =~ ^/[A-Za-z0-9._/-]+$ ]]; then
   echo ""
   echo "ERROR: TCDX_MIGRATION_ENV_FILE debe ser una ruta absoluta segura."
+  exit 1
+fi
+
+if [[ ! "$REMOTE_BACKEND_ENV_FILE" =~ ^/[A-Za-z0-9._/-]+$ ]]; then
+  echo ""
+  echo "ERROR: TCDX_BACKEND_ENV_FILE debe ser una ruta absoluta segura."
   exit 1
 fi
 
@@ -482,12 +836,16 @@ preflight_remote "backend" "$BACKEND_HOST" "$REMOTE_BACKEND_DIR" "$BACKEND_WRAPP
 preflight_remote "AI Engine" "$AI_HOST" "$REMOTE_AI_ENGINE_DIR" "$AI_ENGINE_WRAPPER" "ai-engine.service"
 preflight_remote "frontend" "$FRONTEND_HOST" "$REMOTE_FRONTEND_DIR" "$FRONTEND_WRAPPER" "tcdx-frontend.service"
 
+validate_migration_database_identity
+validate_backend_runtime_database "pre-deploy"
+
 run_registered_migrations "$LOCAL_HEAD"
 echo ""
 echo "======================================"
 echo " DEPLOY BACKEND"
 echo "======================================"
 deploy_remote "backend" "$BACKEND_HOST" "$BACKEND_WRAPPER"
+validate_backend_runtime_database "post-backend-deploy"
 
 echo ""
 echo "======================================"

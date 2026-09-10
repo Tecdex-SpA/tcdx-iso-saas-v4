@@ -204,7 +204,7 @@ VALUES (
   'AI',
   'Commercial add-on for tenant-scoped AI capabilities.',
   'active',
-  '{"commercial_model":"base_plan_plus_addon","authority":"tenant_subscription_addons"}'::jsonb
+  '{"classification":"AI_ADDON","commercial_model":"base_plan_plus_addon","authority":"tenant_subscription_addons"}'::jsonb
 )
 ON CONFLICT (addon_key) DO UPDATE SET
   display_name = EXCLUDED.display_name,

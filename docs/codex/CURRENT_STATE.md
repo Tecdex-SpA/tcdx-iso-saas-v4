@@ -1,5 +1,23 @@
 # CURRENT_STATE — TCDX ISO SaaS V4
 
+## TCDX SaaSv2 Fresh Deploy Architecture — 2026-09-10
+
+Status: `TCDX_SAASV2_FRESH_DEPLOY_ARCHITECTURE_READY_FOR_PRODUCTION`.
+
+Local-only deploy architecture correction on branch `main` / base HEAD `e2e8af2ed75b3c04303d20726a4fd308ce07c15b`. No SQL was executed against `tcdx_saasv2`, `tecdex_saas` or QA. No `.env`, `/home/tecdex/.config/tcdx/migration.env`, commit, push, merge or deploy was performed.
+
+`scripts/deploy-vms.sh` now separates `fresh-baseline` from `historical-upgrade`. Fresh mode is guarded for `current_database=tcdx_saasv2`, refuses the historical chain, does not run `production_schema_v1.sql`, `production_seed_v1.sql` or `load-production-reference-catalogs.js`, and continues with zero registered post-baseline forward-only migrations. Historical mode preserves the existing runner chain but explicitly rejects `tcdx_saasv2`.
+
+The deploy now validates both identities before service changes: `MIGRATION_DATABASE_URL` via `current_database/current_user/inet_server_addr/inet_server_port`, and backend runtime `.env` via `DB_HOST/DB_PORT/DB_USER/DB_PASSWORD/DB_NAME` without printing secrets. Runtime backend validation runs pre-deploy and post-backend-deploy.
+
+Ledger analysis: V1 closeout writes `schema_migrations` and hardcodes `repeat('0',64)` as checksum; V2/V3 do not write ledger rows. V1/V2/V3 are treated as already materialized and are not replayed by recurrent fresh deploy. Future fresh post-baseline migrations require explicit registration and computed-checksum ledger in a later reviewed task.
+
+DB-N05 validation hygiene: `production_seed_v1.sql` now keeps the expected `AI_ADDON` classification marker on the existing global `commercial_addons.ai` row; `db-n05-fresh-production.postgres.test.js` no longer treats `evidences.control_id` as legacy because V2 defines it as catalog identity.
+
+Continuation guard closeout confirmed the previous local self-test was aborting after `BACKEND_DOTENV_PARSER_SPACES=PASS` because a negative-path assertion that calls `exit` was captured directly under `set -e`; the self-test now captures failing guard paths inside subshells and the Node harness requires `dotenv.config({ path: envFile, quiet: true })`.
+
+Validation local PASS: `bash -n scripts/deploy-vms.sh`, `node scripts/deploy-vms-strategy.test.js`, `TCDX_DEPLOY_GUARD_SELF_TEST=1 TCDX_DB_DEPLOY_STRATEGY=fresh-baseline bash scripts/deploy-vms.sh`, strategy-missing fail-closed via `env -u TCDX_DB_DEPLOY_STRATEGY bash scripts/deploy-vms.sh`, DB-N05 focal JS tests requested by prompt, `node scripts/normalization/db-n05-fresh-production.postgres.test.js`, and `git diff --check`.
+
 ## TCDX SaaSv2 GRC Runtime Contract Closeout V3 — 2026-09-10
 
 Status: `TCDX_SAASV2_GRC_RUNTIME_CONTRACT_V3_READY_FOR_CLONE_VALIDATION`.
