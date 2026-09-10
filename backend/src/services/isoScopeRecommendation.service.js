@@ -34,7 +34,6 @@ const ALLOWED_ROLES = new Set([
   'readonly',
   'solo_lectura',
   'ejecutivo',
-  ...PLATFORM_ROLES,
 ]);
 
 const HIGH_RISK = new Set(['alto', 'alta', 'high', 'critico', 'crítico', 'critica', 'crítica', 'critical']);
