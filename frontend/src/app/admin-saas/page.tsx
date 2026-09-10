@@ -592,7 +592,6 @@ export default function AdminSaasPage() {
   const [savingKey, setSavingKey] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  const [isSuperadminUi] = useState(false);
   const [activeAdminTab, setActiveAdminTab] = useState('empresa');
 
   const contractPlanOptions = standardContractPlans.length > 0 ? standardContractPlans : STANDARD_CONTRACT_PLAN_FALLBACK;
@@ -609,6 +608,7 @@ export default function AdminSaasPage() {
   }
 
   const isPlatform = governance?.data?.scope?.is_platform === true;
+  const isSuperadminUi = isPlatform;
   const canViewAdminSaas =
     governance?.data?.permission_map?.['admin_saas.view'] === true;
   const canManageAdminSaas =

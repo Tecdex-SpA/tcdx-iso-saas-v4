@@ -454,6 +454,7 @@ run_phase_migration() {
 }
 
 FRESH_PRODUCTION_MIGRATION_RUNNERS=(
+  "Fresh runtime contract closeout|scripts/normalization/apply-tcdx-saasv2-fresh-runtime-contract-closeout.js"
 )
 
 HISTORICAL_MIGRATION_RUNNERS=(
@@ -536,7 +537,12 @@ run_deploy_guard_self_test() {
   echo "FRESH_MODE_ACCEPTS_TCDX_SAASV2=PASS"
 
   output="$(selected_migration_runners)"
-  [[ -z "$output" ]] || { echo "FRESH_DB_DOES_NOT_RUN_HISTORICAL_MIGRATIONS=FAIL"; exit 1; }
+  [[ "$output" != *"scripts/phase"* ]] || { echo "FRESH_DB_DOES_NOT_RUN_HISTORICAL_MIGRATIONS=FAIL"; exit 1; }
+  [[ "$output" != *"scripts/rbac"* ]] || { echo "FRESH_DB_DOES_NOT_RUN_HISTORICAL_MIGRATIONS=FAIL"; exit 1; }
+  [[ "$output" != *"scripts/commercial-plan"* ]] || { echo "FRESH_DB_DOES_NOT_RUN_HISTORICAL_MIGRATIONS=FAIL"; exit 1; }
+  [[ "$output" != *"scripts/ai-addon"* ]] || { echo "FRESH_DB_DOES_NOT_RUN_HISTORICAL_MIGRATIONS=FAIL"; exit 1; }
+  [[ "$output" != *"apply-normalization"* ]] || { echo "FRESH_DB_DOES_NOT_RUN_HISTORICAL_MIGRATIONS=FAIL"; exit 1; }
+  [[ "$output" != *"hotfix"* ]] || { echo "FRESH_DB_DOES_NOT_RUN_HISTORICAL_MIGRATIONS=FAIL"; exit 1; }
   echo "FRESH_DB_DOES_NOT_RUN_HISTORICAL_MIGRATIONS=PASS"
 
   DB_DEPLOY_STRATEGY="historical-upgrade"
@@ -603,8 +609,8 @@ $( (assert_backend_runtime_identity "tecdex_saas" "tcdx_saasv2") 2>&1 || true)"
   [[ "$output" != *"scripts/phase"* ]] || { echo "NO_HISTORICAL_PHASE_RUNNER_ON_FRESH_DEPLOY=FAIL"; exit 1; }
   echo "NO_HISTORICAL_PHASE_RUNNER_ON_FRESH_DEPLOY=PASS"
 
-  [[ -z "$output" ]] || { echo "DEPLOY_CONTINUES_WITH_ZERO_PENDING_FORWARD_MIGRATIONS=FAIL"; exit 1; }
-  echo "DEPLOY_CONTINUES_WITH_ZERO_PENDING_FORWARD_MIGRATIONS=PASS"
+  [[ "$output" == *"apply-tcdx-saasv2-fresh-runtime-contract-closeout.js"* ]] || { echo "DEPLOY_ACCEPTS_FRESH_FORWARD_MIGRATIONS=FAIL"; exit 1; }
+  echo "DEPLOY_ACCEPTS_FRESH_FORWARD_MIGRATIONS=PASS"
 }
 
 validate_backend() {
