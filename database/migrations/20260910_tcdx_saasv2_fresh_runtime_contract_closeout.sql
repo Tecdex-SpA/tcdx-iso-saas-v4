@@ -700,19 +700,55 @@ JOIN permissions p ON p.permission_key IN (
 WHERE ar.role_key = 'tenant_admin'
 ON CONFLICT (role_key, permission_key) DO UPDATE SET is_allowed = true, updated_at = now();
 
-WITH modules AS (
-  SELECT DISTINCT COALESCE(module_key, capability_key) AS module_key,
-    COALESCE(NULLIF(module_key, ''), capability_key) AS display_name
+WITH module_candidates AS (
+  SELECT
+    COALESCE(module_key, capability_key) AS module_key,
+    COALESCE(NULLIF(module_key, ''), capability_key) AS display_name,
+    2 AS source_priority
   FROM commercial_technical_capabilities
   WHERE COALESCE(module_key, capability_key) IS NOT NULL
-  UNION
-  SELECT module_key, display_name FROM saas_modules
+
+  UNION ALL
+
+  SELECT
+    module_key,
+    display_name,
+    1 AS source_priority
+  FROM saas_modules
+  WHERE module_key IS NOT NULL
+),
+modules AS (
+  SELECT DISTINCT ON (module_key)
+    module_key,
+    display_name
+  FROM module_candidates
+  WHERE NULLIF(TRIM(module_key), '') IS NOT NULL
+  ORDER BY
+    module_key,
+    source_priority,
+    display_name
 )
-INSERT INTO commercial_modules (module_key, display_name, description, sort_order, status, metadata)
-SELECT module_key, display_name, 'Fresh runtime module contract', 500, 'active', '{"source":"fresh_runtime_contract_closeout"}'::jsonb
+INSERT INTO commercial_modules (
+  module_key,
+  display_name,
+  description,
+  sort_order,
+  status,
+  metadata
+)
+SELECT
+  module_key,
+  display_name,
+  'Fresh runtime module contract',
+  500,
+  'active',
+  '{"source":"fresh_runtime_contract_closeout"}'::jsonb
 FROM modules
 ON CONFLICT (module_key) DO UPDATE SET
-  display_name = COALESCE(commercial_modules.display_name, EXCLUDED.display_name),
+  display_name = COALESCE(
+    commercial_modules.display_name,
+    EXCLUDED.display_name
+  ),
   status = 'active',
   updated_at = now();
 
