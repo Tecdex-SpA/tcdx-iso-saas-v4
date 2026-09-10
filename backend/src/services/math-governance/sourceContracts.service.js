@@ -150,7 +150,7 @@ const INDICATOR_SOURCE_MAP = Object.freeze({
   'EVIDENCE-FRESH': 'evidence_freshness_records',
 });
 
-function checksum(value) {
+function publishedSourceContractChecksum(value) {
   return crypto.createHash('sha256').update(JSON.stringify(value, Object.keys(value).sort())).digest('hex');
 }
 
@@ -191,7 +191,7 @@ function contract(definition) {
     required_capability: _requiredCapability,
     ...governed
   } = normalized;
-  return Object.freeze({ ...normalized, checksum: checksum(governed) });
+  return Object.freeze({ ...normalized, checksum: publishedSourceContractChecksum(governed) });
 }
 
 const SOURCE_CONTRACTS = Object.freeze([
@@ -342,4 +342,4 @@ function listSourceContracts() { return SOURCE_CONTRACTS.map((item) => ({ ...ite
 function getSourceContract(sourceCode) { const value = SOURCE_CONTRACT_MAP.get(sourceCode); return value ? { ...value } : null; }
 function listFormulaSourceBindings() { return Object.entries(FORMULA_SOURCE_MAP).map(([formula_code, source_code]) => ({ formula_code, source_code, contract: getSourceContract(source_code) })); }
 
-module.exports = { AVAILABILITY, FORMULA_SOURCE_MAP, SOURCE_CONTRACTS, TEMPORAL_SEMANTICS_BY_SOURCE, STATUS_SEMANTICS_BY_SOURCE, getSourceCodeForFormula, getSourceCodeForIndicator, getSourceContract, listSourceContracts, listFormulaSourceBindings };
+module.exports = { AVAILABILITY, FORMULA_SOURCE_MAP, SOURCE_CONTRACTS, TEMPORAL_SEMANTICS_BY_SOURCE, STATUS_SEMANTICS_BY_SOURCE, publishedSourceContractChecksum, getSourceCodeForFormula, getSourceCodeForIndicator, getSourceContract, listSourceContracts, listFormulaSourceBindings };

@@ -21,6 +21,8 @@ Este archivo registra comandos reutilizables. Codex NO ejecuta automáticamente 
 | F6.11-B semantic diff/regulatory packs focal | `node backend/src/services/knowledge-base/regulatoryDiffPacks.service.test.js` | repo root | VERIFIED/F6.11-B |
 | F6.12-A cross-GRC intelligence focal | `node backend/src/services/intelligence/crossGrcIntelligence.service.test.js` | repo root | VERIFIED/F6.12-A |
 | TCDX SaaSv2 GRC runtime contract V3 | `node scripts/normalization/apply-tcdx-saasv2-grc-runtime-contract-closeout-v3.test.js` | repo root | READY_FOR_CLONE_VALIDATION/TCDX-SAASV2-GRC-RUNTIME-CONTRACT-CLOSEOUT-V3 |
+| Phase 5-C3 source contract checksum focal | `node backend/src/services/math-governance/sourceContractChecksum.test.js` | repo root | VERIFIED/TCDX-SAASV2-PHASE5-C3-CHECKSUM-CLOSEOUT |
+| Phase 5-C3 isolated PostgreSQL replay | `bash scripts/phase5-c3/check-phase5-c3-postgres.sh` | repo root | VERIFIED/TCDX-SAASV2-PHASE5-C3-CHECKSUM-CLOSEOUT |
 | F6.13-A operational learning focal | `node backend/src/services/intelligence/operationalLearning.service.test.js` | repo root | VERIFIED/F6.13-A |
 | F6.14-A AI governance/evaluation focal | `node backend/src/services/intelligence/aiGovernanceEvaluation.service.test.js` | repo root | VERIFIED/F6.14-A |
 | F6.11 migration checksum | `node scripts/f6-11/apply-f6-11-migration.js --checksum` | repo root | VERIFIED/F6.11-B |

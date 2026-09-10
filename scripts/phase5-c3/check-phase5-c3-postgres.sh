@@ -54,6 +54,8 @@ MIGRATION_DATABASE_URL="$DATABASE_URL" node "$C2_RUNNER" --apply >/tmp/tcdx-phas
 
 c3_checksum="$(node "$C3_RUNNER" --checksum | awk -F= '/checksum=/ { print $2; exit }')"
 run_psql -v ON_ERROR_STOP=1 -c "INSERT INTO schema_migrations(migration_id,checksum,applied_by,status,details) VALUES('20260807_phase5_c3_indicators_trust_snapshots',repeat('f',64),current_user,'failed','{\"test\":\"failed-retry\"}'::jsonb) ON CONFLICT(migration_id) DO UPDATE SET checksum=EXCLUDED.checksum,status='failed',details=EXCLUDED.details;" >/dev/null
+MIGRATION_DATABASE_URL="$DATABASE_URL" node "$C3_RUNNER" --preflight >/tmp/tcdx-phase5-c3-preflight.txt
+grep -q 'Phase 5-C3 migration preflight OK' /tmp/tcdx-phase5-c3-preflight.txt || { echo "Phase 5-C3 preflight did not pass" >&2; exit 1; }
 MIGRATION_DATABASE_URL="$DATABASE_URL" node "$C3_RUNNER" --apply >/tmp/tcdx-phase5-c3-apply-1.txt
 MIGRATION_DATABASE_URL="$DATABASE_URL" node "$C3_RUNNER" --apply >/tmp/tcdx-phase5-c3-apply-2.txt
 run_psql -v ON_ERROR_STOP=1 -c "ALTER TABLE metric_measurements DROP CONSTRAINT IF EXISTS metric_measurements_check1; ALTER TABLE metric_measurements ADD CONSTRAINT metric_measurements_check1 CHECK (value_numeric IS NOT NULL OR value_text IS NOT NULL) NOT VALID;" >/dev/null

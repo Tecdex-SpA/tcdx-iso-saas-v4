@@ -2,10 +2,71 @@
 const { FORMULAS } = require('./formulaRegistry.service');
 const { getSourceContract, listSourceContracts } = require('./sourceContracts.service');
 
+const SOURCE_CONTRACT_RUNTIME_FIELDS = Object.freeze([
+  'source_code',
+  'entity',
+  'tables',
+  'columns',
+  'joins',
+  'tenant_filter',
+  'status_filter',
+  'period',
+  'timezone',
+  'unit',
+  'scale_metadata',
+  'count_semantics',
+  'temporal_semantics',
+  'status_semantics',
+  'cardinality',
+  'required_fields',
+  'exclusions',
+  'null_policy',
+  'availability',
+  'version',
+  'status',
+  'adapter',
+  'variable_map',
+  'query',
+  'limitations',
+]);
+
+const SOURCE_CONTRACT_PERSISTED_FIELDS = Object.freeze({
+  entity_name: 'entity',
+  tables: 'tables',
+  columns: 'columns',
+  allowed_joins: 'joins',
+  tenant_filter: 'tenant_filter',
+  status_filter: 'status_filter',
+  period_policy: 'period',
+  timezone_policy: 'timezone',
+  unit: 'unit',
+  cardinality: 'cardinality',
+  required_fields: 'required_fields',
+  exclusions: 'exclusions',
+  null_policy: 'null_policy',
+  availability: 'availability',
+  metadata: 'metadata',
+});
+
 function publicFormula(definition) {
   const { execute, tests, ...serializable } = definition;
   return serializable;
 }
+
+function sourceContractPayload(contract) {
+  const payload = {};
+  for (const field of SOURCE_CONTRACT_RUNTIME_FIELDS) payload[field] = contract[field];
+  return payload;
+}
+
+function stableJson(value) {
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`;
+  if (value && typeof value === 'object') {
+    return `{${Object.keys(value).sort().filter((key) => value[key] !== undefined).map((key) => `${JSON.stringify(key)}:${stableJson(value[key])}`).join(',')}}`;
+  }
+  return JSON.stringify(value);
+}
+
 function sourceContractMetadata(contract) {
   return {
     package: 'phase5_5',
@@ -17,6 +78,55 @@ function sourceContractMetadata(contract) {
     temporal_semantics: contract.temporal_semantics || {},
     status_semantics: contract.status_semantics || {},
   };
+}
+
+function normalizeJsonValue(value) {
+  if (value === null || value === undefined) return value;
+  if (typeof value === 'string') {
+    try { return JSON.parse(value); } catch (_) { return value; }
+  }
+  return value;
+}
+
+function compactHash(value) {
+  return value === null || value === undefined ? null : String(value).trim();
+}
+
+function sourceContractDiff(contract, row = {}) {
+  const expectedMetadata = sourceContractMetadata(contract);
+  const differences = [];
+  for (const [persistedField, contractField] of Object.entries(SOURCE_CONTRACT_PERSISTED_FIELDS)) {
+    const expected = contractField === 'metadata' ? expectedMetadata : contract[contractField];
+    const actual = normalizeJsonValue(row[persistedField]);
+    if (stableJson(actual) !== stableJson(expected)) {
+      differences.push({ field: persistedField, expected, actual });
+    }
+  }
+  return differences;
+}
+
+function sourceContractMismatchError(contract, row) {
+  const dbChecksum = compactHash(row?.checksum);
+  const codeChecksum = compactHash(contract?.checksum);
+  const details = {
+    source_code: contract.source_code,
+    version_number: contract.version,
+    db_contract_checksum: dbChecksum,
+    code_contract_checksum: codeChecksum,
+    db_status: row?.status || null,
+    structural_differences: sourceContractDiff(contract, row).map((item) => item.field),
+  };
+  const error = new Error(`Published source contract checksum mismatch: ${contract.source_code}@${contract.version} db_checksum=${dbChecksum || 'null'} code_checksum=${codeChecksum || 'null'} differing_fields=${details.structural_differences.join(',') || 'none'}`);
+  error.code = 'PUBLISHED_SOURCE_CONTRACT_CHECKSUM_MISMATCH';
+  error.details = details;
+  return error;
+}
+
+function assertPublishedSourceContractCompatible(contract, row) {
+  if (!row) return;
+  if (row.status === 'published' && compactHash(row.checksum) !== compactHash(contract.checksum)) {
+    throw sourceContractMismatchError(contract, row);
+  }
 }
 
 async function syncOfficialFormulaRegistry(client, { actorId = null, status = 'published' } = {}) {
@@ -77,12 +187,15 @@ async function syncOfficialSourceContracts(client, { actorId = null } = {}) {
   const results = [];
   for (const contract of listSourceContracts()) {
     const existing = await client.query(
-      `SELECT id, checksum, status FROM official_formula_source_contracts WHERE tenant_id IS NULL AND source_code = $1 AND version_number = $2`,
+      `SELECT id, checksum, status, entity_name, tables, columns, allowed_joins, tenant_filter,
+              status_filter, period_policy, timezone_policy, unit, cardinality, required_fields,
+              exclusions, null_policy, availability, metadata
+         FROM official_formula_source_contracts
+        WHERE tenant_id IS NULL AND source_code = $1 AND version_number = $2
+        ORDER BY created_at DESC, id DESC`,
       [contract.source_code, contract.version]
     );
-    if (existing.rowCount && existing.rows[0].status === 'published' && existing.rows[0].checksum !== contract.checksum) {
-      throw new Error(`Published source contract checksum mismatch: ${contract.source_code}@${contract.version}`);
-    }
+    if (existing.rowCount) assertPublishedSourceContractCompatible(contract, existing.rows[0]);
     if (!existing.rowCount) {
       await client.query(
         `INSERT INTO official_formula_source_contracts (
@@ -109,4 +222,14 @@ async function syncMathGovernanceCatalog(client, options = {}) {
   return { status: 'OFFICIAL_MATH_GOVERNANCE_SYNCED', sourceContracts, formulas };
 }
 
-module.exports = { syncOfficialFormulaRegistry, syncOfficialSourceContracts, syncMathGovernanceCatalog, publicFormula, sourceContractMetadata };
+module.exports = {
+  syncOfficialFormulaRegistry,
+  syncOfficialSourceContracts,
+  syncMathGovernanceCatalog,
+  publicFormula,
+  sourceContractMetadata,
+  sourceContractPayload,
+  stableJson,
+  sourceContractDiff,
+  assertPublishedSourceContractCompatible,
+};
