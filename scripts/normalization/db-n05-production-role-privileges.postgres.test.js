@@ -39,7 +39,10 @@ assert.doesNotMatch(schema, /GRANT\s+CREATE\s+ON SCHEMA\s+(public|ai_core|tcdx_s
 assert.match(schema, /ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC/, 'future public functions must not inherit public EXECUTE');
 assert.match(schema, /ALTER DEFAULT PRIVILEGES IN SCHEMA tcdx_security REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC/, 'future security functions must not inherit public EXECUTE');
 
-assert.match(backend, /SELECT, INSERT, UPDATE, DELETE ON tenants, users, tenant_standards, tenant_controls, control_soa, control_soa_assessments,\s+control_soa_change_log, findings, evidences, action_plans/, 'R01 backend required read/write PASS');
+assert.match(backend, /SELECT, INSERT, UPDATE, DELETE ON tenants, users, tenant_standards, tenant_controls, control_soa, control_soa_assessments,[^;]*control_soa_change_log, findings, evidences, action_plans/is, 'R01 backend required read/write PASS');
+assert.match(backend, /SELECT, INSERT, UPDATE, DELETE ON [^;]*tenant_operations, tenant_standard_operations[^;]*assets, asset_standards, asset_risks, risks, risk_control_relations, audits/is, 'R01 backend runtime operational DML PASS');
+assert.match(backend, /SELECT ON app_roles, permissions, role_permissions,[^;]*commercial_addons/is, 'R01 backend commercial addon catalog SELECT PASS');
+assert.match(backend, /SELECT ON public\.v_iso_control_effective_health, public\.v_iso_effective_kpi_summary,[^;]*public\.v_commercial_tenant_capabilities[^;]*public\.v_commercial_tenant_health/is, 'R01 backend runtime view SELECT PASS');
 assert.doesNotMatch(backend, /schema_migrations|app_roles, permissions, role_permissions[^;]*SELECT, INSERT, UPDATE, DELETE/is, 'R02 backend cannot mutate migration/admin-only objects');
 assert.doesNotMatch(backend, /refresh_control_health_scores_v2_1/, 'R01 backend must not receive legacy Health refresh function');
 

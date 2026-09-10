@@ -1,0 +1,39 @@
+TCDX_SAASV2_BACKEND_CUTOVER_TENANT_ISOLATION_RESULTS
+DATE=2026-09-09
+
+SYNTHETIC_FIXTURE
+run_id=cutover-1788977868634-ecba6d6b
+tenant_a_created=true
+tenant_b_created=true
+users_created=admin,auditor,viewer per tenant plus platform probe user
+tenant_controls_created=1 per tenant
+tenant_scoped_rows_created=tenant_standards,tenant_controls,control_soa,evidences,findings,action_plans
+passwords_or_tokens_persisted=false
+
+AUTH_RESULTS
+tenant_a_admin_login=200
+tenant_a_auditor_login=200
+tenant_a_viewer_login=200
+tenant_b_admin_login=200
+bad_password_login=401 AUTH_INVALID_CREDENTIALS
+
+TENANT_TOKEN_BLOCKER
+request=/api/auth/validate with tenant user token
+http_status=401
+response_code=INVALID_TOKEN
+backend_log=AUTH ERROR: column "suspended_at" does not exist
+missing_tenant_lifecycle_columns=suspended_at,deleted_at,suspension_reason,deletion_reason
+
+TENANT_ISOLATION
+A_reads_A=NOT_PROVEN_BLOCKED_BY_AUTH_SCHEMA
+A_reads_B=NOT_PROVEN_BLOCKED_BY_AUTH_SCHEMA
+B_reads_A=NOT_PROVEN_BLOCKED_BY_AUTH_SCHEMA
+401_403_EXPECTED_DENIALS=NOT_PROVEN_BLOCKED_BY_AUTH_SCHEMA
+CROSS_TENANT_LEAKAGE=NOT_MEASURED
+
+AUTH_RBAC=FAIL_REAL_RUNTIME_SCHEMA_DEFECT
+CROSS_TENANT_LEAKAGE=NOT_MEASURED
+
+NOTES
+- The failure occurs before tenantScope/RBAC because auth validates tenant service status through columns absent from tcdx_saasv2.tenants.
+- No 5xx was returned for the tenant-user auth blocker, but the backend log shows a runtime SQL schema error masked as INVALID_TOKEN.

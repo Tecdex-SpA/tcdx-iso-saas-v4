@@ -1,0 +1,61 @@
+TCDX_SAASV2_BACKEND_CUTOVER_RUNTIME_PRIVILEGE_RESULTS
+DATE=2026-09-09
+
+ROLE_IDENTITY
+current_database=tcdx_saasv2
+current_user=tcdx_backend_app
+session_user=tcdx_backend_app
+member_of_tcdx_backend_runtime=true
+
+ROLE_ATTRIBUTES
+LOGIN=true
+INHERIT=true
+SUPERUSER=false
+CREATEDB=false
+CREATEROLE=false
+BYPASSRLS=false
+
+RUNTIME_ROLE_COMPATIBILITY_PARTIAL_PASS
+- Login principal exists and connects.
+- Login principal inherits tcdx_backend_runtime.
+- Backend primary pool uses the same effective principal.
+- Runtime role is not superuser and does not bypass RLS.
+
+EFFECTIVE_PRIVILEGE_PROBES
+public.tenants=SELECT,INSERT,UPDATE,DELETE true
+public.users=SELECT,INSERT,UPDATE,DELETE true
+public.tenant_standards=SELECT,INSERT,UPDATE,DELETE true
+public.tenant_controls=SELECT,INSERT,UPDATE,DELETE true
+public.control_soa=SELECT,INSERT,UPDATE,DELETE true
+public.evidences=SELECT,INSERT,UPDATE,DELETE true
+public.findings=SELECT,INSERT,UPDATE,DELETE true
+public.action_plans=SELECT,INSERT,UPDATE,DELETE true
+public.iso_controls=SELECT true, DML false
+public.knowledge_items=SELECT true, DML false
+
+PERMISSION_DENIED_CONFIRMED
+operation=SELECT count(*) FROM public.assets
+error=permission denied for table assets
+operation=SELECT count(*) FROM public.risks
+error=permission denied for table risks
+operation=SELECT count(*) FROM public.risk_control_relations
+error=permission denied for table risk_control_relations
+
+EFFECTIVE_PRIVILEGES_MISSING
+public.assets=SELECT,INSERT,UPDATE,DELETE false
+public.risks=SELECT,INSERT,UPDATE,DELETE false
+public.risk_control_relations=SELECT,INSERT,UPDATE,DELETE false
+public.tenant_operations=SELECT,INSERT,UPDATE,DELETE false
+
+MINIMUM_OBSERVED_PRIVILEGE_DELTA
+- For the executed/read-only runtime gates, tcdx_backend_runtime needs at least SELECT on public.assets, public.risks, public.risk_control_relations and public.tenant_operations if those remain active backend runtime dependencies.
+- DML grants for those objects were not proven necessary in this smoke because mutating asset/risk/operation endpoints were not executed.
+- Do not grant schema-wide privileges. Add explicit allowlist grants only after confirming active runtime ownership and table contract.
+
+RUNTIME_ROLE_COMPATIBILITY=FAIL_REAL_RUNTIME_PRIVILEGE_DEFECT
+
+PROHIBITIONS_RESPECTED
+- No postgres/superuser was used to pass a runtime gate.
+- No grants were changed.
+- tcdx_backend_runtime was not converted into a LOGIN role.
+- No BYPASSRLS or ownership escalation was applied.

@@ -1,0 +1,28 @@
+TCDX_SAASV2_BACKEND_CUTOVER_FORMULA_HEALTH_RESULTS
+DATE=2026-09-09
+
+CANONICAL_CONTRACTS_RETAINED
+executive_health_authority=F5_5_GRC_HEALTH
+control_effectiveness_authority=F5_5_CONTROL_EFFECTIVENESS
+canonical_output=calculation_outputs.output_value.value
+not_authority=KPI-HLT
+not_authority=control_health_scores
+
+REFERENCE_COUNTS
+official_formula_versions=53
+iso_controls=61
+knowledge_items=1000
+
+RUNTIME_EXECUTION
+FORMULA_RUNTIME=NOT_EXECUTED_BLOCKED_BY_AUTH_SCHEMA_AND_HTTP_5XX
+GRC_HEALTH_CANONICAL=NOT_EXECUTED_BLOCKED_BY_AUTH_SCHEMA_AND_HTTP_5XX
+RISK_CANONICAL=FAIL_MISSING_RUNTIME_VIEW
+
+BLOCKERS
+- Tenant authenticated requests cannot pass auth because tcdx_saasv2.tenants lacks service lifecycle columns used by backend/src/middleware/auth.js.
+- Risk matrix summary fails with 42P01: relation "v_iso_risk_matrix_summary" does not exist.
+- Intelligence brief logs missing v_iso_effective_kpi_summary and incompatible v_iso_control_effective_health shape.
+
+NOTES
+- No calculation run, calculation output, source snapshot or metric snapshot was created in this continuation.
+- No null/no-data/insufficient value was converted to zero.

@@ -1,0 +1,56 @@
+TCDX_SAASV2_BACKEND_CUTOVER_BLOCKED
+DATE=2026-09-09
+
+SUMMARY
+The previous RUNTIME_CREDENTIAL_ENV_MISSING blocker is resolved in this Codex shell. Both direct psql and the real backend pool connect as tcdx_backend_app to tcdx_saasv2, with membership in tcdx_backend_runtime.
+
+The cutover review remains blocked by real runtime defects found after temporary backend startup:
+- REAL_RUNTIME_SCHEMA_DEFECT: tenant auth queries missing tenants.suspended_at/deleted_at/suspension_reason/deletion_reason, so tenant-user tokens cannot pass /api auth validation.
+- REAL_RUNTIME_SCHEMA_DEFECT: active backend routes require missing objects tenant_standard_operations, asset_risks, v_iso_risk_matrix_summary, v_iso_effective_kpi_summary and v_commercial_tenant_* views.
+- REAL_RUNTIME_SCHEMA_DEFECT: active backend routes expect columns a.iso, op1.is_default and operation_id in runtime objects/views where tcdx_saasv2 does not provide the required shape.
+- REAL_RUNTIME_PRIVILEGE_DEFECT: tcdx_backend_app/tcdx_backend_runtime lacks effective privileges on public.assets, public.risks, public.risk_control_relations and public.tenant_operations.
+
+GATES
+GIT_PRECHECK=PASS
+DATABASE_IDENTITY_GUARD=PASS
+DATABASE_PREFLIGHT=FAIL_REAL_RUNTIME_SCHEMA_COMPATIBILITY
+CREDENTIAL_ENV_CHECK=PASS
+RUNTIME_ROLE_COMPATIBILITY=FAIL_REAL_RUNTIME_PRIVILEGE_DEFECT
+BACKEND_TEMPORARY_STARTUP=PASS
+BACKEND_DB_CONNECTION=tcdx_saasv2
+AUTH_RBAC=FAIL_REAL_RUNTIME_SCHEMA_DEFECT
+CRITICAL_API_SMOKE=FAIL_REAL_RUNTIME_SCHEMA_AND_PRIVILEGE_DEFECTS
+HTTP_5XX=6
+SQL_ERRORS=>0
+CROSS_TENANT_LEAKAGE=NOT_MEASURED_BLOCKED_BY_AUTH_SCHEMA
+FORMULA_RUNTIME=NOT_EXECUTED_BLOCKED_BY_AUTH_SCHEMA_AND_HTTP_5XX
+GRC_HEALTH_CANONICAL=NOT_EXECUTED_BLOCKED_BY_AUTH_SCHEMA_AND_HTTP_5XX
+RISK_CANONICAL=FAIL_MISSING_RUNTIME_VIEW
+KNOWLEDGE_RUNTIME=PARTIAL_PLATFORM_PROBE_ONLY
+ZERO_LEGACY_RUNTIME=PASS_FOR_EXPLICIT_PROHIBITED_OBJECTS
+LEGACY_RUNTIME_REFERENCES=0
+UNHANDLED_RUNTIME_ERRORS=>0
+CLEANUP=PASS
+SYNTHETIC_TENANTS=0
+SYNTHETIC_USERS=0
+SYNTHETIC_RUNTIME_ROWS=0
+git diff --check=PASS
+
+PROHIBITIONS_RESPECTED
+NO commit
+NO push
+NO merge
+NO deploy
+NO ./scripts/deploy-vms.sh
+NO persistent .env edit
+NO productive backend change
+NO tecdex_saas write
+NO postgres used to pass runtime gates
+
+NEXT_EXACT_ACTION
+Human/backend owner review should reconcile the fresh baseline/versioned migration set with the active backend runtime contract before reattempting this cutover:
+1. Add the missing tenant lifecycle columns required by backend/src/middleware/auth.js, or change auth to use only columns guaranteed by the fresh baseline.
+2. Add or intentionally replace the missing active runtime objects/views: tenant_standard_operations, asset_risks, v_iso_risk_matrix_summary, v_iso_effective_kpi_summary and v_commercial_tenant_*.
+3. Reconcile active route queries expecting a.iso, op1.is_default and operation_id with the fresh schema.
+4. Add explicit least-privilege grants for only the confirmed active runtime tables/views needed by tcdx_backend_runtime.
+5. Recreate tcdx_saasv2 from the corrected baseline or apply the reviewed forward-only correction, then rerun this review from DATABASE_IDENTITY_GUARD.

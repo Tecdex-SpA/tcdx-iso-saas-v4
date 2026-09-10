@@ -131,7 +131,58 @@ WHERE permission_key IN (
 )
 ON CONFLICT (role_key, permission_key) DO UPDATE SET is_allowed = EXCLUDED.is_allowed, updated_at = now();
 
--- Modules and AI_ADDON capabilities are loaded from the canonical commercial runtime registry.
+INSERT INTO saas_modules (
+  module_key,
+  display_name,
+  description,
+  default_enabled,
+  is_system,
+  is_active,
+  sort_order,
+  status
+)
+VALUES
+  (
+    'grc_phase1_core',
+    'GRC Phase 1 Core',
+    'Workflows, evidence requests, readiness, frameworks and audit runtime.',
+    false,
+    true,
+    true,
+    45,
+    'active'
+  ),
+  (
+    'grc_phase2_integrated',
+    'GRC Phase 2 Integrated',
+    'Privacy, incidents, suppliers, connectors and integrated GRC runtime.',
+    false,
+    true,
+    true,
+    46,
+    'active'
+  ),
+  (
+    'grc_phase3_operations',
+    'GRC Phase 3 Operations',
+    'Operational units, processes, services, BIA, continuity, KPI/KRI and quantitative risk runtime.',
+    false,
+    true,
+    true,
+    47,
+    'active'
+  )
+ON CONFLICT (module_key) DO UPDATE SET
+  display_name = EXCLUDED.display_name,
+  description = EXCLUDED.description,
+  default_enabled = false,
+  is_system = true,
+  is_active = true,
+  sort_order = EXCLUDED.sort_order,
+  status = 'active',
+  updated_at = now();
+
+-- Tenant module settings remain tenant-owned and are not seeded here.
 
 INSERT INTO commercial_plans (plan_key, display_name, is_active)
 VALUES
@@ -147,6 +198,21 @@ VALUES
   ('enterprise', 'v1', 'published', now())
 ON CONFLICT (plan_key, version) DO UPDATE SET status = EXCLUDED.status, published_at = COALESCE(commercial_plan_versions.published_at, EXCLUDED.published_at);
 
+INSERT INTO commercial_addons (addon_key, display_name, description, status, metadata)
+VALUES (
+  'ai',
+  'AI',
+  'Commercial add-on for tenant-scoped AI capabilities.',
+  'active',
+  '{"commercial_model":"base_plan_plus_addon","authority":"tenant_subscription_addons"}'::jsonb
+)
+ON CONFLICT (addon_key) DO UPDATE SET
+  display_name = EXCLUDED.display_name,
+  description = EXCLUDED.description,
+  status = EXCLUDED.status,
+  metadata = commercial_addons.metadata || EXCLUDED.metadata,
+  updated_at = now();
+
 INSERT INTO standards (standard_code, family, display_name, version_label, is_active, metadata)
 VALUES
   ('ISO_27001_2022', 'ISO_27001', 'ISO/IEC 27001', '2022', true, '{"source":"reference_seed"}'::jsonb)
@@ -156,6 +222,22 @@ ON CONFLICT (standard_code) DO UPDATE SET
   version_label = EXCLUDED.version_label,
   is_active = EXCLUDED.is_active,
   metadata = EXCLUDED.metadata;
+
+INSERT INTO standard_lifecycle_stage_catalog (stage_code, display_order, is_terminal, is_active, metadata)
+VALUES
+  ('diagnostico', 10, false, true, '{"source":"runtime_contract_v2"}'::jsonb),
+  ('diseno_planificacion', 20, false, true, '{"source":"runtime_contract_v2"}'::jsonb),
+  ('implementacion', 30, false, true, '{"source":"runtime_contract_v2"}'::jsonb),
+  ('verificacion_auditoria', 40, false, true, '{"source":"runtime_contract_v2"}'::jsonb),
+  ('certificacion', 50, false, true, '{"source":"runtime_contract_v2"}'::jsonb),
+  ('mejora_continua', 60, false, true, '{"source":"runtime_contract_v2"}'::jsonb),
+  ('suspendida_fuera_alcance', 70, true, true, '{"source":"runtime_contract_v2"}'::jsonb)
+ON CONFLICT (stage_code) DO UPDATE SET
+  display_order = EXCLUDED.display_order,
+  is_terminal = EXCLUDED.is_terminal,
+  is_active = EXCLUDED.is_active,
+  metadata = standard_lifecycle_stage_catalog.metadata || EXCLUDED.metadata,
+  updated_at = now();
 
 -- The former three-control subset is TEST_FIXTURE_ONLY and is not inserted here.
 -- Production controls and mappings are loaded by load-production-reference-catalogs.js.

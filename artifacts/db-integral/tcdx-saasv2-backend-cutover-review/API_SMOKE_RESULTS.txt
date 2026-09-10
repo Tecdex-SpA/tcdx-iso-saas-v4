@@ -1,0 +1,52 @@
+TCDX_SAASV2_BACKEND_CUTOVER_API_SMOKE_RESULTS
+DATE=2026-09-09
+
+TENANT_USER_SMOKE
+login_a_admin=200
+login_a_auditor=200
+login_a_viewer=200
+login_b_admin=200
+login_bad_password=401 AUTH_INVALID_CREDENTIALS
+all_authenticated_tenant_requests_after_login=401 INVALID_TOKEN
+root_cause=backend auth middleware queries missing tenants.suspended_at/deleted_at/suspension_reason/deletion_reason
+
+PLATFORM_PROBE_SMOKE
+platform_login=200
+platform_auth_validate=200
+GET /api/tenants=200
+GET /api/tenants/:tenant_a=200
+GET /api/tenant-standards/:tenant_a=403 No autorizado
+GET /api/controls/:tenant_a=200
+GET /api/soa/:tenant_a=403 No autorizado para este tenant
+GET /api/evidences/:tenant_a=500 relation "tenant_standard_operations" does not exist
+GET /api/findings/:tenant_a=500 column op1.is_default does not exist
+GET /api/action-plans/:tenant_a=400 TENANT_REQUIRED
+GET /api/assets/:tenant_a=500 column a.iso does not exist
+GET /api/assets/risk-summary/:tenant_a=500 relation "asset_risks" does not exist
+GET /api/iso-risk-matrix/:tenant_a/summary=500 relation "v_iso_risk_matrix_summary" does not exist
+GET /api/audits/:tenant_a=500 column a.iso does not exist
+GET /api/knowledge-base/standards=200
+GET /api/knowledge-base/search?q=ISO=200
+GET /api/intelligence/brief/:tenant_a=200 ai_used=false
+
+INTELLIGENCE_SOURCE_WARNINGS
+tenant_operations=42501 permission denied for table tenant_operations
+public.v_iso_effective_kpi_summary=42P01 relation does not exist
+public.v_iso_control_effective_health=42703 column "operation_id" does not exist
+
+OBSERVABILITY
+HTTP_5XX=6
+SQL_ERRORS=>0
+UNHANDLED_RUNTIME_ERRORS=>0
+
+CRITICAL_API_SMOKE=FAIL_REAL_RUNTIME_SCHEMA_AND_PRIVILEGE_DEFECTS
+AUTH_RBAC=FAIL_REAL_RUNTIME_SCHEMA_DEFECT
+FORMULA_RUNTIME=NOT_EXECUTED_BLOCKED_BY_AUTH_SCHEMA_AND_HTTP_5XX
+GRC_HEALTH_CANONICAL=NOT_EXECUTED_BLOCKED_BY_AUTH_SCHEMA_AND_HTTP_5XX
+RISK_CANONICAL=FAIL_MISSING_RUNTIME_VIEW
+KNOWLEDGE_RUNTIME=PARTIAL_PLATFORM_PROBE_ONLY
+
+NOTES
+- Platform probes are not accepted as tenant isolation proof.
+- No endpoint PASS was inferred from file existence.
+- The backend was not started with postgres and no production process was touched.
