@@ -38,6 +38,10 @@ Este archivo registra comandos reutilizables. Codex NO ejecuta automáticamente 
 | Release RBAC migration checksum | `node scripts/release-rbac/apply-release-rbac-capability-closeout.js --checksum` | repo root | VERIFIED_LOCAL/TCDX-RELEASE-RBAC-CAPABILITY-SYSTEMIC-CLOSEOUT |
 | Commercial runtime integral isolated PostgreSQL | `node scripts/normalization/apply-tcdx-commercial-runtime-integral-closeout.test.js` | repo root | VERIFIED_LOCAL/TCDX-COMMERCIAL-RUNTIME-INTEGRAL-CLOSEOUT |
 | Commercial runtime integral migration checksum | `node scripts/normalization/apply-tcdx-commercial-runtime-integral-closeout.js --checksum` | repo root | VERIFIED_LOCAL/TCDX-COMMERCIAL-RUNTIME-INTEGRAL-CLOSEOUT |
+| Fresh baseline runtime dependency isolated PostgreSQL | `node scripts/normalization/apply-tcdx-fresh-baseline-runtime-dependency-systemic-closeout.test.js` | repo root | VERIFIED_LOCAL/TCDX-FRESH-BASELINE-RUNTIME-DEPENDENCY-SYSTEMIC-CLOSEOUT |
+| Fresh baseline runtime dependency migration checksum | `node scripts/normalization/apply-tcdx-fresh-baseline-runtime-dependency-systemic-closeout.js --checksum` | repo root | VERIFIED_LOCAL/TCDX-FRESH-BASELINE-RUNTIME-DEPENDENCY-SYSTEMIC-CLOSEOUT |
+| Fresh baseline runtime dependency checker scan | `node scripts/normalization/check-fresh-baseline-runtime-dependencies.js --scan-only` | repo root | VERIFIED_LOCAL/TCDX-FRESH-BASELINE-RUNTIME-DEPENDENCY-SYSTEMIC-CLOSEOUT |
+| Fresh baseline runtime dependency checker with DB probes | `MIGRATION_DATABASE_URL="$DATABASE_URL" node scripts/normalization/check-fresh-baseline-runtime-dependencies.js --mutation-probes` | authorized clone/staging DB only | MANUAL_AFTER_HUMAN_REVIEW |
 
 Regla de ahorro:
 - máximo 1 test focal rápido por prompt cuando aporte valor;

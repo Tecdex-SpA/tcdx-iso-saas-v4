@@ -2054,10 +2054,9 @@ router.put('/tenants/:tenant_id/standards/:standard_code', auth, async (req, res
 // =====================================================
 
 // =====================================================
-// FIX_OPERATION_ID_INITIALIZE_CONTROLS
 // POST /api/admin-saas/tenants/:tenant_id/standards/:standard_code/initialize-controls
-// Inicializa controles faltantes usando operation_id obligatorio.
-// No duplica controles existentes por tenant/control/operation.
+// Inicializa controles faltantes usando tenant_standard_id como asociacion canonica.
+// No duplica controles existentes por tenant/control.
 // =====================================================
 router.post('/tenants/:tenant_id/standards/:standard_code/initialize-controls', auth, async (req, res) => {
   const client = await pool.connect();
@@ -2091,6 +2090,7 @@ router.post('/tenants/:tenant_id/standards/:standard_code/initialize-controls', 
     const standardState = await client.query(
       `
       SELECT
+        id AS tenant_standard_id,
         tenant_id,
         standard_code,
         is_active,
@@ -2148,7 +2148,9 @@ router.post('/tenants/:tenant_id/standards/:standard_code/initialize-controls', 
       SELECT
         o.id AS operation_id,
         o.name AS operation_name,
-        o.sort_order
+        o.sort_order,
+        o.is_default,
+        o.created_at
       FROM tenant_standard_operations tso
       JOIN tenant_operations o
         ON o.id = tso.operation_id
@@ -2156,7 +2158,7 @@ router.post('/tenants/:tenant_id/standards/:standard_code/initialize-controls', 
         AND tso.standard_code = $2::text
         AND COALESCE(tso.is_active, TRUE) = TRUE
         AND COALESCE(o.is_active, TRUE) = TRUE
-      ORDER BY o.sort_order, o.name
+      ORDER BY o.is_default DESC, o.sort_order, o.name, o.created_at
       `,
       [tenant_id, standard_code]
     );
@@ -2165,7 +2167,12 @@ router.post('/tenants/:tenant_id/standards/:standard_code/initialize-controls', 
     if (operationsResult.rowCount === 0) {
       let defaultOperationResult = await client.query(
         `
-        SELECT id AS operation_id, name AS operation_name, sort_order
+        SELECT
+          id AS operation_id,
+          name AS operation_name,
+          sort_order,
+          is_default,
+          created_at
         FROM tenant_operations
         WHERE tenant_id = $1::uuid
           AND COALESCE(is_active, TRUE) = TRUE
@@ -2206,7 +2213,12 @@ router.post('/tenants/:tenant_id/standards/:standard_code/initialize-controls', 
             now(),
             now()
           )
-          RETURNING id AS operation_id, name AS operation_name, sort_order
+          RETURNING
+            id AS operation_id,
+            name AS operation_name,
+            sort_order,
+            is_default,
+            created_at
           `,
           [
             tenant_id,
@@ -2255,7 +2267,9 @@ router.post('/tenants/:tenant_id/standards/:standard_code/initialize-controls', 
         SELECT
           o.id AS operation_id,
           o.name AS operation_name,
-          o.sort_order
+          o.sort_order,
+          o.is_default,
+          o.created_at
         FROM tenant_standard_operations tso
         JOIN tenant_operations o
           ON o.id = tso.operation_id
@@ -2263,7 +2277,7 @@ router.post('/tenants/:tenant_id/standards/:standard_code/initialize-controls', 
           AND tso.standard_code = $2::text
           AND COALESCE(tso.is_active, TRUE) = TRUE
           AND COALESCE(o.is_active, TRUE) = TRUE
-        ORDER BY o.sort_order, o.name
+        ORDER BY o.is_default DESC, o.sort_order, o.name, o.created_at
         `,
         [tenant_id, standard_code]
       );
@@ -2278,6 +2292,18 @@ router.post('/tenants/:tenant_id/standards/:standard_code/initialize-controls', 
         error: 'No fue posible determinar una operación activa para inicializar controles.',
         detail: { tenant_id, standard_code },
       });
+    }
+
+    const defaultOperations = operationsResult.rows.filter((row) => row.is_default === true);
+    let selectedOperation = null;
+    let operationResolution = 'unassigned_multiple_active_operations';
+
+    if (operationsCount === 1) {
+      selectedOperation = operationsResult.rows[0];
+      operationResolution = 'single_active_standard_operation';
+    } else if (defaultOperations.length === 1) {
+      selectedOperation = defaultOperations[0];
+      operationResolution = 'default_active_standard_operation';
     }
 
     const existingBeforeResult = await client.query(
@@ -2296,27 +2322,16 @@ router.post('/tenants/:tenant_id/standards/:standard_code/initialize-controls', 
 
     const insertResult = await client.query(
       `
-      WITH active_operations AS (
-        SELECT
-          o.id AS operation_id
-        FROM tenant_standard_operations tso
-        JOIN tenant_operations o
-          ON o.id = tso.operation_id
-        WHERE tso.tenant_id = $1::uuid
-          AND tso.standard_code = $2::text
-          AND COALESCE(tso.is_active, TRUE) = TRUE
-          AND COALESCE(o.is_active, TRUE) = TRUE
-      )
       INSERT INTO tenant_controls (
         tenant_id,
         control_id,
+        tenant_standard_id,
         operation_id,
         status,
         score,
         health_status,
         applicability,
         priority,
-        notes,
         metadata,
         created_at,
         updated_at
@@ -2324,32 +2339,37 @@ router.post('/tenants/:tenant_id/standards/:standard_code/initialize-controls', 
       SELECT
         $1::uuid AS tenant_id,
         cc.id AS control_id,
-        ao.operation_id,
+        $3::uuid AS tenant_standard_id,
+        $4::uuid AS operation_id,
         'pendiente' AS status,
-        0 AS score,
-        'deteriorado' AS health_status,
+        NULL::numeric AS score,
+        'sin_datos' AS health_status,
         'aplicable' AS applicability,
         'media' AS priority,
-        'Control inicializado desde Administración SaaS' AS notes,
         jsonb_build_object(
           'source', 'admin_saas_initialize_controls',
-          'standard_code', $2::text
+          'standard_code', $2::text,
+          'operation_resolution', $5::text
         ) AS metadata,
         now() AS created_at,
         now() AS updated_at
       FROM controls_catalog cc
-      CROSS JOIN active_operations ao
       WHERE cc.iso = $2::text
         AND NOT EXISTS (
           SELECT 1
           FROM tenant_controls tc
           WHERE tc.tenant_id = $1::uuid
             AND tc.control_id = cc.id
-            AND tc.operation_id = ao.operation_id
         )
       RETURNING id
       `,
-      [tenant_id, standard_code]
+      [
+        tenant_id,
+        standard_code,
+        state.tenant_standard_id,
+        selectedOperation?.operation_id || null,
+        operationResolution,
+      ]
     );
 
     const createdCount = insertResult.rowCount || 0;
@@ -2389,6 +2409,8 @@ router.post('/tenants/:tenant_id/standards/:standard_code/initialize-controls', 
             standard_code,
             catalog_controls: catalogCount,
             operations_count: operationsCount,
+            selected_operation_id: selectedOperation?.operation_id || null,
+            operation_resolution: operationResolution,
             existing_before: existingBefore,
             created_controls: createdCount,
             existing_after: existingAfter,
@@ -2409,6 +2431,8 @@ router.post('/tenants/:tenant_id/standards/:standard_code/initialize-controls', 
         standard_code,
         catalog_controls: catalogCount,
         operations_count: operationsCount,
+        selected_operation_id: selectedOperation?.operation_id || null,
+        operation_resolution: operationResolution,
         existing_before: existingBefore,
         created_controls: createdCount,
         existing_after: existingAfter,
@@ -2424,224 +2448,6 @@ router.post('/tenants/:tenant_id/standards/:standard_code/initialize-controls', 
     } catch {}
 
     safeErrorLog('ERROR INITIALIZE TENANT STANDARD CONTROLS FIXED:', error, req);
-
-    return res.status(500).json({
-      ok: false,
-      error: 'Error inicializando controles de la norma',
-      ...errorDetail(error),
-      code: error.code || null,
-    });
-  } finally {
-    client.release();
-  }
-});
-
-
-router.post('/tenants/:tenant_id/standards/:standard_code/initialize-controls', auth, async (req, res) => {
-  const client = await pool.connect();
-
-  try {
-    const ctx = await requireAdminSaasManage(req, res);
-    if (!ctx) return;
-
-    const { tenant_id, standard_code } = req.params;
-
-    await client.query('BEGIN');
-
-    const tenantResult = await client.query(
-      `
-      SELECT id, name
-      FROM tenants
-      WHERE id = $1::uuid
-      LIMIT 1
-      `,
-      [tenant_id]
-    );
-
-    if (tenantResult.rowCount === 0) {
-      await client.query('ROLLBACK');
-      return res.status(404).json({
-        ok: false,
-        error: 'Empresa no encontrada',
-      });
-    }
-
-    const standardState = await client.query(
-      `
-      SELECT
-        tenant_id,
-        standard_code,
-        is_active,
-        COALESCE(
-          lifecycle_status,
-          CASE WHEN COALESCE(is_active, FALSE) = TRUE THEN 'active' ELSE 'paused' END
-        ) AS lifecycle_status
-      FROM tenant_standards
-      WHERE tenant_id = $1::uuid
-        AND standard_code = $2::text
-      LIMIT 1
-      `,
-      [tenant_id, standard_code]
-    );
-
-    const state = standardState.rows[0] || null;
-
-    if (!state || state.lifecycle_status !== 'active' || state.is_active !== true) {
-      await client.query('ROLLBACK');
-      return res.status(409).json({
-        ok: false,
-        code: 'STANDARD_NOT_ACTIVE',
-        error: 'No se pueden inicializar controles porque la norma no está activa. Primero debes contratar/reactivar la norma.',
-        detail: {
-          standard_code,
-          lifecycle_status: state?.lifecycle_status || 'not_contracted',
-          is_active: state?.is_active || false,
-        },
-      });
-    }
-
-    const catalogCountResult = await client.query(
-      `
-      SELECT COUNT(*)::int AS total
-      FROM controls_catalog
-      WHERE iso = $1::text
-      `,
-      [standard_code]
-    );
-
-    const catalogCount = Number(catalogCountResult.rows[0]?.total || 0);
-
-    if (catalogCount === 0) {
-      await client.query('ROLLBACK');
-      return res.status(404).json({
-        ok: false,
-        error: 'No existen controles en controls_catalog para esta norma',
-        detail: {
-          standard_code,
-        },
-      });
-    }
-
-    const existingResult = await client.query(
-      `
-      SELECT COUNT(tc.id)::int AS total
-      FROM tenant_controls tc
-      JOIN controls_catalog cc
-        ON cc.id = tc.control_id
-      WHERE tc.tenant_id = $1::uuid
-        AND cc.iso = $2::text
-      `,
-      [tenant_id, standard_code]
-    );
-
-    const existingBefore = Number(existingResult.rows[0]?.total || 0);
-
-    const insertResult = await client.query(
-      `
-      INSERT INTO tenant_controls (
-        tenant_id,
-        control_id,
-        status,
-        score,
-        health_status,
-        applicability,
-        priority,
-        created_at,
-        updated_at
-      )
-      SELECT
-        $1::uuid AS tenant_id,
-        cc.id AS control_id,
-        'pendiente' AS status,
-        0 AS score,
-        'deteriorado' AS health_status,
-        'aplicable' AS applicability,
-        'media' AS priority,
-        now() AS created_at,
-        now() AS updated_at
-      FROM controls_catalog cc
-      WHERE cc.iso = $2::text
-        AND NOT EXISTS (
-          SELECT 1
-          FROM tenant_controls tc
-          WHERE tc.tenant_id = $1::uuid
-            AND tc.control_id = cc.id
-        )
-      RETURNING id
-      `,
-      [tenant_id, standard_code]
-    );
-
-    const createdCount = insertResult.rowCount || 0;
-
-    const existingAfterResult = await client.query(
-      `
-      SELECT COUNT(tc.id)::int AS total
-      FROM tenant_controls tc
-      JOIN controls_catalog cc
-        ON cc.id = tc.control_id
-      WHERE tc.tenant_id = $1::uuid
-        AND cc.iso = $2::text
-      `,
-      [tenant_id, standard_code]
-    );
-
-    const existingAfter = Number(existingAfterResult.rows[0]?.total || 0);
-
-    try {
-      await client.query(
-        `
-        SELECT log_admin_audit_event(
-          $1::uuid,
-          $2::text,
-          $3::uuid,
-          $4::text,
-          NULL::uuid,
-          $5::jsonb
-        )
-        `,
-        [
-          ctx.user.id,
-          'tenant_standard.controls_initialized',
-          tenant_id,
-          'tenant_standard',
-          JSON.stringify({
-            standard_code,
-            catalog_controls: catalogCount,
-            existing_before: existingBefore,
-            created_controls: createdCount,
-            existing_after: existingAfter,
-            source: req.body?.source || 'admin_saas',
-          }),
-        ]
-      );
-    } catch (auditError) {
-      safeWarnLog('WARN log_admin_audit_event initialize-controls:', auditError, req);
-    }
-
-    await client.query('COMMIT');
-
-    return res.json({
-      ok: true,
-      data: {
-        tenant_id,
-        standard_code,
-        catalog_controls: catalogCount,
-        existing_before: existingBefore,
-        created_controls: createdCount,
-        existing_after: existingAfter,
-        message:
-          createdCount > 0
-            ? `Controles inicializados correctamente: ${createdCount} creado(s).`
-            : 'La norma ya tenía todos sus controles inicializados. No se duplicaron controles.',
-      },
-    });
-  } catch (error) {
-    try {
-      await client.query('ROLLBACK');
-    } catch {}
-
-    safeErrorLog('ERROR INITIALIZE TENANT STANDARD CONTROLS:', error, req);
 
     return res.status(500).json({
       ok: false,

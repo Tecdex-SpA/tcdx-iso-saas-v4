@@ -457,6 +457,7 @@ FRESH_PRODUCTION_MIGRATION_RUNNERS=(
   "Fresh runtime contract closeout|scripts/normalization/apply-tcdx-saasv2-fresh-runtime-contract-closeout.js"
   "Release RBAC capability systemic closeout|scripts/release-rbac/apply-release-rbac-capability-closeout.js"
   "Commercial runtime integral closeout|scripts/normalization/apply-tcdx-commercial-runtime-integral-closeout.js"
+  "Fresh baseline runtime dependency systemic closeout|scripts/normalization/apply-tcdx-fresh-baseline-runtime-dependency-systemic-closeout.js"
 )
 
 HISTORICAL_MIGRATION_RUNNERS=(
@@ -612,6 +613,7 @@ $( (assert_backend_runtime_identity "tecdex_saas" "tcdx_saasv2") 2>&1 || true)"
   echo "NO_HISTORICAL_PHASE_RUNNER_ON_FRESH_DEPLOY=PASS"
 
   [[ "$output" == *"apply-tcdx-saasv2-fresh-runtime-contract-closeout.js"* ]] || { echo "DEPLOY_ACCEPTS_FRESH_FORWARD_MIGRATIONS=FAIL"; exit 1; }
+  [[ "$output" == *"apply-tcdx-fresh-baseline-runtime-dependency-systemic-closeout.js"* ]] || { echo "DEPLOY_ACCEPTS_FRESH_FORWARD_MIGRATIONS=FAIL"; exit 1; }
   echo "DEPLOY_ACCEPTS_FRESH_FORWARD_MIGRATIONS=PASS"
 }
 

@@ -866,7 +866,7 @@ router.get('/:tenant_id', auth, async (req, res) => {
         COALESCE(ts.is_active, FALSE) AS is_active,
         COALESCE(ts.catalog_mode, 'generic') AS catalog_mode,
         ts.initialized_at,
-        ts.created_at,
+        COALESCE(ts.contracted_at, ts.activated_at, ts.updated_at) AS created_at,
 
         COALESCE(cat.catalog_controls, 0) AS catalog_controls,
         COALESCE(tct.tenant_controls, 0) AS tenant_controls,

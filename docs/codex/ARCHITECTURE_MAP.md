@@ -241,3 +241,20 @@ Fresh production bootstrap now has a zero-legacy authority path for DB-N01..DB-N
 Health has two separate projections. Tenant/global Health is `F5_5_GRC_HEALTH` through the official formula/orchestrator lineage. Per-control Health is `public.v_iso_control_effective_health` and reads only official measured `F5_5_CONTROL_EFFECTIVENESS` snapshots with explicit `tenant_control_id`. It does not infer control scores from global GRC Health, and no UI/API path should coerce missing scores to zero.
 
 Formula execution has two productive phases: `officialCalculationOrchestrator.service.js -> recalculateOfficialAnalytics` resolves source contracts, validates bindings and formula versions, and persists runs/outputs/source snapshots; `indicatorGovernance.service.js` publishes governed metric snapshots. Fresh baseline objects `calculation_validations`, `calculation_snapshots`, indicator governance tables and metric snapshot publication columns are included because runtime services consume them.
+
+## Fresh runtime dependency closeout — 2026-09-11
+
+Fresh production uses strategy `fresh-baseline` and must run only forward fresh runners, in this order:
+
+1. `scripts/normalization/apply-tcdx-saasv2-fresh-runtime-contract-closeout.js`
+2. `scripts/release-rbac/apply-release-rbac-capability-closeout.js`
+3. `scripts/normalization/apply-tcdx-commercial-runtime-integral-closeout.js`
+4. `scripts/normalization/apply-tcdx-fresh-baseline-runtime-dependency-systemic-closeout.js`
+
+The fourth runner reconciles bounded active runtime dependencies that remain after the first three fresh closeouts. It creates/extends only physical contracts used by executable backend SQL: notifications, document index/exclusions, report catalog/access/exports, ISO Express diagnostic tables, ISO Operational Suggestions audit/conversions and supporting views/grants.
+
+Controls initialization uses `tenant_standards.id -> tenant_controls.tenant_standard_id` as the canonical standard association. `tenant_controls.operation_id` remains nullable; when a standard has multiple active operations and no single default, initialization does not pick a row by arbitrary ordering. The unique tenant/control contract remains the idempotency boundary.
+
+Per-control Health remains a projection over `metric_snapshots` with `metric_code='F5_5_CONTROL_EFFECTIVENESS'`. `controls_catalog.category` is the source of category in the view. `control_health_scores`, KPI-HLT and global `F5_5_GRC_HEALTH` are not per-control Health authorities in this fresh path.
+
+Optional dependencies are explicit: `search_history` remains optional empty/no-op from commercial closeout; `tenant_controls.notes` is not a fresh contract; `document_index` same-tenant FKs to source/integration are added only when those parent contracts exist. RLS remains staged according to DB-N03/DB-N04; this closeout does not enable universal RLS.
