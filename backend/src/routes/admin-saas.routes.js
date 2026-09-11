@@ -27,6 +27,12 @@ const {
   isPlatformRole: isCanonicalPlatformRole,
   normalizeRoleKey,
 } = require('../services/auth/roleCompatibility.service');
+const {
+  effectiveCatalogOrder,
+  effectiveCatalogPredicate,
+  equivalenceKeyExpression,
+  standardMembershipPredicate,
+} = require('../services/controlCatalogLifecycle.service');
 
 
 const logoUploadDir = path.join(__dirname, '..', '..', 'uploads', 'logos');
@@ -2093,6 +2099,7 @@ router.post('/tenants/:tenant_id/standards/:standard_code/initialize-controls', 
         id AS tenant_standard_id,
         tenant_id,
         standard_code,
+        COALESCE(catalog_mode, 'generic') AS catalog_mode,
         is_active,
         COALESCE(
           lifecycle_status,
@@ -2124,11 +2131,31 @@ router.post('/tenants/:tenant_id/standards/:standard_code/initialize-controls', 
 
     const catalogCountResult = await client.query(
       `
+      WITH effective_catalog AS (
+        SELECT
+          cc.id,
+          ROW_NUMBER() OVER (
+            PARTITION BY ${equivalenceKeyExpression({ catalogAlias: 'cc' })}
+            ORDER BY ${effectiveCatalogOrder({
+              catalogAlias: 'cc',
+              tenantIdSql: '$1::uuid',
+              standardCodeSql: '$2::text',
+            })}
+          ) AS rn
+        FROM controls_catalog cc
+        WHERE cc.is_active = TRUE
+          AND ${standardMembershipPredicate({ catalogAlias: 'cc', standardCodeSql: '$2::text' })}
+          AND ${effectiveCatalogPredicate({
+            catalogAlias: 'cc',
+            catalogModeSql: '$3::text',
+            tenantIdSql: '$1::uuid',
+          })}
+      )
       SELECT COUNT(*)::int AS total
-      FROM controls_catalog
-      WHERE iso = $1::text
+      FROM effective_catalog
+      WHERE rn = 1
       `,
-      [standard_code]
+      [tenant_id, standard_code, state.catalog_mode]
     );
 
     const catalogCount = Number(catalogCountResult.rows[0]?.total || 0);
@@ -2312,16 +2339,46 @@ router.post('/tenants/:tenant_id/standards/:standard_code/initialize-controls', 
       FROM tenant_controls tc
       JOIN controls_catalog cc
         ON cc.id = tc.control_id
+       AND cc.is_active = TRUE
       WHERE tc.tenant_id = $1::uuid
-        AND cc.iso = $2::text
+        AND ${standardMembershipPredicate({ catalogAlias: 'cc', standardCodeSql: '$2::text' })}
+        AND ${effectiveCatalogPredicate({
+          catalogAlias: 'cc',
+          catalogModeSql: '$3::text',
+          tenantIdSql: 'tc.tenant_id',
+        })}
       `,
-      [tenant_id, standard_code]
+      [tenant_id, standard_code, state.catalog_mode]
     );
 
     const existingBefore = Number(existingBeforeResult.rows[0]?.total || 0);
 
     const insertResult = await client.query(
       `
+      WITH effective_catalog AS (
+        SELECT *
+        FROM (
+          SELECT
+            cc.id,
+            ROW_NUMBER() OVER (
+              PARTITION BY ${equivalenceKeyExpression({ catalogAlias: 'cc' })}
+              ORDER BY ${effectiveCatalogOrder({
+                catalogAlias: 'cc',
+                tenantIdSql: '$1::uuid',
+                standardCodeSql: '$2::text',
+              })}
+            ) AS rn
+          FROM controls_catalog cc
+          WHERE cc.is_active = TRUE
+            AND ${standardMembershipPredicate({ catalogAlias: 'cc', standardCodeSql: '$2::text' })}
+            AND ${effectiveCatalogPredicate({
+              catalogAlias: 'cc',
+              catalogModeSql: '$6::text',
+              tenantIdSql: '$1::uuid',
+            })}
+        ) ranked_catalog
+        WHERE rn = 1
+      )
       INSERT INTO tenant_controls (
         tenant_id,
         control_id,
@@ -2338,7 +2395,7 @@ router.post('/tenants/:tenant_id/standards/:standard_code/initialize-controls', 
       )
       SELECT
         $1::uuid AS tenant_id,
-        cc.id AS control_id,
+        ec.id AS control_id,
         $3::uuid AS tenant_standard_id,
         $4::uuid AS operation_id,
         'pendiente' AS status,
@@ -2353,13 +2410,12 @@ router.post('/tenants/:tenant_id/standards/:standard_code/initialize-controls', 
         ) AS metadata,
         now() AS created_at,
         now() AS updated_at
-      FROM controls_catalog cc
-      WHERE cc.iso = $2::text
-        AND NOT EXISTS (
+      FROM effective_catalog ec
+      WHERE NOT EXISTS (
           SELECT 1
           FROM tenant_controls tc
           WHERE tc.tenant_id = $1::uuid
-            AND tc.control_id = cc.id
+            AND tc.control_id = ec.id
         )
       RETURNING id
       `,
@@ -2369,6 +2425,7 @@ router.post('/tenants/:tenant_id/standards/:standard_code/initialize-controls', 
         state.tenant_standard_id,
         selectedOperation?.operation_id || null,
         operationResolution,
+        state.catalog_mode,
       ]
     );
 
@@ -2380,13 +2437,132 @@ router.post('/tenants/:tenant_id/standards/:standard_code/initialize-controls', 
       FROM tenant_controls tc
       JOIN controls_catalog cc
         ON cc.id = tc.control_id
+       AND cc.is_active = TRUE
       WHERE tc.tenant_id = $1::uuid
-        AND cc.iso = $2::text
+        AND ${standardMembershipPredicate({ catalogAlias: 'cc', standardCodeSql: '$2::text' })}
+        AND ${effectiveCatalogPredicate({
+          catalogAlias: 'cc',
+          catalogModeSql: '$3::text',
+          tenantIdSql: 'tc.tenant_id',
+        })}
       `,
-      [tenant_id, standard_code]
+      [tenant_id, standard_code, state.catalog_mode]
     );
 
     const existingAfter = Number(existingAfterResult.rows[0]?.total || 0);
+
+    const applicabilityResult = await client.query(
+      `
+      WITH effective_tenant_controls AS (
+        SELECT
+          tc.id AS tenant_control_id,
+          tc.control_id AS control_catalog_id,
+          COALESCE(cc.code, cc.clause) AS control_code,
+          COALESCE(NULLIF(cc.title, ''), NULLIF(cc.description, ''), cc.code, 'Control') AS control_name,
+          $2::text AS standard_code,
+          tc.priority
+        FROM tenant_controls tc
+        JOIN controls_catalog cc
+          ON cc.id = tc.control_id
+         AND cc.is_active = TRUE
+        WHERE tc.tenant_id = $1::uuid
+          AND ${standardMembershipPredicate({ catalogAlias: 'cc', standardCodeSql: '$2::text' })}
+          AND ${effectiveCatalogPredicate({
+            catalogAlias: 'cc',
+            catalogModeSql: '$3::text',
+            tenantIdSql: 'tc.tenant_id',
+          })}
+      )
+      INSERT INTO tenant_applicable_controls (
+        tenant_id,
+        tenant_control_id,
+        control_catalog_id,
+        standard_code,
+        control_code,
+        control_name,
+        applicability_status,
+        applicability_reason,
+        applicability_score,
+        priority,
+        profile_drivers,
+        calculation_weight,
+        must_exist,
+        visible_to_tenant,
+        active,
+        source,
+        created_at,
+        updated_at
+      )
+      SELECT
+        $1::uuid,
+        etc.tenant_control_id,
+        etc.control_catalog_id,
+        etc.standard_code,
+        etc.control_code,
+        etc.control_name,
+        'applicable',
+        'bootstrap_from_effective_control_catalog',
+        NULL::numeric,
+        COALESCE(etc.priority, 'media'),
+        jsonb_build_object(
+          'source', 'admin_saas_initialize_controls',
+          'standard_code', $2::text,
+          'catalog_mode', $3::text
+        ),
+        1,
+        TRUE,
+        TRUE,
+        TRUE,
+        'admin_saas_initialize_controls',
+        now(),
+        now()
+      FROM effective_tenant_controls etc
+      WHERE NOT EXISTS (
+        SELECT 1
+        FROM tenant_applicable_controls tac
+        WHERE tac.tenant_id = $1::uuid
+          AND (
+            tac.tenant_control_id = etc.tenant_control_id
+            OR (
+              tac.tenant_control_id IS NULL
+              AND tac.control_catalog_id = etc.control_catalog_id
+              AND COALESCE(tac.standard_code, $2::text) = $2::text
+            )
+          )
+      )
+      RETURNING id
+      `,
+      [tenant_id, standard_code, state.catalog_mode]
+    );
+
+    const applicableVisibleResult = await client.query(
+      `
+      SELECT COUNT(DISTINCT tc.id)::int AS total
+      FROM tenant_controls tc
+      JOIN controls_catalog cc
+        ON cc.id = tc.control_id
+       AND cc.is_active = TRUE
+      JOIN tenant_applicable_controls tac
+        ON tac.tenant_id = tc.tenant_id
+       AND tac.active = TRUE
+       AND tac.visible_to_tenant = TRUE
+       AND (
+         tac.tenant_control_id = tc.id
+         OR tac.control_catalog_id = tc.control_id
+       )
+      WHERE tc.tenant_id = $1::uuid
+        AND ${standardMembershipPredicate({ catalogAlias: 'cc', standardCodeSql: '$2::text' })}
+        AND ${effectiveCatalogPredicate({
+          catalogAlias: 'cc',
+          catalogModeSql: '$3::text',
+          tenantIdSql: 'tc.tenant_id',
+        })}
+      `,
+      [tenant_id, standard_code, state.catalog_mode]
+    );
+
+    const createdApplicability = applicabilityResult.rowCount || 0;
+    const applicableVisible = Number(applicableVisibleResult.rows[0]?.total || 0);
 
     try {
       await client.query(
@@ -2414,6 +2590,8 @@ router.post('/tenants/:tenant_id/standards/:standard_code/initialize-controls', 
             existing_before: existingBefore,
             created_controls: createdCount,
             existing_after: existingAfter,
+            created_applicability: createdApplicability,
+            applicable_visible: applicableVisible,
             source: req.body?.source || 'admin_saas',
           }),
         ]
@@ -2436,9 +2614,11 @@ router.post('/tenants/:tenant_id/standards/:standard_code/initialize-controls', 
         existing_before: existingBefore,
         created_controls: createdCount,
         existing_after: existingAfter,
+        created_applicability: createdApplicability,
+        applicable_visible: applicableVisible,
         message:
-          createdCount > 0
-            ? `Controles inicializados correctamente: ${createdCount} creado(s).`
+          createdCount > 0 || createdApplicability > 0
+            ? `Lifecycle de controles inicializado: ${createdCount} control(es) y ${createdApplicability} aplicabilidad(es) creada(s).`
             : 'La norma ya tenía todos sus controles inicializados para sus operaciones activas. No se duplicaron controles.',
       },
     });

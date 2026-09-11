@@ -7,6 +7,12 @@ const {
   isPlatformRole,
   normalizeRoleKey,
 } = require('../services/auth/roleCompatibility.service');
+const {
+  effectiveCatalogOrder,
+  effectiveCatalogPredicate,
+  equivalenceKeyExpression,
+  standardMembershipPredicate,
+} = require('../services/controlCatalogLifecycle.service');
 
 const roleOf = (req) => normalizeRoleKey(req.user?.role || req.user?.user_role || req.user?.userRole);
 const isPlatform = (req) => isPlatformRole(roleOf(req));
@@ -884,11 +890,27 @@ router.get('/:tenant_id', auth, async (req, res) => {
 
       LEFT JOIN LATERAL (
         SELECT COUNT(*)::int AS catalog_controls
-        FROM controls_catalog cc
-        WHERE cc.iso = s.code
-          AND cc.is_active = TRUE
-          AND cc.source_type = 'generic'
-          AND cc.tenant_id IS NULL
+        FROM (
+          SELECT
+            cc.id,
+            ROW_NUMBER() OVER (
+              PARTITION BY ${equivalenceKeyExpression({ catalogAlias: 'cc' })}
+              ORDER BY ${effectiveCatalogOrder({
+                catalogAlias: 'cc',
+                tenantIdSql: '$1',
+                standardCodeSql: 's.code',
+              })}
+            ) AS rn
+          FROM controls_catalog cc
+          WHERE cc.is_active = TRUE
+            AND ${standardMembershipPredicate({ catalogAlias: 'cc', standardCodeSql: 's.code' })}
+            AND ${effectiveCatalogPredicate({
+              catalogAlias: 'cc',
+              catalogModeSql: "COALESCE(ts.catalog_mode, 'generic')",
+              tenantIdSql: '$1',
+            })}
+        ) effective_catalog
+        WHERE rn = 1
       ) cat ON TRUE
 
       LEFT JOIN LATERAL (

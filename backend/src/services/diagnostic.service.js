@@ -6,6 +6,9 @@ const {
 
 const pool = require('../config/db');
 const { buildRecommendationPayload } = require('./evidenceRecommendationEngine.service');
+const {
+  effectiveCatalogPredicate,
+} = require('./controlCatalogLifecycle.service');
 
 const READ_ROLES = new Set([
   'admin',
@@ -303,16 +306,11 @@ async function resolveStandard({ tenantId, standardId, standardCode }) {
 
 function effectiveCatalogWhere() {
   return `
-    (
-      (ts.catalog_mode = 'generic' AND cc.source_type = 'generic' AND cc.tenant_id IS NULL)
-      OR
-      (ts.catalog_mode = 'personalized' AND cc.source_type = 'personalized' AND cc.tenant_id = tc.tenant_id)
-      OR
-      (ts.catalog_mode = 'mixed' AND (
-        (cc.source_type = 'generic' AND cc.tenant_id IS NULL)
-        OR (cc.source_type = 'personalized' AND cc.tenant_id = tc.tenant_id)
-      ))
-    )
+    ${effectiveCatalogPredicate({
+      catalogAlias: 'cc',
+      catalogModeSql: 'ts.catalog_mode',
+      tenantIdSql: 'tc.tenant_id',
+    })}
   `;
 }
 

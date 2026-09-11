@@ -458,6 +458,7 @@ FRESH_PRODUCTION_MIGRATION_RUNNERS=(
   "Release RBAC capability systemic closeout|scripts/release-rbac/apply-release-rbac-capability-closeout.js"
   "Commercial runtime integral closeout|scripts/normalization/apply-tcdx-commercial-runtime-integral-closeout.js"
   "Fresh baseline runtime dependency systemic closeout|scripts/normalization/apply-tcdx-fresh-baseline-runtime-dependency-systemic-closeout.js"
+  "Control lifecycle systemic closeout|scripts/normalization/apply-tcdx-control-lifecycle-systemic-closeout.js"
 )
 
 HISTORICAL_MIGRATION_RUNNERS=(

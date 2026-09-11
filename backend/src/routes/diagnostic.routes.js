@@ -9,6 +9,9 @@ const auth = require('../middleware/auth');
 const diagnosticService = require('../services/diagnostic.service');
 const diagnosticAiService = require('../services/diagnosticAi.service');
 const diagnosticAcceptanceService = require('../services/diagnosticAcceptance.service');
+const {
+  effectiveCatalogPredicate,
+} = require('../services/controlCatalogLifecycle.service');
 
 const ALLOWED_STATUSES = [
   'cumple',
@@ -69,7 +72,7 @@ function normalizeRole(role) {
 function isPlatformRole(role) {
   const normalized = normalizeRole(role);
 
-  return isPlatformRole(normalized);
+  return isCanonicalPlatformRole(normalized);
 }
 
 function ensureTenantAccess(req, tenantId) {
@@ -81,22 +84,11 @@ function ensureTenantAccess(req, tenantId) {
 }
 
 const getEffectiveWhere = () => `
-(
-  (ts.catalog_mode = 'generic'
-    AND cc.source_type = 'generic'
-    AND cc.tenant_id IS NULL)
-  OR
-  (ts.catalog_mode = 'personalized'
-    AND cc.source_type = 'personalized'
-    AND cc.tenant_id = tc.tenant_id)
-  OR
-  (ts.catalog_mode = 'mixed'
-    AND (
-      (cc.source_type = 'generic' AND cc.tenant_id IS NULL)
-      OR
-      (cc.source_type = 'personalized' AND cc.tenant_id = tc.tenant_id)
-    ))
-)
+${effectiveCatalogPredicate({
+  catalogAlias: 'cc',
+  catalogModeSql: 'ts.catalog_mode',
+  tenantIdSql: 'tc.tenant_id',
+})}
 `;
 
 async function refreshHealthForTenant(client, tenantId) {

@@ -10,6 +10,10 @@ const auth = require('../middleware/auth');
 const aiContextBuilder = require('../services/aiContextBuilder.service');
 const { runOperationalAiReview } = require('../services/aiOperationalReview.service');
 const { filterApplicableControls } = require('../services/applicabilityScope.service');
+const {
+  catalogScopeExpression,
+  effectiveCatalogPredicate,
+} = require('../services/controlCatalogLifecycle.service');
 
 
 function deriveWorkbenchHealthStatus(row) {
@@ -82,7 +86,8 @@ function deriveWorkbenchHealthScore(row) {
 
 
 function getWorkbenchDerivedHealth(row) {
-  const healthScore = Number(row.health_score || 0)
+  const hasHealthScore = row.health_score !== null && row.health_score !== undefined && row.health_score !== ''
+  const healthScore = hasHealthScore ? Number(row.health_score) : null
   const existingHealth = String(
     row.derived_health_status ||
     row.tenant_health_status ||
@@ -103,7 +108,7 @@ function getWorkbenchDerivedHealth(row) {
   const openNonconformities = Number(row.open_nonconformities_count || 0)
 
   if (
-    healthScore > 0 &&
+    Number(healthScore || 0) > 0 &&
     ['saludable', 'atencion', 'deteriorado', 'critico'].includes(existingHealth)
   ) {
     return {
@@ -138,7 +143,7 @@ function getWorkbenchDerivedHealth(row) {
   }
 
   return {
-    derived_health_status: existingHealth || 'deteriorado',
+    derived_health_status: existingHealth || 'sin_datos',
     health_score: healthScore,
   }
 }
@@ -489,6 +494,7 @@ async function getCatalogControlForTenant(
         cc.category,
         cc.description,
         cc.source_type,
+        ${catalogScopeExpression({ catalogAlias: 'cc', tenantIdSql: '$1' })} AS catalog_scope,
         cc.tenant_id,
         cc.base_control_id,
         cc.is_active,
@@ -544,17 +550,11 @@ async function getCatalogControlForTenant(
         WHERE ccs.control_id = cc.id
       ) rel ON TRUE
       WHERE cc.is_active = TRUE
-        AND (
-          ($4 = 'generic' AND cc.source_type = 'generic' AND cc.tenant_id IS NULL)
-          OR
-          ($4 = 'personalized' AND cc.source_type = 'personalized' AND cc.tenant_id = $1)
-          OR
-          ($4 = 'mixed' AND (
-            (cc.source_type = 'generic' AND cc.tenant_id IS NULL)
-            OR
-            (cc.source_type = 'personalized' AND cc.tenant_id = $1)
-          ))
-        )
+        AND ${effectiveCatalogPredicate({
+          catalogAlias: 'cc',
+          catalogModeSql: '$4',
+          tenantIdSql: '$1',
+        })}
         AND (
           cc.iso = $3
           OR EXISTS (
@@ -854,6 +854,7 @@ router.get('/workbench/:tenant_id/:iso', auth, async (req, res) => {
           cc.category,
           cc.description,
           cc.source_type,
+          ${catalogScopeExpression({ catalogAlias: 'cc', tenantIdSql: '$1' })} AS catalog_scope,
           $4::text AS catalog_mode,
           COALESCE(
             rel.valid_for_standards,
@@ -960,17 +961,11 @@ router.get('/workbench/:tenant_id/:iso', auth, async (req, res) => {
         WHERE tc.tenant_id = $1
           AND tc.operation_id = $2
           AND cc.is_active = TRUE
-          AND (
-            ($4 = 'generic' AND cc.source_type = 'generic' AND cc.tenant_id IS NULL)
-            OR
-            ($4 = 'personalized' AND cc.source_type = 'personalized' AND cc.tenant_id = $1)
-            OR
-            ($4 = 'mixed' AND (
-              (cc.source_type = 'generic' AND cc.tenant_id IS NULL)
-              OR
-              (cc.source_type = 'personalized' AND cc.tenant_id = $1)
-            ))
-          )
+          AND ${effectiveCatalogPredicate({
+            catalogAlias: 'cc',
+            catalogModeSql: '$4',
+            tenantIdSql: '$1',
+          })}
           AND (
             cc.iso = $3
             OR EXISTS (
@@ -1019,7 +1014,7 @@ router.get('/workbench/:tenant_id/:iso', auth, async (req, res) => {
       const effectiveHealthScore =
         row.effective_health_score !== null && row.effective_health_score !== undefined
           ? Number(row.effective_health_score || 0)
-          : Number(fallbackHealth.health_score || 0);
+          : fallbackHealth.health_score;
 
       const effectiveHealthStatus =
         row.effective_health_status ||
@@ -1032,9 +1027,9 @@ router.get('/workbench/:tenant_id/:iso', auth, async (req, res) => {
         null;
 
       if (!complianceBucket) {
-        if (effectiveHealthScore >= 80) complianceBucket = 'cumple';
-        else if (effectiveHealthScore >= 50) complianceBucket = 'parcial';
-        else if (effectiveHealthScore > 0) complianceBucket = 'no_cumple';
+        if (effectiveHealthScore !== null && effectiveHealthScore >= 80) complianceBucket = 'cumple';
+        else if (effectiveHealthScore !== null && effectiveHealthScore >= 50) complianceBucket = 'parcial';
+        else if (effectiveHealthScore !== null && effectiveHealthScore > 0) complianceBucket = 'no_cumple';
         else complianceBucket = 'sin_datos';
       }
 
@@ -1607,6 +1602,7 @@ router.get('/catalog/:tenant_id/:iso', auth, async (req, res) => {
           cc.category,
           cc.description,
           cc.source_type,
+          ${catalogScopeExpression({ catalogAlias: 'cc', tenantIdSql: '$1' })} AS catalog_scope,
           cc.tenant_id,
           cc.base_control_id,
           cc.is_active,
@@ -1666,17 +1662,11 @@ router.get('/catalog/:tenant_id/:iso', auth, async (req, res) => {
           WHERE ccs.control_id = cc.id
         ) rel ON TRUE
         WHERE cc.is_active = TRUE
-          AND (
-            ($4 = 'generic' AND cc.source_type = 'generic' AND cc.tenant_id IS NULL)
-            OR
-            ($4 = 'personalized' AND cc.source_type = 'personalized' AND cc.tenant_id = $1)
-            OR
-            ($4 = 'mixed' AND (
-              (cc.source_type = 'generic' AND cc.tenant_id IS NULL)
-              OR
-              (cc.source_type = 'personalized' AND cc.tenant_id = $1)
-            ))
-          )
+          AND ${effectiveCatalogPredicate({
+            catalogAlias: 'cc',
+            catalogModeSql: '$4',
+            tenantIdSql: '$1',
+          })}
           AND (
             cc.iso = $3
             OR EXISTS (
@@ -1713,9 +1703,9 @@ router.get('/catalog/:tenant_id/:iso', auth, async (req, res) => {
     const allRows = isPlatformRequest(req) && req.query.include_exclusions === 'true'
       ? controlsResult.rows
       : await filterApplicableControls(controlsResult.rows, tenant_id, { standardCode: iso });
-    const genericControls = allRows.filter((row) => row.source_type === 'generic');
+    const genericControls = allRows.filter((row) => row.catalog_scope === 'global');
     const personalizedControls = allRows.filter(
-      (row) => row.source_type === 'personalized'
+      (row) => row.catalog_scope === 'tenant'
     );
 
     let effectiveControls = [];

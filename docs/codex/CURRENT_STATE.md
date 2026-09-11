@@ -1,5 +1,23 @@
 # CURRENT_STATE — TCDX ISO SaaS V4
 
+## TCDX Control Lifecycle Systemic Closeout — 2026-09-11
+
+Status: `TCDX_CONTROL_LIFECYCLE_SYSTEMIC_CLOSEOUT_READY_FOR_HUMAN_REVIEW`.
+
+Local-only closeout on branch `main` / HEAD `137ab0c19156636b9c9126affb72471cb2dcd115`. Codex did not commit, push, merge, deploy, edit `.env`, connect to `tcdx_saasv2`, or write to any real database.
+
+Root cause closed: runtime consumers treated generic catalog as `controls_catalog.source_type='generic' AND tenant_id IS NULL`, but the real global catalog is identified canonically by `tenant_id IS NULL` and may carry provenance values such as `knowledge_base_seed_v2` and `migrated_reference_from_qa`. Admin SaaS could show tenant controls while Dashboard/Diagnóstico/applicability saw no applicable controls.
+
+Implemented shared runtime semantics in `backend/src/services/controlCatalogLifecycle.service.js` and fresh/backfill SQL function `public.tcdx_effective_control_catalog(uuid,text,text)`: `generic=global`, `personalized=same-tenant`, `mixed=global + same-tenant`, active only, standard membership by normalized `controls_catalog.iso` or `controls_catalog_standards`, and duplicate replacement only by declared `base_control_id`. `source_type` remains provenance, not a functional generic flag.
+
+`initialize-controls` now resolves effective catalog canonically, inserts only missing `tenant_controls`, preserves `(tenant_id, control_id)` idempotency, links `tenant_standard_id`, avoids arbitrary operation assignment when no single default exists, keeps score `NULL`/Health `sin_datos`, and reconciles default-visible `tenant_applicable_controls` in the same transaction without overwriting human/profile exclusions. Applicability rows store the requested `standard_code` context even when catalog membership comes from `controls_catalog_standards` and `controls_catalog.iso` is a different primary standard.
+
+Forward-only migration `database/migrations/20260911_tcdx_control_lifecycle_systemic_closeout.sql` and runner `scripts/normalization/apply-tcdx-control-lifecycle-systemic-closeout.js` were added and registered after Fresh baseline runtime dependency systemic closeout. Checksum: `e3912a97fb9e57177b5e94e9946169c3bd055d2fb3fa194619644f7c64ba147b`.
+
+Consumers aligned: Admin SaaS initialize/counts, tenant standards catalog counts, Dashboard, `/controles`, `diagnostic.routes.js`, `diagnostic.service.js`, Dashboard Controls through canonical applicability/Health, and downstream SoA/audits/evidences/findings/nonconformities/reports/action/AI consumers via the materialized `tenant_controls -> tenant_applicable_controls` contract. The accidental recursive `diagnostic.routes.js` platform-role helper was fixed.
+
+Validation PASS: checksum, isolated PostgreSQL lifecycle test, `git diff --check`, `bash -n scripts/deploy-vms.sh`, `node scripts/deploy-vms-strategy.test.js`, `npm --prefix backend test`, `npm --prefix frontend run typecheck`, and all requested release RBAC gates with `RESIDUAL_AUTHORIZATION_AUTHORITY=0` and `UNCLASSIFIED_ROLE_CHECKS=0`.
+
 ## TCDX Commercial Runtime Integral Closeout — 2026-09-10
 
 Status: `TCDX_COMMERCIAL_RUNTIME_INTEGRAL_CLOSEOUT_READY_FOR_HUMAN_REVIEW`.

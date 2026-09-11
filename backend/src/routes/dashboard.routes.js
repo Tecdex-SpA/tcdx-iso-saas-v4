@@ -6,6 +6,9 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../config/db');
 const auth = require('../middleware/auth');
+const {
+  effectiveCatalogPredicate,
+} = require('../services/controlCatalogLifecycle.service');
 
 function normalizeRole(role) {
   return String(role || '').toLowerCase().trim();
@@ -35,22 +38,11 @@ function canAccessTenant(req, tenantId) {
 }
 
 const getEffectiveWhere = () => `
-(
-  (ts.catalog_mode = 'generic'
-    AND cc.source_type = 'generic'
-    AND cc.tenant_id IS NULL)
-  OR
-  (ts.catalog_mode = 'personalized'
-    AND cc.source_type = 'personalized'
-    AND cc.tenant_id = tc.tenant_id)
-  OR
-  (ts.catalog_mode = 'mixed'
-    AND (
-      (cc.source_type = 'generic' AND cc.tenant_id IS NULL)
-      OR
-      (cc.source_type = 'personalized' AND cc.tenant_id = tc.tenant_id)
-    ))
-)
+${effectiveCatalogPredicate({
+  catalogAlias: 'cc',
+  catalogModeSql: 'ts.catalog_mode',
+  tenantIdSql: 'tc.tenant_id',
+})}
 `;
 
 router.get('/:tenant_id', auth, async (req, res) => {
