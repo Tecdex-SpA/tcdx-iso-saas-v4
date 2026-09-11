@@ -22,6 +22,10 @@ const {
   isPlatformUser,
   isTenantAdminUser,
 } = require('../services/auth/roleCompatibility.service');
+const {
+  publishAffectedOfficialIndicators,
+  recordControlSoAAssessment,
+} = require('../services/grcCalculationOrchestration.service');
 
 // =============================
 // 🔐 AUTORIZACIÓN BÁSICA
@@ -779,8 +783,38 @@ router.put('/:tenant_control_id', auth, async (req, res) => {
     }
 
     const rows = await getSoARows(client, control.tenant_id, control.iso_code, tenant_control_id);
+    const canonicalAssessment = await recordControlSoAAssessment({
+      client,
+      tenantId: control.tenant_id,
+      tenantControlId: tenant_control_id,
+      isoCode: control.iso_code,
+      implementationStatus: next.implementation_status,
+      applicable: next.applicable,
+      userId: getUserId(req),
+      metadata: {
+        producer: 'soa.routes',
+        endpoint: 'PUT /api/soa/:tenant_control_id',
+        factType: 'soa',
+      },
+    });
     await client.query('COMMIT');
-    res.json(rows[0]);
+    const officialRecalculation = await publishAffectedOfficialIndicators({
+      tenantId: control.tenant_id,
+      user: req.user,
+      factType: 'soa',
+      requestId: req.requestId,
+      metadata: {
+        producer: 'soa.routes',
+        endpoint: 'PUT /api/soa/:tenant_control_id',
+        tenant_control_id,
+        iso_code: control.iso_code,
+      },
+    });
+    res.json({
+      ...rows[0],
+      canonical_assessment: canonicalAssessment,
+      official_recalculation: officialRecalculation,
+    });
 
   } catch (err) {
     await client.query('ROLLBACK').catch(() => {});

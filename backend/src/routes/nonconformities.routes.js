@@ -8,6 +8,9 @@ const pool = require('../config/db');
 const auth = require('../middleware/auth');
 const aiContextBuilder = require('../services/aiContextBuilder.service');
 const { runOperationalAiReview } = require('../services/aiOperationalReview.service');
+const {
+  publishAffectedOfficialIndicators,
+} = require('../services/grcCalculationOrchestration.service');
 
 function getUserTenantId(user) {
   return (
@@ -486,8 +489,23 @@ router.put('/:id', auth, async (req, res) => {
     const refreshed = await getNcWithStandard(client, id);
 
     await client.query('COMMIT');
+    const officialRecalculation = await publishAffectedOfficialIndicators({
+      tenantId: nc.tenant_id,
+      user: req.user,
+      factType: 'nonconformity',
+      requestId: req.requestId,
+      metadata: {
+        producer: 'nonconformities.routes',
+        endpoint: 'PUT /api/nonconformities/:id',
+        nonconformity_id: id,
+        status,
+      },
+    });
 
-    return res.json(refreshed.rows[0] || nc);
+    return res.json({
+      ...(refreshed.rows[0] || nc),
+      official_recalculation: officialRecalculation,
+    });
   } catch (err) {
     await client.query('ROLLBACK');
 

@@ -79,6 +79,7 @@ Backend Node/Express
         |      + official indicator matrix v1 derived from formula registry/source contracts
         |      + formula registry/execution
         |      + official calculation orchestrator as single source of truth
+        |      + GRC post-mutation orchestration adapter: route producers derive functional metric codes from existing indicator/formula catalog and delegate publication through indicator governance / officialCalculationOrchestrator; post-COMMIT publication failures are observable in `official_recalculation` without false mutation 500s; no formula execution, Health engine or mapping/assurance score authority is duplicated
         |      + DB-N02 Health authority: `F5_5_GRC_HEALTH` v2 es la unica autoridad ejecutiva Health por `official_formula_versions`, `calculation_runs`, `calculation_outputs`, `metric_snapshots` y `metric_source_bindings`; `canonicalHealthProjection.service.js` solo lee, normaliza, explica y presenta
         |      + DB-N03/DB-N04 tenant DB context: backend Node usa `set_config(..., true)` dentro de transacciones por `withTenantTransaction`, `tenantContextMiddleware` y pool wrapper; platform admin usa `withPlatformTransaction`/scope explicito, no `BYPASSRLS` en runtime tenant; AI Engine sigue pendiente de tenant context o vistas tenant-safe
         |      + governed Observation emission producer for material Data Trust signals

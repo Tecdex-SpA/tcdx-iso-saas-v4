@@ -4,6 +4,9 @@ const {
   isPlatformUser,
   normalizeRoleKey,
 } = require('../services/auth/roleCompatibility.service');
+const {
+  publishAffectedOfficialIndicators,
+} = require('../services/grcCalculationOrchestration.service');
 
 const KPI_CODES = {
   OBJECTIVES: 'KPI-01',
@@ -1092,14 +1095,6 @@ async function recalculateTenantKpis(req, res) {
   try {
     await client.query('BEGIN');
 
-    const refreshKpiHealthRes = {
-      rows: [{
-        tenant_id: tenantId,
-        refresh_mode: 'canonical_health_projection_read_only',
-        legacy_function_removed: true,
-      }],
-    };
-
     await client.query(
       `
       DELETE FROM kpi_snapshots ks
@@ -1202,13 +1197,32 @@ async function recalculateTenantKpis(req, res) {
     }
 
     await client.query('COMMIT');
+    const officialRecalculation = await publishAffectedOfficialIndicators({
+      tenantId,
+      user: req.user,
+      factType: 'official_recalculation',
+      metricCodes: [
+        'COMPLIANCE',
+        'COVERAGE',
+        'RISK-INHERENT',
+        'RISK-RESIDUAL',
+        'ACTIONS',
+        'REMEDIATION',
+        'EVIDENCE-FRESH',
+      ],
+      requestId: req.requestId,
+      metadata: {
+        producer: 'kpi.controller',
+        endpoint: 'POST /api/kpis/:tenantId/recalculate',
+      },
+    });
 
     return res.json({
       ok: true,
       tenant_id: tenantId,
-      health_recalculated: 0,
-      health_refresh: null,
-      health_kpi_refresh: refreshKpiHealthRes.rows || [],
+      health_recalculated: officialRecalculation.summary?.published || 0,
+      health_refresh: officialRecalculation,
+      health_kpi_refresh: officialRecalculation.results || [],
       snapshots_created: snapshotsCreated.length,
       snapshots: snapshotsCreated
     });

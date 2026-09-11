@@ -14,6 +14,10 @@ const {
   catalogScopeExpression,
   effectiveCatalogPredicate,
 } = require('../services/controlCatalogLifecycle.service');
+const {
+  publishAffectedOfficialIndicators,
+  recordControlSoAAssessment,
+} = require('../services/grcCalculationOrchestration.service');
 
 
 function deriveWorkbenchHealthStatus(row) {
@@ -71,6 +75,19 @@ function deriveWorkbenchHealthStatus(row) {
   if (explicitHealth) return explicitHealth
 
   return 'deteriorado'
+}
+
+async function publishControlOrchestration(req, tenantId, factType, metadata = {}) {
+  return publishAffectedOfficialIndicators({
+    tenantId,
+    user: req.user,
+    factType,
+    requestId: req.requestId,
+    metadata: {
+      producer: 'controls.routes',
+      ...metadata,
+    },
+  });
 }
 
 function deriveWorkbenchHealthScore(row) {
@@ -1187,6 +1204,8 @@ router.put('/workbench/:tenant_control_id', auth, async (req, res) => {
       resolvedLastReviewedAt = last_reviewed_at;
     }
 
+    await client.query('BEGIN');
+
     const result = await client.query(
       `
       UPDATE tenant_controls
@@ -1216,11 +1235,37 @@ router.put('/workbench/:tenant_control_id', auth, async (req, res) => {
       ]
     );
 
+    const controlRefs = await resolveControlRefs(client, tenant_id, tenant_control_id);
+    const canonicalAssessment = await recordControlSoAAssessment({
+      client,
+      tenantId: tenant_id,
+      tenantControlId: tenant_control_id,
+      isoCode: controlRefs?.primary_standard_code,
+      implementationStatus: result.rows[0]?.status,
+      applicable: result.rows[0]?.applicability,
+      userId: getUserId(req.user),
+      metadata: {
+        producer: 'controls.routes',
+        endpoint: 'PUT /api/controls/workbench/:tenant_control_id',
+        factType: 'compliance',
+      },
+    });
+
+    await client.query('COMMIT');
+
+    const officialRecalculation = await publishControlOrchestration(req, tenant_id, 'compliance', {
+      endpoint: 'PUT /api/controls/workbench/:tenant_control_id',
+      tenant_control_id,
+    });
+
     return res.json({
       ok: true,
       updated: result.rows[0],
+      canonical_assessment: canonicalAssessment,
+      official_recalculation: officialRecalculation,
     });
   } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
     console.error('ERROR UPDATE CONTROL WORKBENCH:', err);
     return res.status(500).json({
       error: 'Error actualizando control operativo',
@@ -1294,10 +1339,17 @@ router.post('/workbench/:tenant_control_id/quick-nonconformity', auth, async (re
       [tenant_id, control.catalog_control_id, control.description]
     );
 
+    const officialRecalculation = await publishControlOrchestration(req, tenant_id, 'nonconformity', {
+      endpoint: 'POST /api/controls/workbench/:tenant_control_id/quick-nonconformity',
+      tenant_control_id: control.tenant_control_id,
+      nonconformity_id: created.rows[0]?.id || null,
+    });
+
     return res.json({
       ok: true,
       already_exists: false,
       nonconformity: created.rows[0],
+      official_recalculation: officialRecalculation,
     });
   } catch (err) {
     console.error('ERROR QUICK NONCONFORMITY:', err);
@@ -1404,10 +1456,17 @@ router.post('/workbench/:tenant_control_id/quick-finding', auth, async (req, res
       ]
     );
 
+    const officialRecalculation = await publishControlOrchestration(req, tenant_id, 'finding', {
+      endpoint: 'POST /api/controls/workbench/:tenant_control_id/quick-finding',
+      tenant_control_id: control.tenant_control_id,
+      finding_id: created.rows[0]?.id || null,
+    });
+
     return res.json({
       ok: true,
       already_exists: false,
       finding: created.rows[0],
+      official_recalculation: officialRecalculation,
     });
   } catch (err) {
     console.error('ERROR QUICK FINDING:', err);
@@ -1539,10 +1598,17 @@ router.post('/workbench/:tenant_control_id/quick-action-plan', auth, async (req,
       ]
     );
 
+    const officialRecalculation = await publishControlOrchestration(req, tenant_id, 'action', {
+      endpoint: 'POST /api/controls/workbench/:tenant_control_id/quick-action-plan',
+      tenant_control_id: control.tenant_control_id,
+      action_plan_id: created.rows[0]?.id || null,
+    });
+
     return res.json({
       ok: true,
       already_exists: false,
       action_plan: created.rows[0],
+      official_recalculation: officialRecalculation,
     });
   } catch (err) {
     console.error('ERROR QUICK ACTION PLAN:', err);
@@ -1811,12 +1877,21 @@ router.post('/catalog/:control_id/enable', auth, async (req, res) => {
       );
     }
 
+    const officialRecalculation = await publishControlOrchestration(req, tenant_id, 'scope', {
+      endpoint: 'POST /api/controls/catalog/:control_id/enable',
+      tenant_control_id: tenantControl?.id || null,
+      control_id,
+      operation_id: operation.id,
+      standard_code: iso,
+    });
+
     return res.json({
       ok: true,
       already_enabled: alreadyEnabled,
       tenant_control: tenantControl,
       control: catalogControl,
       operation,
+      official_recalculation: officialRecalculation,
     });
   } catch (err) {
     console.error('ERROR ENABLE CONTROL FROM CATALOG:', err);
@@ -1894,12 +1969,20 @@ router.post('/catalog/:control_id/disable', auth, async (req, res) => {
       [tenantControl.id, tenant_id]
     );
 
+    const officialRecalculation = await publishControlOrchestration(req, tenant_id, 'scope', {
+      endpoint: 'POST /api/controls/catalog/:control_id/disable',
+      tenant_control_id: tenantControl.id,
+      control_id,
+      operation_id,
+    });
+
     return res.json({
       ok: true,
       disabled: true,
       tenant_control_id: tenantControl.id,
       control_id,
       dependencies: dependencyCheck.dependencies,
+      official_recalculation: officialRecalculation,
     });
   } catch (err) {
     console.error('ERROR DISABLE CONTROL FROM CATALOG:', err);

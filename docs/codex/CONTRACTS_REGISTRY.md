@@ -4,6 +4,7 @@
 |---|---|---|---|
 | Source contracts | CURRENT/PUI-09 | CODEX A | PUI cerró ownership, escala/unidad, conteos, temporalidad, status, fallback, Data Trust y matriz oficial. |
 | Metric/data semantics | CURRENT/PUI-09 | CODEX A | PRE-UI Data Truth Gate cerrado; 53 fórmulas oficiales cubiertas y validadas en runtime. |
+| GRC post-mutation calculation orchestration | CURRENT/GRC-CALCULATION-ORCHESTRATION-LOCAL | CODEX A+C | Productores GRC llaman un adaptador post-mutacion que no calcula formulas: resuelve metric codes desde `FUNCTIONAL_INDICATORS`, delega en `indicatorGovernance -> officialCalculationOrchestrator`, publica base metrics antes de `DATA-TRUST` y `GRC-HEALTH`, y reporta fallas post-COMMIT en `official_recalculation` sin falsear la durabilidad del hecho. Diagnostico/SoA escriben `control_soa_assessments`; no crean `grc_requirement_control_mappings`; y no inventan scores `grc_control_assurance` 100/50/0 sin contrato de conversion gobernado. |
 | Count semantics | CURRENT/PUI-03 | CODEX A | PUI-03 cerró received/eligible/usable/excluded/exclusionIssueCount/population_size para source resolver y dataset validation focales. |
 | Temporal semantics | CURRENT/PUI-04 | CODEX A | `temporal_semantics` contractual agregado a los 20 source contracts; validación focal/deploy confirmada externamente sobre `7a9df18`. |
 | Status semantics | CURRENT/PUI-05 | CODEX A | `status_semantics` contractual agregado a los 20 source contracts; normalización versionada por dominio y unknown visible en Math Governance. |

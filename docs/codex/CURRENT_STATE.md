@@ -1,5 +1,17 @@
 # CURRENT_STATE — TCDX ISO SaaS V4
 
+## GRC Calculation Orchestration Systemic Closeout — 2026-09-11
+
+Status: `GRC_CALCULATION_ORCHESTRATION_READY_FOR_HUMAN_REVIEW`.
+
+Local-only continuation on branch `main` / HEAD `d889fa915ccc46ff932c51fbc69b292f81772974`, preserving the inherited uncommitted working tree. Codex did not commit, push, merge, deploy, edit `.env`, connect to `tcdx_saasv2`, or write to any protected/productive database.
+
+Root cause closed: post-mutation GRC propagation existed as a partial diff but used a provisional fact-to-metric map and did not prove the compliance source contract. `grc_requirement_control_mappings` remains the governed primary compliance mapping; Diagnostico/SoA must not create normative mappings. `control_soa_assessments.status` is workflow, while `suggested_implementation_status`/`suggested_applicable` are the mathematical compliance signals.
+
+Implemented continuation: `grcCalculationOrchestration.service.js` now derives affected metric codes from the functional indicator/formula catalog, orders publication as base metrics -> `DATA-TRUST` -> `GRC-HEALTH`, and reports post-COMMIT propagation failures as `completed_with_failures` inside `official_recalculation` without converting a durable GRC fact into a false mutation 500. It normalizes ISO/user identity and records SoA assessment history. Human-review correction: `recordMappedControlAssurance` no longer invents 100/50/0 or writes `conform/partial/non_conform` into `grc_control_assurance`; absent a governed conversion contract it returns `ASSURANCE_STATUS_SCORE_CONVERSION_UNGOVERNED` and leaves the SoA fact to the official source/fallback path. `sourceResolver.service.js` reads the latest `control_soa_assessments` row deterministically by `(tenant_id, tenant_control_id, iso_code)` for the allowed fallback path. KPI recalculate no longer reuses `factType='scope'`; it requests explicit canonical metrics.
+
+Validation PASS: `git diff --check`; Node syntax for touched orchestration/source/KPI/PostgreSQL test files; `node backend/src/services/grcCalculationOrchestration.service.test.js`; `node backend/src/services/math-governance/sourceResolver.test.js`; `node backend/src/services/math-governance/officialIndicatorMatrix.test.js`; `node backend/src/services/math-governance/officialCalculationOrchestrator.test.js`; `node backend/src/services/math-governance/canonicalHealthProjection.service.test.js`; `node backend/src/services/isoRiskMatrix.service.test.js`; `npm --prefix backend test`; `npm --prefix frontend run typecheck`; `node scripts/deploy-vms-strategy.test.js`; release RBAC contract/residual/alias/frontend-backend gates; and isolated PostgreSQL formula lineage/runtime orchestrator E2E via `node scripts/normalization/db-integral-formula-lineage.postgres.test.js`. PostgreSQL gate reported `FORMULA_LINEAGE_POSTGRES PASS`, `RUNTIME_ORCHESTRATOR_END_TO_END PASS`, formula mismatches 0, snapshot mismatches 0, projection mismatches 0, unreconstructable outputs 0, `RUNTIME_TENANT_A COMPLIANCE=100`, `RUNTIME_TENANT_B COMPLIANCE=0`, `SOURCE_DATA_INSUFFICIENT` not coerced to zero, and `FORMULA_CROSS_TENANT_LEAKAGE=0`.
+
 ## TCDX Post-Lifecycle Runtime Consumers Systemic Closeout — 2026-09-11
 
 Status: `TCDX_POST_LIFECYCLE_RUNTIME_CONSUMERS_SYSTEMIC_CLOSEOUT_READY_FOR_HUMAN_REVIEW`.

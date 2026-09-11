@@ -13,6 +13,9 @@ const {
   equivalenceKeyExpression,
   standardMembershipPredicate,
 } = require('../services/controlCatalogLifecycle.service');
+const {
+  publishAffectedOfficialIndicators,
+} = require('../services/grcCalculationOrchestration.service');
 
 const roleOf = (req) => normalizeRoleKey(req.user?.role || req.user?.user_role || req.user?.userRole);
 const isPlatform = (req) => isPlatformRole(roleOf(req));
@@ -28,6 +31,19 @@ const canManageTenant = (req, tenantId) => {
   if (isAdmin(req) && req.user?.tenant_id === tenantId) return true;
   return false;
 };
+
+async function publishScopeOrchestration(req, tenantId, metadata = {}) {
+  return publishAffectedOfficialIndicators({
+    tenantId,
+    user: req.user,
+    factType: 'scope',
+    requestId: req.requestId,
+    metadata: {
+      producer: 'tenant-standards.routes',
+      ...metadata,
+    },
+  });
+}
 
 const getCatalogMode = async (tenantId, standardCode) => {
   const result = await pool.query(
@@ -436,7 +452,15 @@ router.post('/operations', auth, async (req, res) => {
     );
 
     await client.query('COMMIT');
-    return res.json(result.rows[0]);
+    const officialRecalculation = await publishScopeOrchestration(req, tenant_id, {
+      endpoint: 'POST /api/tenant-standards/operations',
+      operation_id: result.rows[0]?.id || null,
+    });
+
+    return res.json({
+      ...result.rows[0],
+      official_recalculation: officialRecalculation,
+    });
   } catch (err) {
     await client.query('ROLLBACK');
     console.error('ERROR CREATE TENANT OPERATION:', err);
@@ -560,7 +584,15 @@ router.put('/operations/:operation_id', auth, async (req, res) => {
     }
 
     await client.query('COMMIT');
-    return res.json(result.rows[0]);
+    const officialRecalculation = await publishScopeOrchestration(req, row.tenant_id, {
+      endpoint: 'PUT /api/tenant-standards/operations/:operation_id',
+      operation_id,
+    });
+
+    return res.json({
+      ...result.rows[0],
+      official_recalculation: officialRecalculation,
+    });
   } catch (err) {
     await client.query('ROLLBACK');
     console.error('ERROR UPDATE TENANT OPERATION:', err);
@@ -646,7 +678,15 @@ router.put('/operations/:operation_id/deactivate', auth, async (req, res) => {
     }
 
     await client.query('COMMIT');
-    return res.json({ success: true });
+    const officialRecalculation = await publishScopeOrchestration(req, row.tenant_id, {
+      endpoint: 'PUT /api/tenant-standards/operations/:operation_id/deactivate',
+      operation_id,
+    });
+
+    return res.json({
+      success: true,
+      official_recalculation: officialRecalculation,
+    });
   } catch (err) {
     await client.query('ROLLBACK');
     console.error('ERROR DEACTIVATE TENANT OPERATION:', err);
@@ -829,11 +869,16 @@ router.put('/scope/:tenant_id/:standard_code', auth, async (req, res) => {
     );
 
     await client.query('COMMIT');
+    const officialRecalculation = await publishScopeOrchestration(req, tenant_id, {
+      endpoint: 'PUT /api/tenant-standards/scope/:tenant_id/:standard_code',
+      standard_code,
+    });
 
     return res.json({
       success: true,
       standard: refreshedStandard,
-      active_operation_ids: mappings.rows.map((m) => m.operation_id)
+      active_operation_ids: mappings.rows.map((m) => m.operation_id),
+      official_recalculation: officialRecalculation,
     });
   } catch (err) {
     await client.query('ROLLBACK');
@@ -1028,13 +1073,18 @@ router.post('/initialize', auth, async (req, res) => {
     );
 
     await client.query('COMMIT');
+    const officialRecalculation = await publishScopeOrchestration(req, tenant_id, {
+      endpoint: 'POST /api/tenant-standards/initialize',
+      standard_code,
+    });
 
     res.json({
       success: true,
       standard_code,
       inserted_count: 0,
       operation_id: defaultOperation.id,
-      message: 'Norma activada. Los controles quedan disponibles, no habilitados por defecto.'
+      message: 'Norma activada. Los controles quedan disponibles, no habilitados por defecto.',
+      official_recalculation: officialRecalculation,
     });
   } catch (err) {
     await client.query('ROLLBACK');
@@ -1092,10 +1142,15 @@ router.put('/deactivate', auth, async (req, res) => {
     );
 
     await client.query('COMMIT');
+    const officialRecalculation = await publishScopeOrchestration(req, tenant_id, {
+      endpoint: 'PUT /api/tenant-standards/deactivate',
+      standard_code,
+    });
 
     res.json({
       success: true,
-      standard_code
+      standard_code,
+      official_recalculation: officialRecalculation,
     });
   } catch (err) {
     await client.query('ROLLBACK');

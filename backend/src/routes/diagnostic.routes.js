@@ -10,6 +10,10 @@ const diagnosticService = require('../services/diagnostic.service');
 const diagnosticAiService = require('../services/diagnosticAi.service');
 const diagnosticAcceptanceService = require('../services/diagnosticAcceptance.service');
 const {
+  publishAffectedOfficialIndicators,
+  recordControlSoAAssessment,
+} = require('../services/grcCalculationOrchestration.service');
+const {
   effectiveCatalogPredicate,
   standardMembershipPredicate,
 } = require('../services/controlCatalogLifecycle.service');
@@ -115,7 +119,7 @@ async function refreshHealthForTenant(client, tenantId) {
   return {
     health: healthRes.rows || [],
     kpis: [],
-    refresh_mode: 'canonical_health_projection_read_only'
+    projection_mode: 'canonical_health_projection_after_official_recalculation'
   };
 }
 
@@ -497,17 +501,45 @@ router.put('/:id', auth, async (req, res) => {
       }
     }
 
-    const refresh = await refreshHealthForTenant(client, control.tenant_id);
+    const canonicalAssessment = await recordControlSoAAssessment({
+      client,
+      tenantId: control.tenant_id,
+      tenantControlId: control.id,
+      isoCode: control.iso,
+      implementationStatus: requestedStatus,
+      userId: req.user?.user_id || req.user?.userId || req.user?.id || null,
+      metadata: {
+        producer: 'diagnostic.routes',
+        endpoint: 'PUT /api/diagnostic/:id',
+        factType: 'diagnostic',
+      },
+    });
 
     await client.query('COMMIT');
 
+    const officialRecalculation = await publishAffectedOfficialIndicators({
+      tenantId: control.tenant_id,
+      user: req.user,
+      factType: 'diagnostic',
+      requestId: req.requestId,
+      metadata: {
+        producer: 'diagnostic.routes',
+        endpoint: 'PUT /api/diagnostic/:id',
+        tenant_control_id: control.id,
+        status: requestedStatus,
+      },
+    });
+
+    const refresh = await refreshHealthForTenant(pool, control.tenant_id);
     const freshControl = await getDiagnosticControlById(pool, control.id);
 
     return res.json({
       ok: true,
       control: freshControl,
       nonconformity_action: nonconformityAction,
-      refresh
+      canonical_assessment: canonicalAssessment,
+      refresh,
+      official_recalculation: officialRecalculation,
     });
   } catch (err) {
     await client.query('ROLLBACK');

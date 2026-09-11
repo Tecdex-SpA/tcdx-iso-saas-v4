@@ -71,6 +71,7 @@ async function seedRuntimeTenant(client, { tenantId, suffix, assessmentStatus, e
   const operationId = uuid(`runtime-${suffix}-operation`);
   const tenantControlId = uuid(`runtime-${suffix}-tenant-control`);
   const soaAssessmentId = uuid(`runtime-${suffix}-soa-assessment`);
+  const oldSoaAssessmentId = uuid(`runtime-${suffix}-soa-assessment-old`);
   const evidenceId = uuid(`runtime-${suffix}-evidence`);
   const actionPlanId = uuid(`runtime-${suffix}-action-plan`);
   const actionUpdateId = uuid(`runtime-${suffix}-action-update`);
@@ -80,6 +81,14 @@ async function seedRuntimeTenant(client, { tenantId, suffix, assessmentStatus, e
   const likelihood = suffix === 'a' ? 2 : 4;
   const impact = suffix === 'a' ? 3 : 5;
   const controlEffectivenessScore = suffix === 'a' ? 70 : 10;
+  const suggestedImplementationStatus = assessmentStatus === 'non_compliant'
+    ? 'no implementado'
+    : assessmentStatus === 'partial'
+      ? 'parcial'
+      : 'implementado';
+  const historicalImplementationStatus = suggestedImplementationStatus === 'implementado'
+    ? 'no implementado'
+    : 'implementado';
   const catalog = await client.query(`
     SELECT id
     FROM controls_catalog
@@ -111,10 +120,17 @@ async function seedRuntimeTenant(client, { tenantId, suffix, assessmentStatus, e
   await client.query(`
     INSERT INTO control_soa_assessments (
       id, tenant_id, tenant_control_id, iso_code, source, status,
-      suggested_applicable, suggested_implementation_status, confidence_score, created_at
+      suggested_applicable, suggested_implementation_status, confidence_score, created_at, updated_at
     )
-    VALUES ($1, $2, $3, 'ISO_27001_2022', 'db_integral_runtime_e2e', $4, true, 'implemented', 0.95, '2026-09-08T00:00:00Z')
-  `, [soaAssessmentId, tenantId, tenantControlId, assessmentStatus]);
+    VALUES ($1, $2, $3, 'ISO_27001_2022', 'db_integral_runtime_e2e_history', 'applied', true, $4, 0.20, '2026-09-01T00:00:00Z', '2026-09-01T00:00:00Z')
+  `, [oldSoaAssessmentId, tenantId, tenantControlId, historicalImplementationStatus]);
+  await client.query(`
+    INSERT INTO control_soa_assessments (
+      id, tenant_id, tenant_control_id, iso_code, source, status,
+      suggested_applicable, suggested_implementation_status, confidence_score, created_at, updated_at
+    )
+    VALUES ($1, $2, $3, 'ISO_27001_2022', 'db_integral_runtime_e2e', 'applied', true, $4, 0.95, '2026-09-08T00:00:00Z', '2026-09-08T00:00:00Z')
+  `, [soaAssessmentId, tenantId, tenantControlId, suggestedImplementationStatus]);
   await client.query(`
     INSERT INTO evidences (
       id, tenant_id, tenant_control_id, catalog_control_id, title,
@@ -251,6 +267,9 @@ async function runRuntimeOrchestratorE2E({ pool, pg }) {
       assert.ok(byCodeA.get(code)?.calculation_run_id, `${code} must persist a calculation_run for runtime tenant A`);
       assert.ok(byCodeA.get(code)?.snapshot_id, `${code} must persist a source snapshot for runtime tenant A`);
     }
+    assert.equal(Number(byCodeA.get('F5_5_COMPLIANCE_WEIGHTED')?.value), 100, 'runtime tenant A compliance must use latest suggested_implementation_status only');
+    assert.equal(Number(byCodeA.get('F5_5_COVERAGE')?.value), 100, 'runtime tenant A coverage must not duplicate historical SoA rows');
+    assert.equal(Number(byCodeB.get('F5_5_COMPLIANCE_WEIGHTED')?.value), 0, 'runtime tenant B compliance must use its own latest suggested_implementation_status');
     assert.equal(byCodeB.get('F5_5_GRC_HEALTH')?.status, 'unmeasured', 'runtime tenant B GRC Health must not publish a score with insufficient coverage');
     assert.equal(byCodeB.get('F5_5_GRC_HEALTH')?.machine_reason || byCodeB.get('F5_5_GRC_HEALTH')?.code, 'FORMULA_INSUFFICIENT_COVERAGE');
     assert.notEqual(Number(byCodeA.get('F5_5_COMPLIANCE_WEIGHTED')?.value), Number(byCodeB.get('F5_5_COMPLIANCE_WEIGHTED')?.value), 'runtime tenants must produce distinct compliance outputs from distinct inputs');

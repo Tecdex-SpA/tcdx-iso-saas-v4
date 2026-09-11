@@ -24,6 +24,9 @@ const {
 const aiContextBuilder = require('../services/aiContextBuilder.service')
 const { runOperationalAiReview } = require('../services/aiOperationalReview.service')
 const { resolveTenantControl } = require('../utils/tenantControlIdentity')
+const {
+  publishAffectedOfficialIndicators
+} = require('../services/grcCalculationOrchestration.service')
 
 const AI_RECOMMENDATION_THRESHOLD = Number(
   process.env.EVIDENCE_AI_RECOMMENDATION_THRESHOLD ||
@@ -852,9 +855,23 @@ router.post('/upload', auth, evidenceUpload, async (req, res) => {
 
     await client.query('COMMIT')
 
+    const officialRecalculation = await publishAffectedOfficialIndicators({
+      tenantId: tenant_id,
+      user: req.user,
+      factType: 'evidence',
+      requestId: req.requestId,
+      metadata: {
+        producer: 'evidences.routes',
+        endpoint: 'POST /api/evidences/upload',
+        evidence_id: created.id,
+        tenant_control_id: created.tenant_control_id || null
+      }
+    })
+
     return res.json({
       ...created,
-      ai_queue_job_id: jobId
+      ai_queue_job_id: jobId,
+      official_recalculation: officialRecalculation
     })
   } catch (err) {
     await client.query('ROLLBACK')
@@ -926,10 +943,23 @@ router.put('/validate/:id', auth, async (req, res) => {
 
     await client.query('COMMIT')
 
+    const officialRecalculation = await publishAffectedOfficialIndicators({
+      tenantId: evidence.tenant_id,
+      user: req.user,
+      factType: 'evidence',
+      requestId: req.requestId,
+      metadata: {
+        producer: 'evidences.routes',
+        endpoint: 'PUT /api/evidences/validate/:id',
+        evidence_id: evidence.id
+      }
+    })
+
     return res.json({
       success: true,
       evidence_id: evidence.id,
-      ai_queue_job_id: jobId
+      ai_queue_job_id: jobId,
+      official_recalculation: officialRecalculation
     })
   } catch (err) {
     await client.query('ROLLBACK')
@@ -984,10 +1014,24 @@ router.post('/reprocess-ai/:id', auth, async (req, res) => {
 
     await client.query('COMMIT')
 
+    const officialRecalculation = await publishAffectedOfficialIndicators({
+      tenantId: evidence.tenant_id,
+      user: req.user,
+      factType: 'evidence',
+      requestId: req.requestId,
+      metadata: {
+        producer: 'evidences.routes',
+        endpoint: 'PUT /api/evidences/approve/:id',
+        evidence_id: evidence.id,
+        reviewed_status: normalizedStatus
+      }
+    })
+
     return res.json({
       success: true,
       evidence_id: evidence.id,
-      ai_queue_job_id: jobId
+      ai_queue_job_id: jobId,
+      official_recalculation: officialRecalculation
     })
   } catch (err) {
     await client.query('ROLLBACK')
@@ -1333,10 +1377,24 @@ router.post('/:id/mark-official', auth, async (req, res) => {
 
     await client.query('COMMIT');
 
+    const officialRecalculation = await publishAffectedOfficialIndicators({
+      tenantId,
+      user: req.user,
+      factType: 'evidence',
+      requestId: req.requestId,
+      metadata: {
+        producer: 'evidences.routes',
+        endpoint: 'POST /api/evidences/:id/mark-official',
+        evidence_id: evidenceId,
+        tenant_control_id: evidence.tenant_control_id
+      }
+    });
+
     return res.json({
       ok: true,
       evidence: updatedEvidenceResult.rows[0],
-      message: 'Evidencia marcada como oficial del control'
+      message: 'Evidencia marcada como oficial del control',
+      official_recalculation: officialRecalculation
     });
   } catch (err) {
     await client.query('ROLLBACK');

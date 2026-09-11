@@ -13,6 +13,9 @@ const { resolveTenantControl } = require('../utils/tenantControlIdentity');
 const {
   ACTIVE_CONTROL_REMEDIATION_STATUSES,
 } = require('../services/actionPlanTraceability.service');
+const {
+  publishAffectedOfficialIndicators,
+} = require('../services/grcCalculationOrchestration.service');
 
 function getUserTenantId(user) {
   return (
@@ -27,6 +30,19 @@ function getUserTenantId(user) {
 
 function getUserId(user) {
   return user?.user_id || user?.userId || user?.id || null;
+}
+
+async function publishActionPlanOrchestration(req, row, metadata = {}) {
+  return publishAffectedOfficialIndicators({
+    tenantId: row?.tenant_id,
+    user: req.user,
+    factType: 'action',
+    requestId: req.requestId,
+    metadata: {
+      producer: 'action-plans.routes',
+      ...metadata,
+    },
+  });
 }
 
 function isSuperAdmin(user) {
@@ -877,11 +893,17 @@ router.post('/:id/updates', auth, requireActionsManage, async (req, res) => {
     const actionPlanResult = await getEnrichedActionPlanById(client, id);
 
     await client.query('COMMIT');
+    const officialRecalculation = await publishActionPlanOrchestration(req, actionPlanResult.rows[0], {
+      endpoint: 'POST /api/action-plans/:id/updates',
+      action_plan_id: id,
+      update_id: insertResult.rows[0].id,
+    });
 
     return res.json({
       ok: true,
       update: insertResult.rows[0],
       action_plan: actionPlanResult.rows[0],
+      official_recalculation: officialRecalculation,
     });
   } catch (err) {
     await client.query('ROLLBACK');
@@ -996,10 +1018,15 @@ router.post('/:id/request-approval', auth, requireActionsManage, async (req, res
     const result = await getEnrichedActionPlanById(client, id);
 
     await client.query('COMMIT');
+    const officialRecalculation = await publishActionPlanOrchestration(req, result.rows[0], {
+      endpoint: 'POST /api/action-plans/:id/request-approval',
+      action_plan_id: id,
+    });
 
     return res.json({
       ok: true,
       data: result.rows[0],
+      official_recalculation: officialRecalculation,
     });
   } catch (err) {
     await client.query('ROLLBACK');
@@ -1154,10 +1181,16 @@ router.post('/:id/review-approval', auth, requireActionsApprove, async (req, res
     const result = await getEnrichedActionPlanById(client, id);
 
     await client.query('COMMIT');
+    const officialRecalculation = await publishActionPlanOrchestration(req, result.rows[0], {
+      endpoint: 'POST /api/action-plans/:id/review-approval',
+      action_plan_id: id,
+      decision,
+    });
 
     return res.json({
       ok: true,
       data: result.rows[0],
+      official_recalculation: officialRecalculation,
     });
   } catch (err) {
     await client.query('ROLLBACK');
@@ -1690,8 +1723,16 @@ router.post('/', auth, requireActionsManage, async (req, res) => {
     );
 
     await client.query('COMMIT');
+    const officialRecalculation = await publishActionPlanOrchestration(req, result.rows[0], {
+      endpoint: 'POST /api/action-plans',
+      action_plan_id: insertResult.rows[0].id,
+      tenant_control_id: result.rows[0]?.tenant_control_id || null,
+    });
 
-    return res.json(result.rows[0]);
+    return res.json({
+      ...result.rows[0],
+      official_recalculation: officialRecalculation,
+    });
   } catch (err) {
     await client.query('ROLLBACK');
 
@@ -1908,8 +1949,16 @@ router.put('/:id', auth, requireActionsManage, async (req, res) => {
     const result = await getEnrichedActionPlanById(client, id);
 
     await client.query('COMMIT');
+    const officialRecalculation = await publishActionPlanOrchestration(req, result.rows[0], {
+      endpoint: 'PUT /api/action-plans/:id',
+      action_plan_id: id,
+      tenant_control_id: result.rows[0]?.tenant_control_id || null,
+    });
 
-    return res.json(result.rows[0]);
+    return res.json({
+      ...result.rows[0],
+      official_recalculation: officialRecalculation,
+    });
   } catch (err) {
     await client.query('ROLLBACK');
     console.error('ERROR UPDATE ACTION PLAN:', err);
@@ -1956,8 +2005,16 @@ router.delete('/:id', auth, requireActionsDelete, async (req, res) => {
     }
 
     await pool.query(`DELETE FROM action_plans WHERE id = $1`, [id]);
+    const officialRecalculation = await publishActionPlanOrchestration(req, row, {
+      endpoint: 'DELETE /api/action-plans/:id',
+      action_plan_id: id,
+      tenant_control_id: row.tenant_control_id || null,
+    });
 
-    return res.json({ success: true });
+    return res.json({
+      success: true,
+      official_recalculation: officialRecalculation,
+    });
   } catch (err) {
     console.error('ERROR DELETE ACTION PLAN:', err);
     return res.status(500).json({

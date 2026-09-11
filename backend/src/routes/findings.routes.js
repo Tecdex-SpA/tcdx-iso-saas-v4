@@ -12,6 +12,9 @@ const { resolveTenantControl } = require('../utils/tenantControlIdentity');
 const {
   upsertActionPlanOriginRelation,
 } = require('../services/actionPlanTraceability.service');
+const {
+  publishAffectedOfficialIndicators,
+} = require('../services/grcCalculationOrchestration.service');
 
 function getUserTenantId(user) {
   return (
@@ -26,6 +29,19 @@ function getUserTenantId(user) {
 
 function getUserId(user) {
   return user?.user_id || user?.userId || user?.id || null;
+}
+
+async function publishFindingOrchestration(req, row, metadata = {}) {
+  return publishAffectedOfficialIndicators({
+    tenantId: row?.tenant_id,
+    user: req.user,
+    factType: 'finding',
+    requestId: req.requestId,
+    metadata: {
+      producer: 'findings.routes',
+      ...metadata,
+    },
+  });
 }
 
 function isSuperAdmin(user) {
@@ -797,7 +813,18 @@ router.post('/', auth, async (req, res) => {
     );
 
     await client.query('COMMIT');
-    return res.json(result.rows[0]);
+
+    const created = result.rows[0];
+    const officialRecalculation = await publishFindingOrchestration(req, created, {
+      endpoint: 'POST /api/findings',
+      finding_id: created.id,
+      tenant_control_id: created.tenant_control_id || null,
+    });
+
+    return res.json({
+      ...created,
+      official_recalculation: officialRecalculation,
+    });
   } catch (err) {
     await client.query('ROLLBACK');
     console.error('ERROR CREATE FINDING:', err);
@@ -970,7 +997,17 @@ router.put('/:id', auth, async (req, res) => {
       [id]
     );
 
-    return res.json(result.rows[0]);
+    const updated = result.rows[0];
+    const officialRecalculation = await publishFindingOrchestration(req, updated, {
+      endpoint: 'PUT /api/findings/:id',
+      finding_id: updated.id,
+      tenant_control_id: updated.tenant_control_id || null,
+    });
+
+    return res.json({
+      ...updated,
+      official_recalculation: officialRecalculation,
+    });
   } catch (err) {
     console.error('ERROR UPDATE FINDING:', err);
     return res.status(500).json({
@@ -1011,7 +1048,16 @@ router.delete('/:id', auth, async (req, res) => {
 
     await pool.query(`DELETE FROM findings WHERE id = $1`, [id]);
 
-    return res.json({ success: true });
+    const officialRecalculation = await publishFindingOrchestration(req, row, {
+      endpoint: 'DELETE /api/findings/:id',
+      finding_id: id,
+      tenant_control_id: row.tenant_control_id || null,
+    });
+
+    return res.json({
+      success: true,
+      official_recalculation: officialRecalculation,
+    });
   } catch (err) {
     console.error('ERROR DELETE FINDING:', err);
     return res.status(500).json({
@@ -1165,10 +1211,24 @@ router.post('/:id/create-action', auth, async (req, res) => {
       });
 
       await client.query('COMMIT');
+      const officialRecalculation = await publishAffectedOfficialIndicators({
+        tenantId: finding.tenant_id,
+        user: req.user,
+        factType: 'action',
+        requestId: req.requestId,
+        metadata: {
+          producer: 'findings.routes',
+          endpoint: 'POST /api/findings/:id/create-action',
+          finding_id: finding.id,
+          action_plan_id: existing.id,
+          reused: true,
+        },
+      });
 
       return res.json({
         success: true,
         already_exists: true,
+        official_recalculation: officialRecalculation,
         action_plan: {
           ...existing,
           tenant_control_id: existing.tenant_control_id || resolvedControl.tenant_control_id_moderno
@@ -1265,10 +1325,24 @@ router.post('/:id/create-action', auth, async (req, res) => {
     );
 
     await client.query('COMMIT');
+    const officialRecalculation = await publishAffectedOfficialIndicators({
+      tenantId: finding.tenant_id,
+      user: req.user,
+      factType: 'action',
+      requestId: req.requestId,
+      metadata: {
+        producer: 'findings.routes',
+        endpoint: 'POST /api/findings/:id/create-action',
+        finding_id: finding.id,
+        action_plan_id: actionResult.rows[0].id,
+        reused: false,
+      },
+    });
 
     return res.json({
       success: true,
       already_exists: false,
+      official_recalculation: officialRecalculation,
       action_plan: actionResult.rows[0]
     });
   } catch (err) {

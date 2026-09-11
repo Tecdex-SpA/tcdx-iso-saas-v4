@@ -2,6 +2,9 @@ const express = require('express');
 const router = express.Router();
 const { errorDetail } = require('../utils/errorResponse');
 const isoRiskMatrix = require('../services/isoRiskMatrix.service');
+const {
+  publishAffectedOfficialIndicators,
+} = require('../services/grcCalculationOrchestration.service');
 
 function sendData(res, data, extra = {}) {
   return res.json({
@@ -26,6 +29,19 @@ function handleError(res, error) {
   });
 }
 
+async function publishRiskOrchestration(req, tenantId, metadata = {}) {
+  return publishAffectedOfficialIndicators({
+    tenantId,
+    user: req.user,
+    factType: 'risk',
+    requestId: req.requestId,
+    metadata: {
+      producer: 'iso-risk-matrix.routes',
+      ...metadata,
+    },
+  });
+}
+
 router.get('/:tenantId/options', async (req, res) => {
   try {
     const options = await isoRiskMatrix.listOptions(req.params.tenantId, req.user);
@@ -45,10 +61,18 @@ router.post('/:tenantId/generate', async (req, res) => {
       user: req.user,
       payload: req.body || {},
     });
+    const officialRecalculation = data?.dry_run === true
+      ? { status: 'skipped', code: 'DRY_RUN_NO_MUTATION', metric_codes: [], results: [] }
+      : await publishRiskOrchestration(req, req.params.tenantId, {
+          endpoint: 'POST /api/iso-risk-matrix/:tenantId/generate',
+          run_id: data?.run?.id || null,
+        });
+
     return sendData(res, data, {
       success: true,
       run_id: data?.run?.id || null,
       dry_run: data?.dry_run === true,
+      official_recalculation: officialRecalculation,
     });
   } catch (error) {
     return handleError(res, error);
@@ -149,8 +173,14 @@ router.post('/:tenantId/items/:itemId/review', async (req, res) => {
       req.user,
       req.body || {}
     );
+    const officialRecalculation = await publishRiskOrchestration(req, req.params.tenantId, {
+      endpoint: 'POST /api/iso-risk-matrix/:tenantId/items/:itemId/review',
+      item_id: req.params.itemId,
+    });
+
     return sendData(res, data, {
       success: true,
+      official_recalculation: officialRecalculation,
     });
   } catch (error) {
     return handleError(res, error);
@@ -165,8 +195,14 @@ router.patch('/:tenantId/items/:itemId/risk-inputs', async (req, res) => {
       req.user,
       req.body || {}
     );
+    const officialRecalculation = await publishRiskOrchestration(req, req.params.tenantId, {
+      endpoint: 'PATCH /api/iso-risk-matrix/:tenantId/items/:itemId/risk-inputs',
+      item_id: req.params.itemId,
+    });
+
     return sendData(res, data, {
       success: true,
+      official_recalculation: officialRecalculation,
     });
   } catch (error) {
     return handleError(res, error);
@@ -180,8 +216,14 @@ router.post('/:tenantId/runs/:runId/archive', async (req, res) => {
       req.params.runId,
       req.user
     );
+    const officialRecalculation = await publishRiskOrchestration(req, req.params.tenantId, {
+      endpoint: 'POST /api/iso-risk-matrix/:tenantId/runs/:runId/archive',
+      run_id: req.params.runId,
+    });
+
     return sendData(res, data, {
       success: true,
+      official_recalculation: officialRecalculation,
     });
   } catch (error) {
     return handleError(res, error);
