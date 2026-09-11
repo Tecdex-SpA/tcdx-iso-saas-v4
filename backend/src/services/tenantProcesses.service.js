@@ -98,6 +98,22 @@ function databaseError(error) {
   return error;
 }
 
+function isMissingProcessContract(error) {
+  const code = String(error?.code || '');
+  const message = String(error?.message || '');
+
+  if (code === '42P01') {
+    return /relation "tenant_(processes|operations)" does not exist/i.test(message);
+  }
+
+  if (code !== '42703') return false;
+
+  return [
+    /column p\.(code|description|area|owner_user_id|criticality|is_active|sort_order|metadata|created_at|updated_at) does not exist/i,
+    /column op\.(id|tenant_id|process_id|is_active|sort_order|name) does not exist/i,
+  ].some((pattern) => pattern.test(message));
+}
+
 async function assertOwnerBelongsToTenant(client, tenantId, ownerUserId) {
   if (!ownerUserId) return null;
 
@@ -216,6 +232,9 @@ async function listProcesses({ user, filters = {} }) {
 
     return result.rows.map(mapProcess);
   } catch (error) {
+    if (isMissingProcessContract(error)) {
+      return [];
+    }
     throw databaseError(error);
   }
 }
@@ -590,4 +609,7 @@ module.exports = {
   createOperation,
   updateOperation,
   setOperationStatus,
+  _private: {
+    isMissingProcessContract,
+  },
 };

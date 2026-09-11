@@ -11,6 +11,7 @@ const diagnosticAiService = require('../services/diagnosticAi.service');
 const diagnosticAcceptanceService = require('../services/diagnosticAcceptance.service');
 const {
   effectiveCatalogPredicate,
+  standardMembershipPredicate,
 } = require('../services/controlCatalogLifecycle.service');
 
 const ALLOWED_STATUSES = [
@@ -91,18 +92,30 @@ ${effectiveCatalogPredicate({
 })}
 `;
 
+const getStandardMembershipWhere = (standardCodeSql) => `
+${standardMembershipPredicate({
+  catalogAlias: 'cc',
+  standardCodeSql,
+})}
+`;
+
 async function refreshHealthForTenant(client, tenantId) {
-  const kpiRes = await client.query(
+  const healthRes = await client.query(
     `
-    SELECT *
-    FROM refresh_kpi_health_snapshots($1::uuid)
+    SELECT
+      COUNT(*)::int AS health_rows,
+      COUNT(*) FILTER (WHERE effective_health_score IS NOT NULL)::int AS health_scored,
+      COUNT(*) FILTER (WHERE effective_health_score IS NULL)::int AS health_without_score
+    FROM public.v_iso_control_effective_health
+    WHERE tenant_id = $1::uuid
     `,
     [tenantId]
   );
 
   return {
-    health: [],
-    kpis: kpiRes.rows || []
+    health: healthRes.rows || [],
+    kpis: [],
+    refresh_mode: 'canonical_health_projection_read_only'
   };
 }
 
@@ -306,15 +319,15 @@ router.get('/:tenant_id', auth, async (req, res) => {
         ON tc.control_id = cc.id
       JOIN tenant_standards ts
         ON ts.tenant_id = tc.tenant_id
-       AND ts.standard_code = cc.iso
        AND ts.is_active = TRUE
-      JOIN tenant_operations op
+       AND ${getStandardMembershipWhere('ts.standard_code')}
+      LEFT JOIN tenant_operations op
         ON op.id = tc.operation_id
        AND op.tenant_id = tc.tenant_id
        AND op.is_active = TRUE
-      JOIN tenant_standard_operations tso
+      LEFT JOIN tenant_standard_operations tso
         ON tso.tenant_id = tc.tenant_id
-       AND tso.standard_code = cc.iso
+       AND tso.standard_code = ts.standard_code
        AND tso.operation_id = tc.operation_id
        AND tso.is_active = TRUE
       WHERE tc.tenant_id = $1::uuid
@@ -326,8 +339,8 @@ router.get('/:tenant_id', auth, async (req, res) => {
     let idx = params.length + 1;
 
     if (iso) {
-      query += ` AND cc.iso = $${idx}`;
       params.push(String(iso));
+      query += ` AND ts.standard_code = $${idx} AND ${getStandardMembershipWhere(`$${idx}`)}`;
       idx++;
     }
 

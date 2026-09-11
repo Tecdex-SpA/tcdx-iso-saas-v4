@@ -1,5 +1,21 @@
 # CURRENT_STATE — TCDX ISO SaaS V4
 
+## TCDX Post-Lifecycle Runtime Consumers Systemic Closeout — 2026-09-11
+
+Status: `TCDX_POST_LIFECYCLE_RUNTIME_CONSUMERS_SYSTEMIC_CLOSEOUT_READY_FOR_HUMAN_REVIEW`.
+
+Local-only closeout continuation on branch `main` / HEAD `dd5e2bba153367dea452db545a3c3a55c0dd097e`. Codex did not commit, push, merge, deploy, edit `.env`, connect to `tcdx_saasv2`, or write to any real database.
+
+Root causes closed: runtime consumers still read `controls_catalog_standards.clause`/`display_clause` even though fresh stores control clause in `controls_catalog.clause`; Diagnostico detail projected optional legacy columns from `findings`/`action_plans`; status changes still called legacy `refresh_kpi_health_snapshots(uuid)`; Health ISO routes referenced non-materialized read models; applicability failure handling attempted failed-run writes inside an aborted transaction; `/configuracion` did not degrade to empty processes when the process contract was absent; AI Compliance converted feature-disabled states into 500/outer capability denial for engine health; risk quantitative 403s were surfaced as technical errors. Final review corrections: runner pending preflight no longer requires views that the migration creates; AI Compliance restores `ai.view`/capability gate for all protected endpoints except engine-health; process-contract degradation is scoped to known optional process relations/columns only.
+
+Runtime consumers aligned: controls catalog/workbench/document/evidence AI consumers use `controls_catalog.clause`; diagnostic summary/detail uses effective standard membership and explicit `NULL::text` projections for optional non-canonical columns; status-change Health refresh is read-only against `v_iso_control_effective_health`; applicability failed-run recording now happens after rollback via independent pool query; Configuracion returns 0 processes on missing optional process contract; risk quantitative frontend reports capability disabled contractually; AI Compliance engine-health returns `healthy`, `feature_disabled`, `engine_unavailable`, or `db_unavailable`.
+
+Forward-only migration `database/migrations/20260911_tcdx_post_lifecycle_runtime_consumers_systemic_closeout.sql` and runner `scripts/normalization/apply-tcdx-post-lifecycle-runtime-consumers-systemic-closeout.js` were added and registered after Control lifecycle systemic closeout. Checksum: `1d9e00b12bc1d05b580b3002b07ff9db318e24ef578301d439d6cbaad85cdebe`.
+
+Health view decisions: all requested missing Health read models are `MATERIALIZE_CANONICAL_VIEW`: `v_control_health_risks`, `v_health_root_causes_by_standard`, `v_health_remediation_summary_by_tenant`, `v_health_remediation_plan`, `v_remediation_executive_by_tenant`, `v_remediation_executive_by_standard`, `v_evidence_approval_queue`, `v_audit_evidence_timeline`, `v_audit_action_plan_timeline`, `v_audit_event_log_enriched`, and `v_controls_recovered_by_remediation`. Additional active route/report views `v_control_health_risks_applicable`, `v_health_remediation_summary_by_standard`, and `v_audit_control_recovery_timeline` are also materialized. They use real tenant-scoped contracts and do not fabricate rows or scores.
+
+Local validation PASS: checksum, Node syntax on touched backend/runner files, isolated PostgreSQL pending preflight without views/no preflight DDL/first apply/applied preflight/reapply/required views/empty tenant/no invented score/checksum mismatch, AI Compliance RBAC focal test, tenantProcesses scoped-degradation test, `git diff --check`, `bash -n scripts/deploy-vms.sh`, `node scripts/deploy-vms-strategy.test.js`, `npm --prefix backend test`, `npm --prefix frontend run typecheck`, and all requested release RBAC consistency gates. This is not production PASS; runtime validation remains human/post-deploy.
+
 ## TCDX Control Lifecycle Systemic Closeout — 2026-09-11
 
 Status: `TCDX_CONTROL_LIFECYCLE_SYSTEMIC_CLOSEOUT_READY_FOR_HUMAN_REVIEW`.

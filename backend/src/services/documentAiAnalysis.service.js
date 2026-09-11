@@ -446,9 +446,9 @@ async function getAvailableControls(tenantId, standards) {
       `
       SELECT DISTINCT
         COALESCE(ccs.standard_code, cc.iso) AS standard_code,
-        COALESCE(ccs.clause, cc.clause) AS clause,
-        COALESCE(ccs.clause, cc.clause) AS control_code,
-        COALESCE(cc.description, cc.category, COALESCE(ccs.clause, cc.clause), '') AS title,
+        cc.clause AS clause,
+        cc.clause AS control_code,
+        COALESCE(cc.description, cc.category, cc.clause, '') AS title,
         COALESCE(cc.description, '') AS description,
         cc.category AS category
       FROM controls_catalog cc
@@ -463,8 +463,8 @@ async function getAvailableControls(tenantId, standards) {
            )
       ORDER BY
         COALESCE(ccs.standard_code, cc.iso),
-        COALESCE(ccs.clause, cc.clause),
-        COALESCE(cc.description, cc.category, COALESCE(ccs.clause, cc.clause), '')
+        cc.clause,
+        COALESCE(cc.description, cc.category, cc.clause, '')
       LIMIT 300
       `,
       [expandedStandards]

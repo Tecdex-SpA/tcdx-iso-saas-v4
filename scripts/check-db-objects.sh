@@ -41,7 +41,6 @@ WITH expected(proname) AS (
   VALUES
     ('refresh_tenant_control_health'),
     ('refresh_control_health_scores_v2_1'),
-    ('refresh_kpi_health_snapshots'),
     ('user_has_permission'),
     ('log_admin_audit_event')
 )

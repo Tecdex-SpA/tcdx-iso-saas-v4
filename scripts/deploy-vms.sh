@@ -459,6 +459,7 @@ FRESH_PRODUCTION_MIGRATION_RUNNERS=(
   "Commercial runtime integral closeout|scripts/normalization/apply-tcdx-commercial-runtime-integral-closeout.js"
   "Fresh baseline runtime dependency systemic closeout|scripts/normalization/apply-tcdx-fresh-baseline-runtime-dependency-systemic-closeout.js"
   "Control lifecycle systemic closeout|scripts/normalization/apply-tcdx-control-lifecycle-systemic-closeout.js"
+  "Post-lifecycle runtime consumers systemic closeout|scripts/normalization/apply-tcdx-post-lifecycle-runtime-consumers-systemic-closeout.js"
 )
 
 HISTORICAL_MIGRATION_RUNNERS=(
@@ -615,6 +616,7 @@ $( (assert_backend_runtime_identity "tecdex_saas" "tcdx_saasv2") 2>&1 || true)"
 
   [[ "$output" == *"apply-tcdx-saasv2-fresh-runtime-contract-closeout.js"* ]] || { echo "DEPLOY_ACCEPTS_FRESH_FORWARD_MIGRATIONS=FAIL"; exit 1; }
   [[ "$output" == *"apply-tcdx-fresh-baseline-runtime-dependency-systemic-closeout.js"* ]] || { echo "DEPLOY_ACCEPTS_FRESH_FORWARD_MIGRATIONS=FAIL"; exit 1; }
+  [[ "$output" == *"apply-tcdx-post-lifecycle-runtime-consumers-systemic-closeout.js"* ]] || { echo "DEPLOY_ACCEPTS_FRESH_FORWARD_MIGRATIONS=FAIL"; exit 1; }
   echo "DEPLOY_ACCEPTS_FRESH_FORWARD_MIGRATIONS=PASS"
 }
 

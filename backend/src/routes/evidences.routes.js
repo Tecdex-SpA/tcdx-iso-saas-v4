@@ -228,7 +228,11 @@ function buildAiRecommendationPayload(row, acceptancePct) {
 async function refreshHealthForTenant(client, tenantId) {
   try {
     await client.query(
-      `SELECT * FROM refresh_kpi_health_snapshots($1::uuid)`,
+      `
+      SELECT COUNT(*)::int AS health_rows
+      FROM public.v_iso_control_effective_health
+      WHERE tenant_id = $1::uuid
+      `,
       [tenantId]
     )
   } catch (err) {

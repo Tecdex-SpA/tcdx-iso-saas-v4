@@ -391,7 +391,7 @@ async function loadControls(client, tenantId, activeStandards) {
         tc.control_id AS control_catalog_id,
         tc.tenant_id,
         cc.iso AS primary_standard_code,
-        COALESCE(rel.display_clause, cc.clause) AS clause,
+        cc.clause AS clause,
         cc.category,
         cc.description AS control_name,
         cc.description,
@@ -408,8 +408,7 @@ async function loadControls(client, tenantId, activeStandards) {
       JOIN controls_catalog cc ON cc.id = tc.control_id
       LEFT JOIN LATERAL (
         SELECT
-          array_agg(DISTINCT ccs.standard_code ORDER BY ccs.standard_code) AS valid_for_standards,
-          MAX(ccs.clause) FILTER (WHERE ccs.standard_code = ANY($2::text[])) AS display_clause
+          array_agg(DISTINCT ccs.standard_code ORDER BY ccs.standard_code) AS valid_for_standards
         FROM controls_catalog_standards ccs
         WHERE ccs.control_id = cc.id
       ) rel ON TRUE
@@ -423,7 +422,7 @@ async function loadControls(client, tenantId, activeStandards) {
         cc.id AS control_catalog_id,
         $1::uuid AS tenant_id,
         cc.iso AS primary_standard_code,
-        COALESCE(rel.display_clause, cc.clause) AS clause,
+        cc.clause AS clause,
         cc.category,
         cc.description AS control_name,
         cc.description,
@@ -439,8 +438,7 @@ async function loadControls(client, tenantId, activeStandards) {
       FROM controls_catalog cc
       LEFT JOIN LATERAL (
         SELECT
-          array_agg(DISTINCT ccs.standard_code ORDER BY ccs.standard_code) AS valid_for_standards,
-          MAX(ccs.clause) FILTER (WHERE ccs.standard_code = ANY($2::text[])) AS display_clause
+          array_agg(DISTINCT ccs.standard_code ORDER BY ccs.standard_code) AS valid_for_standards
         FROM controls_catalog_standards ccs
         WHERE ccs.control_id = cc.id
       ) rel ON TRUE
@@ -563,6 +561,32 @@ async function completeRun(client, runId, status, summary, trace, error = null) 
     `,
     [runId, status, JSON.stringify(summary || {}), JSON.stringify(trace || {}), error ? JSON.stringify(error) : null]
   );
+}
+
+async function recordFailedRunAfterRollback({ tenantId, userId, startedAt, error }) {
+  try {
+    await pool.query(
+      `
+      INSERT INTO tenant_applicability_runs (
+        tenant_id, status, started_at, completed_at, created_by,
+        summary_json, trace_json, error_json
+      )
+      VALUES ($1::uuid, 'failed', to_timestamp($2::double precision / 1000), now(), $3::uuid, '{}'::jsonb, $4::jsonb, $5::jsonb)
+      `,
+      [
+        tenantId,
+        startedAt,
+        userId,
+        JSON.stringify({ duration_ms: Date.now() - startedAt, rollback_completed: true }),
+        JSON.stringify({
+          error_type: error?.code || error?.name || 'APPLICABILITY_ENGINE_ERROR',
+          error_message: String(error?.message || 'Error calculando aplicabilidad').slice(0, 500),
+        }),
+      ]
+    );
+  } catch (recordError) {
+    console.error('APPLICABILITY ENGINE FAILURE RECORD ERROR:', recordError.message);
+  }
 }
 
 async function buildTenantApplicabilityUniverse({ tenantId, userId = null, forceRebuild = false } = {}) {
@@ -812,16 +836,11 @@ async function buildTenantApplicabilityUniverse({ tenantId, userId = null, force
     return { ok: true, run_id: run.id, summary, trace };
   } catch (error) {
     try {
-      if (run?.id) {
-        await completeRun(client, run.id, 'failed', {}, { duration_ms: Date.now() - startedAt }, {
-          error_type: error?.code || error?.name || 'APPLICABILITY_ENGINE_ERROR',
-          error_message: String(error?.message || 'Error calculando aplicabilidad').slice(0, 500),
-        });
-      }
       await client.query('ROLLBACK');
     } catch (rollbackError) {
       console.error('APPLICABILITY ENGINE ROLLBACK ERROR:', rollbackError.message);
     }
+    await recordFailedRunAfterRollback({ tenantId, userId, startedAt, error });
     throw error;
   } finally {
     client.release();

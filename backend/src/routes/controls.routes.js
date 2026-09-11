@@ -490,7 +490,7 @@ async function getCatalogControlForTenant(
         os.id AS operation_id,
         os.name AS operation_name,
         cc.iso AS primary_standard_code,
-        COALESCE(rel.display_clause, cc.clause) AS clause,
+        cc.clause AS clause,
         cc.category,
         cc.description,
         cc.source_type,
@@ -544,8 +544,7 @@ async function getCatalogControlForTenant(
           array_remove(
             array_agg(DISTINCT ccs.standard_code ORDER BY ccs.standard_code),
             $3::text
-          ) AS also_valid_for,
-          MAX(CASE WHEN ccs.standard_code = $3 THEN ccs.clause END) AS display_clause
+          ) AS also_valid_for
         FROM controls_catalog_standards ccs
         WHERE ccs.control_id = cc.id
       ) rel ON TRUE
@@ -850,7 +849,7 @@ router.get('/workbench/:tenant_id/:iso', auth, async (req, res) => {
           tc.control_id AS catalog_control_id,
           $3::text AS iso,
           cc.iso AS primary_standard_code,
-          COALESCE(rel.display_clause, cc.clause) AS clause,
+          cc.clause AS clause,
           cc.category,
           cc.description,
           cc.source_type,
@@ -940,8 +939,7 @@ router.get('/workbench/:tenant_id/:iso', auth, async (req, res) => {
             array_remove(
               array_agg(DISTINCT ccs.standard_code ORDER BY ccs.standard_code),
               $3::text
-            ) AS also_valid_for,
-            MAX(CASE WHEN ccs.standard_code = $3 THEN ccs.clause END) AS display_clause
+            ) AS also_valid_for
           FROM controls_catalog_standards ccs
           WHERE ccs.control_id = cc.id
         ) rel ON TRUE
@@ -1598,7 +1596,7 @@ router.get('/catalog/:tenant_id/:iso', auth, async (req, res) => {
           os.id AS operation_id,
           os.name AS operation_name,
           cc.iso AS primary_standard_code,
-          COALESCE(rel.display_clause, cc.clause) AS clause,
+          cc.clause AS clause,
           cc.category,
           cc.description,
           cc.source_type,
@@ -1656,8 +1654,7 @@ router.get('/catalog/:tenant_id/:iso', auth, async (req, res) => {
             array_remove(
               array_agg(DISTINCT ccs.standard_code ORDER BY ccs.standard_code),
               $3::text
-            ) AS also_valid_for,
-            MAX(CASE WHEN ccs.standard_code = $3 THEN ccs.clause END) AS display_clause
+            ) AS also_valid_for
           FROM controls_catalog_standards ccs
           WHERE ccs.control_id = cc.id
         ) rel ON TRUE
@@ -2019,17 +2016,15 @@ router.post('/catalog/custom', auth, async (req, res) => {
         INSERT INTO controls_catalog_standards (
           control_id,
           standard_code,
-          clause,
           is_primary
         )
-        VALUES ($1, $2, $3, $4)
+        VALUES ($1, $2, $3)
         ON CONFLICT (control_id, standard_code)
         DO UPDATE SET
-          clause = COALESCE(EXCLUDED.clause, controls_catalog_standards.clause),
           is_primary = controls_catalog_standards.is_primary OR EXCLUDED.is_primary,
           updated_at = NOW()
         `,
-        [created.id, standardCode, clause || null, standardCode === iso]
+        [created.id, standardCode, standardCode === iso]
       );
     }
 
@@ -2158,17 +2153,15 @@ router.post('/catalog/copy/:control_id', auth, async (req, res) => {
         INSERT INTO controls_catalog_standards (
           control_id,
           standard_code,
-          clause,
           is_primary
         )
-        VALUES ($1, $2, $3, $4)
+        VALUES ($1, $2, $3)
         ON CONFLICT (control_id, standard_code)
         DO UPDATE SET
-          clause = COALESCE(EXCLUDED.clause, controls_catalog_standards.clause),
           is_primary = controls_catalog_standards.is_primary OR EXCLUDED.is_primary,
           updated_at = NOW()
         `,
-        [created.id, standardCode, values.clause, values.is_primary]
+        [created.id, standardCode, values.is_primary]
       );
     }
 
@@ -2267,29 +2260,26 @@ router.put('/catalog/custom/:id', auth, async (req, res) => {
           INSERT INTO controls_catalog_standards (
             control_id,
             standard_code,
-            clause,
             is_primary
           )
-          VALUES ($1, $2, $3, $4)
+          VALUES ($1, $2, $3)
           ON CONFLICT (control_id, standard_code)
           DO UPDATE SET
-            clause = COALESCE(EXCLUDED.clause, controls_catalog_standards.clause),
             is_primary = EXCLUDED.is_primary,
             updated_at = NOW()
           `,
-          [id, standardCode, clause ?? row.clause, standardCode === row.iso]
+          [id, standardCode, standardCode === row.iso]
         );
       }
     } else {
       await client.query(
         `
         UPDATE controls_catalog_standards
-        SET clause = $1,
-            updated_at = NOW()
-        WHERE control_id = $2
-          AND standard_code = $3
+        SET updated_at = NOW()
+        WHERE control_id = $1
+          AND standard_code = $2
         `,
-        [clause ?? row.clause, id, row.iso]
+        [id, row.iso]
       );
     }
 

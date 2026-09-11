@@ -1988,7 +1988,7 @@ async function listTargetCandidates({ user, targetType, search = '' }) {
             END,
             ''
           ),
-          NULLIF(COALESCE(std.display_clause, cc.clause), ''),
+          NULLIF(cc.clause, ''),
           NULLIF(COALESCE(op.name, tc.status, ''), '')
         ) AS subtitle
       FROM tenant_controls tc
@@ -1996,8 +1996,7 @@ async function listTargetCandidates({ user, targetType, search = '' }) {
       LEFT JOIN tenant_operations op ON op.id = tc.operation_id AND op.tenant_id = tc.tenant_id
       LEFT JOIN LATERAL (
         SELECT
-          array_agg(DISTINCT ccs.standard_code ORDER BY ccs.standard_code) AS valid_for_standards,
-          MAX(NULLIF(ccs.clause, '')) AS display_clause
+          array_agg(DISTINCT ccs.standard_code ORDER BY ccs.standard_code) AS valid_for_standards
         FROM controls_catalog_standards ccs
         WHERE ccs.control_id = cc.id
       ) std ON true

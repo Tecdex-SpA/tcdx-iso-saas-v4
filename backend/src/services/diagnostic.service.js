@@ -8,6 +8,7 @@ const pool = require('../config/db');
 const { buildRecommendationPayload } = require('./evidenceRecommendationEngine.service');
 const {
   effectiveCatalogPredicate,
+  standardMembershipPredicate,
 } = require('./controlCatalogLifecycle.service');
 
 const READ_ROLES = new Set([
@@ -179,6 +180,10 @@ async function getSchemaCapabilities() {
     processHasArea,
     processHasCriticality,
     processHasSortOrder,
+    findingHasDescription,
+    actionHasDescription,
+    actionHasPriority,
+    actionHasOwner,
   ] = await Promise.all([
     tableExists('iso_standard_versions'),
     tableExists('tenant_processes'),
@@ -196,6 +201,10 @@ async function getSchemaCapabilities() {
     columnExists('tenant_processes', 'area'),
     columnExists('tenant_processes', 'criticality'),
     columnExists('tenant_processes', 'sort_order'),
+    columnExists('findings', 'description'),
+    columnExists('action_plans', 'description'),
+    columnExists('action_plans', 'priority'),
+    columnExists('action_plans', 'owner'),
   ]);
 
   return {
@@ -215,6 +224,10 @@ async function getSchemaCapabilities() {
     processHasArea,
     processHasCriticality,
     processHasSortOrder,
+    findingHasDescription,
+    actionHasDescription,
+    actionHasPriority,
+    actionHasOwner,
   };
 }
 
@@ -314,6 +327,13 @@ function effectiveCatalogWhere() {
   `;
 }
 
+function standardMembershipWhere(standardCodeSql) {
+  return standardMembershipPredicate({
+    catalogAlias: 'cc',
+    standardCodeSql,
+  });
+}
+
 function appendAreaVisibility({ where, params, access, caps }) {
   if (!AREA_ROLES.has(access.role)) return;
 
@@ -368,7 +388,7 @@ async function loadControls({ tenantId, standard, user, filters = {}, caps }) {
   const params = [tenantId, standard.standard_code];
   const where = [
     'tc.tenant_id = $1::uuid',
-    'cc.iso = $2',
+    standardMembershipWhere('$2'),
     'cc.is_active IS DISTINCT FROM false',
     effectiveCatalogWhere(),
   ];
@@ -471,15 +491,15 @@ async function loadControls({ tenantId, standard, user, filters = {}, caps }) {
       ON cc.id = tc.control_id
     JOIN tenant_standards ts
       ON ts.tenant_id = tc.tenant_id
-     AND ts.standard_code = cc.iso
+     AND ts.standard_code = $2
      AND ts.is_active IS DISTINCT FROM false
-    JOIN tenant_operations op
+    LEFT JOIN tenant_operations op
       ON op.id = tc.operation_id
      AND op.tenant_id = tc.tenant_id
      AND op.is_active IS DISTINCT FROM false
-    JOIN tenant_standard_operations tso
+    LEFT JOIN tenant_standard_operations tso
       ON tso.tenant_id = tc.tenant_id
-     AND tso.standard_code = cc.iso
+     AND tso.standard_code = ts.standard_code
      AND tso.operation_id = tc.operation_id
      AND tso.is_active IS DISTINCT FROM false
     ${processJoin}
@@ -767,13 +787,21 @@ async function loadGaps(tenantId, controls) {
   return map;
 }
 
-async function loadFindings(tenantId, controls) {
+async function loadFindings(tenantId, controls, caps) {
   const map = new Map();
   if (!controls.length) return map;
 
   const result = await pool.query(
     `
-    SELECT id, tenant_control_id, title, description, severity, status, created_at, closed_at
+    SELECT
+      id,
+      tenant_control_id,
+      title,
+      ${caps.findingHasDescription ? 'description' : 'NULL::text AS description'},
+      severity,
+      status,
+      created_at,
+      closed_at
     FROM findings
     WHERE tenant_id = $1::uuid
       AND tenant_control_id = ANY($2::uuid[])
@@ -798,13 +826,23 @@ async function loadFindings(tenantId, controls) {
   return map;
 }
 
-async function loadActions(tenantId, controls) {
+async function loadActions(tenantId, controls, caps) {
   const map = new Map();
   if (!controls.length) return map;
 
   const result = await pool.query(
     `
-    SELECT id, tenant_control_id, title, description, priority, status, owner, due_date, created_at, completed_at
+    SELECT
+      id,
+      tenant_control_id,
+      title,
+      ${caps.actionHasDescription ? 'description' : 'NULL::text AS description'},
+      ${caps.actionHasPriority ? 'priority' : 'NULL::text AS priority'},
+      status,
+      ${caps.actionHasOwner ? 'owner' : 'NULL::text AS owner'},
+      due_date,
+      created_at,
+      completed_at
     FROM action_plans
     WHERE tenant_id = $1::uuid
       AND tenant_control_id = ANY($2::uuid[])
@@ -1133,8 +1171,8 @@ async function buildDiagnostic({ user, tenantId: requestedTenantId = null, stand
     loadSemanticSuggestions(tenantId, rawControls, caps),
     loadLegacySuggestions(tenantId, rawControls, caps),
     loadGaps(tenantId, rawControls),
-    loadFindings(tenantId, rawControls),
-    loadActions(tenantId, rawControls),
+    loadFindings(tenantId, rawControls, caps),
+    loadActions(tenantId, rawControls, caps),
     loadRisks(tenantId, rawControls, caps),
   ]);
 

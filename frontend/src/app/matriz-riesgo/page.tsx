@@ -597,7 +597,13 @@ function RiskMatrixPageContent() {
       const json = await res.json();
 
       if (!res.ok || json?.ok === false) {
-        throw new Error(json?.error || 'No fue posible cargar simulaciones operativas');
+        const disabled = res.status === 403 && (
+          json?.code === 'CAPABILITY_NOT_INCLUDED' ||
+          json?.reason_code === 'CAPABILITY_NOT_ENTITLED' ||
+          json?.reason_code === 'CAPABILITY_DISABLED' ||
+          json?.reason_code === 'MODULE_NOT_ACTIVE'
+        );
+        throw new Error(disabled ? 'Capacidad no habilitada para esta empresa.' : (json?.error || 'No fue posible cargar simulaciones operativas'));
       }
 
       const rows = Array.isArray(json?.data) ? json.data : [];
@@ -673,7 +679,13 @@ function RiskMatrixPageContent() {
       const json = await res.json();
 
       if (!res.ok || json?.ok === false) {
-        throw new Error(json?.error || 'No fue posible ejecutar la simulacion');
+        const disabled = res.status === 403 && (
+          json?.code === 'CAPABILITY_NOT_INCLUDED' ||
+          json?.reason_code === 'CAPABILITY_NOT_ENTITLED' ||
+          json?.reason_code === 'CAPABILITY_DISABLED' ||
+          json?.reason_code === 'MODULE_NOT_ACTIVE'
+        );
+        throw new Error(disabled ? 'Capacidad no habilitada para esta empresa.' : (json?.error || 'No fue posible ejecutar la simulacion'));
       }
 
       const createdSimulation = json?.data as OperationalRiskSimulation | undefined;

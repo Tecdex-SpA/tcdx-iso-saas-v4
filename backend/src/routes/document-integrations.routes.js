@@ -327,7 +327,7 @@ async function resolveTenantControlForDocumentSuggestion(client, {
         tc.operation_id,
         cc.iso,
         COALESCE(tac.standard_code, ccs.standard_code, cc.iso) AS standard_code,
-        COALESCE(tac.control_code, ccs.clause, cc.clause) AS clause,
+        COALESCE(tac.control_code, cc.clause) AS clause,
         COALESCE(tac.control_name, cc.description) AS control_description,
         cc.category,
         op.name AS operation_name,
@@ -374,16 +374,16 @@ async function resolveTenantControlForDocumentSuggestion(client, {
         tc.operation_id,
         cc.iso,
         COALESCE(tac.standard_code, ccs.standard_code, cc.iso) AS standard_code,
-        COALESCE(tac.control_code, ccs.clause, cc.clause) AS clause,
+        COALESCE(tac.control_code, cc.clause) AS clause,
         COALESCE(tac.control_name, cc.description) AS control_description,
         cc.category,
         op.name AS operation_name,
         op.code AS operation_code,
         op.operation_type,
         CASE
-          WHEN regexp_replace(upper(COALESCE(tac.control_code, ccs.clause, cc.clause, '')), '[^A-Z0-9.]', '', 'g') = regexp_replace(upper($3), '[^A-Z0-9.]', '', 'g') THEN 1
-          WHEN regexp_replace(upper(COALESCE(ccs.clause, cc.clause, '')), '[^A-Z0-9.]', '', 'g') = regexp_replace(upper($3), '[^A-Z0-9.]', '', 'g') THEN 2
-          WHEN length($3) >= 3 AND regexp_replace(upper(COALESCE(tac.control_code, ccs.clause, cc.clause, '')), '[^A-Z0-9.]', '', 'g') LIKE regexp_replace(upper($3), '[^A-Z0-9.]', '', 'g') || '%' THEN 8
+          WHEN regexp_replace(upper(COALESCE(tac.control_code, cc.clause, '')), '[^A-Z0-9.]', '', 'g') = regexp_replace(upper($3), '[^A-Z0-9.]', '', 'g') THEN 1
+          WHEN regexp_replace(upper(COALESCE(cc.clause, '')), '[^A-Z0-9.]', '', 'g') = regexp_replace(upper($3), '[^A-Z0-9.]', '', 'g') THEN 2
+          WHEN length($3) >= 3 AND regexp_replace(upper(COALESCE(tac.control_code, cc.clause, '')), '[^A-Z0-9.]', '', 'g') LIKE regexp_replace(upper($3), '[^A-Z0-9.]', '', 'g') || '%' THEN 8
           WHEN length($5) >= 8 AND lower(COALESCE(tac.control_name, cc.description, '')) LIKE '%' || lower($5) || '%' THEN 9
           ELSE 99
         END AS match_priority

@@ -1092,13 +1092,13 @@ async function recalculateTenantKpis(req, res) {
   try {
     await client.query('BEGIN');
 
-    const refreshKpiHealthRes = await client.query(
-      `
-      SELECT *
-      FROM refresh_kpi_health_snapshots($1::uuid)
-      `,
-      [tenantId]
-    );
+    const refreshKpiHealthRes = {
+      rows: [{
+        tenant_id: tenantId,
+        refresh_mode: 'canonical_health_projection_read_only',
+        legacy_function_removed: true,
+      }],
+    };
 
     await client.query(
       `

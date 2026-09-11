@@ -54,6 +54,7 @@ Backend Node/Express
         |      + TCDX SaaSv2 fresh runtime closeout local: la migracion forward-only `20260910_tcdx_saasv2_fresh_runtime_contract_closeout` agrega el contrato fisico activo de perfil, Admin SaaS, RBAC SQL, dealers, modulos, contratos, catalogo comercial administrable, prefacturacion, external lookup y auditoria; no reabre baseline, no replay historico, no `DROP VIEW ... CASCADE` y no seed de precios/cuota default
         |      + TCDX commercial runtime integral closeout local: la migracion forward-only `20260910_tcdx_commercial_runtime_integral_closeout` cubre `tenant_standard_audit`, perfil/aplicabilidad tenant, enlaces documento-objeto, `findings.due_date` y `tenant_subscription_addons.tenant_id`; audit/report normalizan estados inline sin depender de `normalize_status_for_audits(text)` y search history degrada seguro si su tabla opcional no existe
         |      + TCDX control lifecycle closeout local: `controls_catalog.tenant_id IS NULL` es catalogo global, same-tenant es catalogo tenant y `source_type` queda como provenance; `initialize-controls` y `public.tcdx_effective_control_catalog(uuid,text,text)` materializan `tenant_controls` + `tenant_applicable_controls` idempotentes para Dashboard, Diagnostico, `/controles`, Tenant Standards y consumidores downstream sin fabricar Health scores
+        |      + TCDX post-lifecycle runtime consumers closeout local: consumidores posteriores al lifecycle leen clausula desde `controls_catalog.clause`, no desde `controls_catalog_standards`; Diagnostico usa pertenencia normativa efectiva y columnas opcionales nulas; Health ISO consume vistas tenant-scoped materializadas sobre `v_iso_control_effective_health`, aplicabilidad, evidencias, hallazgos, acciones y audit logs; `refresh_kpi_health_snapshots` queda fuera del runtime fresh; runner preflight pending no exige vistas que todavia no existen
         |
         +--> Commercial product authority
         |      + `commercial_plans`, `commercial_plan_versions`
@@ -130,6 +131,7 @@ Backend Node/Express
                + Operational Learning (`recommendation-decision-ledger-v1`, `effectiveness-feedback-loop-v1`, `operational-memory-v1`)
                + AI Governance (`ai-governance-contract-v1`, `ai-capability-registry-v1`, `ai-policy-boundaries-v1`)
                + AI Evaluation Suite (`ai-evaluation-suite-v1`)
+               + AI Compliance engine-health reports contractual states (`healthy`, `feature_disabled`, `engine_unavailable`, `db_unavailable`) without converting disabled features into 500; protected AI Compliance operations still require auth, tenant isolation, RBAC `ai.view` and `ai.compliance` capability
                + deterministic fallback/audit traces
                + non-blocking Intelligence Brief: deterministic base response first, tenant-scoped cache/dedupe, background AI narrative refresh, safe fallback observability
                     |

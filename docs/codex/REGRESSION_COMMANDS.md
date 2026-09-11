@@ -44,6 +44,11 @@ Este archivo registra comandos reutilizables. Codex NO ejecuta automáticamente 
 | Fresh baseline runtime dependency checker with DB probes | `MIGRATION_DATABASE_URL="$DATABASE_URL" node scripts/normalization/check-fresh-baseline-runtime-dependencies.js --mutation-probes` | authorized clone/staging DB only | MANUAL_AFTER_HUMAN_REVIEW |
 | Control lifecycle systemic closeout isolated PostgreSQL | `node scripts/normalization/apply-tcdx-control-lifecycle-systemic-closeout.test.js` | repo root | VERIFIED_LOCAL/TCDX-CONTROL-LIFECYCLE-SYSTEMIC-CLOSEOUT |
 | Control lifecycle systemic closeout migration checksum | `node scripts/normalization/apply-tcdx-control-lifecycle-systemic-closeout.js --checksum` | repo root | VERIFIED_LOCAL/TCDX-CONTROL-LIFECYCLE-SYSTEMIC-CLOSEOUT |
+| Post-lifecycle runtime consumers isolated PostgreSQL | `node scripts/normalization/apply-tcdx-post-lifecycle-runtime-consumers-systemic-closeout.test.js` | repo root | VERIFIED_LOCAL/TCDX-POST-LIFECYCLE-RUNTIME-CONSUMERS-SYSTEMIC-CLOSEOUT |
+| Post-lifecycle runtime consumers migration checksum | `node scripts/normalization/apply-tcdx-post-lifecycle-runtime-consumers-systemic-closeout.js --checksum` | repo root | VERIFIED_LOCAL/TCDX-POST-LIFECYCLE-RUNTIME-CONSUMERS-SYSTEMIC-CLOSEOUT |
+| Post-lifecycle AI Compliance RBAC focal | `node backend/src/routes/ai-compliance.rbac.test.js` | repo root | VERIFIED_LOCAL/TCDX-POST-LIFECYCLE-RUNTIME-CONSUMERS-SYSTEMIC-CLOSEOUT |
+| Post-lifecycle tenant processes degradation focal | `node backend/src/services/tenantProcesses.service.test.js` | repo root | VERIFIED_LOCAL/TCDX-POST-LIFECYCLE-RUNTIME-CONSUMERS-SYSTEMIC-CLOSEOUT |
+| Post-lifecycle runtime consumers preflight/apply | `MIGRATION_DATABASE_URL="$DATABASE_URL" node scripts/normalization/apply-tcdx-post-lifecycle-runtime-consumers-systemic-closeout.js --preflight` then human-approved `--apply` | authorized clone/staging DB only | MANUAL_AFTER_HUMAN_REVIEW |
 
 Regla de ahorro:
 - máximo 1 test focal rápido por prompt cuando aporte valor;

@@ -205,6 +205,8 @@ const aiContextBuilder = require('../services/aiContextBuilder.service');
 const aiEngineClient = require('../services/aiEngineClient.service');
 const { createAiTimer, resolveAiMode } = require('../services/aiRuntimeMetrics.service');
 const { isTenantAiFeatureEnabled } = require('../services/tenantAiSettings.service');
+const { resolveCapability } = require('../services/commercial/entitlementResolver.service');
+const { TenantResolutionError, resolveEffectiveTenant } = require('../utils/effectiveTenant');
 const intelligenceService = require('../services/intelligence/intelligence.service');
 const {
   buildReducedIntelligenceBriefForAiCompliance,
@@ -260,7 +262,89 @@ function normalizeRole(role) {
 function isPlatformRole(role) {
   const normalized = normalizeRole(role);
 
-  return isPlatformRole(normalized);
+  return isCanonicalPlatformRole(normalized);
+}
+
+function isInternalAiUser(user) {
+  return normalizeRole(user?.role || user?.user_role || user?.userRole) === 'internal_ai';
+}
+
+function shouldSkipAiComplianceReadGate(req) {
+  return String(req?.path || '').split('?')[0] === '/engine-health' || isInternalAiUser(req?.user);
+}
+
+function aiComplianceAccessDeniedPayload(decision, req) {
+  const reasonCode = decision?.reason_code || 'CAPABILITY_DENIED';
+  const permissionDenied = reasonCode === 'RBAC_PERMISSION_REQUIRED';
+  return {
+    ok: false,
+    code: permissionDenied ? 'PERMISSION_DENIED' : 'CAPABILITY_NOT_INCLUDED',
+    reason_code: reasonCode,
+    error: permissionDenied
+      ? 'Permiso requerido para operar IA Compliance.'
+      : 'IA Compliance no esta habilitada para esta empresa.',
+    capability_key: decision?.capability_key || 'ai.compliance',
+    decision: decision?.decision || 'denied',
+    source: decision?.source || null,
+    request_id: req?.requestId || null,
+  };
+}
+
+function buildFeatureDisabledEngineHealthPayload({ entitlement = {}, req = null } = {}) {
+  return {
+    ok: true,
+    status: 'feature_disabled',
+    locale: resolveLocale(req),
+    data: {
+      ok: false,
+      service: 'ai-engine',
+      state: 'feature_disabled',
+      db_connection: null,
+      backend_db_connection: null,
+      degraded: true,
+      ai_disabled_by_plan: true,
+      ai_disabled_reason: entitlement.reason,
+      capability_key: entitlement.capability_key || 'ai.compliance',
+    },
+  };
+}
+
+function createAiComplianceReadGate({
+  resolveEffectiveTenantFn = resolveEffectiveTenant,
+  resolveCapabilityFn = resolveCapability,
+} = {}) {
+  return async function aiComplianceReadGate(req, res, next) {
+    try {
+      if (shouldSkipAiComplianceReadGate(req)) return next();
+
+      const tenantId = await resolveEffectiveTenantFn(req, { required: true });
+      const decision = await resolveCapabilityFn({
+        tenantId,
+        user: req.user,
+        capabilityKey: 'ai.compliance',
+        requiredPermission: 'ai.view',
+        mode: 'read',
+      });
+
+      res.locals = res.locals || {};
+      res.locals.aiComplianceCapabilityDecision = decision;
+
+      if (decision.enabled === true && decision.decision === 'allowed') return next();
+
+      return res.status(403).json(aiComplianceAccessDeniedPayload(decision, req));
+    } catch (error) {
+      if (error instanceof TenantResolutionError || error?.name === 'TenantResolutionError') {
+        return res.status(error.status || 403).json({
+          ok: false,
+          code: error.code,
+          error: error.message,
+          details: error.details || undefined,
+          request_id: req.requestId || null,
+        });
+      }
+      return next(error);
+    }
+  };
 }
 
 function resolveTenantId(req) {
@@ -281,13 +365,17 @@ function resolveTenantId(req) {
 
 router.use(auth, async (req, res, next) => {
   try {
-    const role = normalizeRole(req.user?.role || req.user?.user_role || req.user?.userRole);
-    if (role === 'internal_ai') {
+    if (isInternalAiUser(req.user)) {
       return next();
     }
 
     const tenantId = resolveTenantId(req);
     const entitlement = await isTenantAiFeatureEnabled(tenantId, 'suggestions');
+    res.locals.aiComplianceEntitlement = entitlement;
+
+    if (!entitlement.enabled && req.path === '/engine-health') {
+      return next();
+    }
 
     if (!entitlement.enabled) {
       return res.status(403).json({
@@ -317,6 +405,8 @@ router.use(auth, async (req, res, next) => {
     return next(error);
   }
 });
+
+router.use(createAiComplianceReadGate());
 
 function normalizePriority(value) {
   const raw = String(value || '').toLowerCase().trim();
@@ -1930,10 +2020,25 @@ async function createDraftActionPlanFromSuggestion(tenantId, suggestion) {
 
 router.get('/engine-health', auth, async (req, res) => {
   try {
+    const tenantId = resolveTenantId(req);
+    const entitlement =
+      res.locals.aiComplianceEntitlement ||
+      await isTenantAiFeatureEnabled(tenantId, 'suggestions');
+
+    if (!entitlement.enabled) {
+      return res.json(buildFeatureDisabledEngineHealthPayload({ entitlement, req }));
+    }
+
     const health = await getRobustAiComplianceEngineHealth();
+    const engineState = health?.data?.ok === true
+      ? 'healthy'
+      : health?.data?.backend_db_connection === false
+        ? 'db_unavailable'
+        : 'engine_unavailable';
 
     return res.json({
       ...health,
+      status: engineState,
       locale: resolveLocale(req),
     });
   } catch (error) {
@@ -3570,5 +3675,12 @@ router.post('/apply/nonconformity-draft-to-action-plan', auth, async (req, res) 
     client.release();
   }
 });
+
+router._private = {
+  aiComplianceAccessDeniedPayload,
+  buildFeatureDisabledEngineHealthPayload,
+  createAiComplianceReadGate,
+  shouldSkipAiComplianceReadGate,
+};
 
 module.exports = router;

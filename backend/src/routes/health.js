@@ -1745,20 +1745,21 @@ router.post('/refresh', async (req, res) => {
 
     await client.query('BEGIN');
 
-    const cleanupAfterHealth = await client.query(
-      `SELECT * FROM cleanup_inactive_health_scope($1::uuid)`,
-      [finalTenantId]
-    );
+    const cleanupAfterHealth = { rows: [] };
 
     const kpiResult = await client.query(
-      `SELECT * FROM refresh_kpi_health_snapshots($1::uuid)`,
+      `
+      SELECT
+        COUNT(*)::int AS health_rows,
+        COUNT(*) FILTER (WHERE effective_health_score IS NOT NULL)::int AS health_scored,
+        COUNT(*) FILTER (WHERE effective_health_score IS NULL)::int AS health_without_score
+      FROM public.v_iso_control_effective_health
+      WHERE ($1::uuid IS NULL OR tenant_id = $1::uuid)
+      `,
       [finalTenantId]
     );
 
-    const cleanupAfterKpis = await client.query(
-      `SELECT * FROM cleanup_inactive_health_scope($1::uuid)`,
-      [finalTenantId]
-    );
+    const cleanupAfterKpis = { rows: [] };
 
     await client.query('COMMIT');
 

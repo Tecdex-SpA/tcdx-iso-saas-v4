@@ -396,7 +396,7 @@ app.use('/api/admin-saas', adminSaasRoutes);
 app.use('/api/me', meModulesRoutes);
 app.use('/api/ai-compliance/answer', requireCommercialCapability('ai.compliance', { requiredPermission: 'ai.view' }), aiAnswerRoutes);
 app.use('/api/ai-compliance/benchmark', aiBenchmarkRoutes);
-app.use('/api/ai-compliance', requireCommercialCapability('ai.compliance', { requiredPermission: 'ai.view' }), aiComplianceRoutes);
+app.use('/api/ai-compliance', aiComplianceRoutes);
 app.use('/api/ai-compliance/knowledge', aiKnowledgeRoutes);
 app.use('/api/iso-knowledge', isoKnowledgeRoutes);
 app.use('/api/iso-control-mapping', isoControlMappingRoutes);
