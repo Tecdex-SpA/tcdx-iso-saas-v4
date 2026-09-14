@@ -148,7 +148,11 @@ Backend Node/Express
                       explicit insufficient-evidence/human-review output; contexts
                       with operational evidence require generic claims with
                       authorized source_refs before being treated as grounded
-                    + context building
+                    + canonical context building over current `ai_core` views:
+                      tenant/KPI health as published metric snapshots, controls by
+                      tenant/control/catalog identity plus `implementation_status`,
+                      app-derived implementation buckets, no legacy context columns
+                      and no cross-tenant fallback
                     + trusted external lookup
 ```
 

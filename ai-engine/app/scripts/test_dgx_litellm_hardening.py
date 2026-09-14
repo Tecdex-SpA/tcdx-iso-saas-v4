@@ -317,5 +317,254 @@ class DgxLiteLlmHardeningTests(unittest.TestCase):
         self.assertEqual(action_response["confidence"], "alta")
 
 
+class AiContextCanonicalSchemaTests(unittest.TestCase):
+    TENANT_A = "11111111-1111-1111-1111-111111111111"
+    TENANT_B = "22222222-2222-2222-2222-222222222222"
+    CONTROL_A = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+    CATALOG_A = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
+    FINDING_A = "cccccccc-cccc-cccc-cccc-cccccccccccc"
+
+    def _install_context_builder_db_fake(self, context_builder):
+        captured = []
+        forbidden_sql_terms = (
+            "tenant_name",
+            "total_controls",
+            "healthy_controls",
+            "attention_controls,",
+            "deteriorated_controls",
+            "total_evidences",
+            "total_findings",
+            "total_action_plans",
+            "healthy_percentage",
+            "control_code",
+            "control_title",
+            "control_description",
+            "control_category",
+            "health_status",
+            "responsible_user_id",
+            "last_reviewed_at",
+            "due_date",
+            "priority",
+            "applicability",
+            "evidence_count",
+            "finding_count",
+            "action_plan_count",
+            "kpi_snapshot_id",
+            "kpi_code",
+            "kpi_name",
+            "status_color",
+            "calculated_at",
+        )
+
+        def fake_fetch_all(sql, params=None):
+            sql_lower = " ".join(sql.lower().split())
+            for term in forbidden_sql_terms:
+                self.assertNotIn(term, sql_lower)
+            captured.append({"sql": sql, "params": list(params or [])})
+
+            if "ai_core.v_tenant_health_context" in sql:
+                self.assertIn("tenant_id = %s::uuid", sql)
+                self.assertNotIn("standard_code = %s", sql)
+                return [
+                    {
+                        "tenant_id": self.TENANT_A,
+                        "metric_code": "F5_5_GRC_HEALTH",
+                        "numeric_value": 82,
+                        "publication_state": "published",
+                        "coverage": 0.91,
+                        "effective_at": "2026-09-14T10:00:00Z",
+                    }
+                ]
+
+            if "ai_core.v_control_context" in sql:
+                self.assertIn("tenant_id = %s::uuid", sql)
+                rows = [
+                    {
+                        "tenant_id": self.TENANT_A,
+                        "tenant_control_id": self.CONTROL_A,
+                        "catalog_control_id": self.CATALOG_A,
+                        "code": "A.5.1",
+                        "title": "Control de prueba",
+                        "standard_code": "ISO27001",
+                        "implementation_status": "not_implemented",
+                    },
+                    {
+                        "tenant_id": self.TENANT_A,
+                        "tenant_control_id": "dddddddd-dddd-dddd-dddd-dddddddddddd",
+                        "catalog_control_id": "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee",
+                        "code": "A.5.2",
+                        "title": "Control parcial",
+                        "standard_code": "ISO27001",
+                        "implementation_status": "partial",
+                    },
+                    {
+                        "tenant_id": self.TENANT_B,
+                        "tenant_control_id": "ffffffff-ffff-ffff-ffff-ffffffffffff",
+                        "catalog_control_id": "abababab-abab-abab-abab-abababababab",
+                        "code": "B.1",
+                        "title": "Control otro tenant",
+                        "standard_code": "ISO27001",
+                        "implementation_status": "not_implemented",
+                    },
+                ]
+                return [row for row in rows if row["tenant_id"] == self.TENANT_A]
+
+            if "ai_core.v_finding_context" in sql:
+                return [
+                    {
+                        "tenant_id": self.TENANT_A,
+                        "finding_id": self.FINDING_A,
+                        "tenant_control_id": self.CONTROL_A,
+                        "title": "Hallazgo canónico",
+                        "severity": "alta",
+                        "status": "open",
+                        "created_at": "2026-09-14T11:00:00Z",
+                    }
+                ]
+
+            if "ai_core.v_kpi_context" in sql:
+                self.assertNotIn("standard_code = %s", sql)
+                return [
+                    {
+                        "tenant_id": self.TENANT_A,
+                        "metric_code": "F5_5_CONTROL_EFFECTIVENESS",
+                        "numeric_value": 70,
+                        "publication_state": "published",
+                        "coverage": 0.75,
+                        "effective_at": "2026-09-14T12:00:00Z",
+                    }
+                ]
+
+            return []
+
+        original_fetch_all = context_builder.fetch_all
+        context_builder.fetch_all = fake_fetch_all
+        return captured, original_fetch_all
+
+    def test_context_builder_uses_canonical_health_and_control_shapes(self):
+        from app.services import context_builder
+
+        captured, original_fetch_all = self._install_context_builder_db_fake(context_builder)
+        try:
+            context = context_builder.build_context_pack(
+                tenant_id=self.TENANT_A,
+                entity_type="control",
+                entity_id=self.CONTROL_A,
+                standard_code="ISO27001",
+            )
+        finally:
+            context_builder.fetch_all = original_fetch_all
+
+        self.assertEqual(context["tenant_id"], self.TENANT_A)
+        self.assertEqual(context["scope_status"], "tenant_scoped")
+        self.assertTrue(context["tenant_scope_authorized"])
+        self.assertTrue(context["provenance"]["no_cross_tenant_fallback"])
+        self.assertEqual(context["tenant_health"][0]["metric_code"], "F5_5_GRC_HEALTH")
+        self.assertNotIn("standard_code", context["tenant_health"][0])
+        self.assertEqual(context["critical_controls"][0]["code"], "A.5.1")
+        self.assertEqual(context["critical_controls"][0]["context_bucket"], "implementation_gap")
+        self.assertEqual(context["attention_controls"][0]["context_bucket"], "implementation_attention")
+        self.assertEqual(context["selected_control"][0]["tenant_control_id"], self.CONTROL_A)
+        serialized = json.dumps(context, ensure_ascii=False)
+        self.assertNotIn(self.TENANT_B, serialized)
+        self.assertGreaterEqual(len(captured), 5)
+
+    def test_context_builder_filters_tenant_control_standard_without_legacy_columns(self):
+        from app.services import context_builder
+
+        captured, original_fetch_all = self._install_context_builder_db_fake(context_builder)
+        try:
+            rows = context_builder.get_control_context(
+                tenant_id=self.TENANT_A,
+                tenant_control_id=self.CONTROL_A,
+                standard_code="ISO27001",
+                limit=5,
+            )
+        finally:
+            context_builder.fetch_all = original_fetch_all
+
+        self.assertEqual(rows[0]["tenant_id"], self.TENANT_A)
+        self.assertEqual(rows[0]["tenant_control_id"], self.CONTROL_A)
+        self.assertEqual(rows[0]["catalog_control_id"], self.CATALOG_A)
+        self.assertEqual(rows[0]["code"], "A.5.1")
+        self.assertEqual(rows[0]["title"], "Control de prueba")
+        sql = captured[-1]["sql"]
+        self.assertIn("tenant_id = %s::uuid", sql)
+        self.assertIn("tenant_control_id = %s::uuid", sql)
+        self.assertIn("standard_code = %s", sql)
+
+    def test_context_builder_requires_tenant_scope_without_querying_db(self):
+        from app.services import context_builder
+
+        captured = []
+        original_fetch_all = context_builder.fetch_all
+        context_builder.fetch_all = lambda *args, **kwargs: captured.append(args) or []
+        try:
+            context = context_builder.build_context_pack()
+        finally:
+            context_builder.fetch_all = original_fetch_all
+
+        self.assertFalse(captured)
+        self.assertFalse(context["tenant_scope_authorized"])
+        self.assertEqual(context["warnings"], ["tenant_scope_required"])
+        self.assertTrue(context["provenance"]["no_cross_tenant_fallback"])
+
+    def test_guided_adapters_continue_without_500_with_canonical_context_shape(self):
+        from app.services import guided_endpoint_adapter as adapter
+
+        canonical_guided = {
+            "ok": True,
+            "engine": "tcdx_guided_solution_v2_domain_aware",
+            "classification": {"problem_type_code": "missing_evidence", "confidence": 0.86},
+            "domain_detection": {"domain_code": "evidence_management"},
+            "problem": {
+                "code": "missing_evidence",
+                "name": "Evidencia faltante",
+                "severity": "media",
+                "priority_weight": 50,
+            },
+            "context_summary": {
+                "tenant_health": "F5_5_GRC_HEALTH: valor 82, publicación published, cobertura 0.91.",
+                "signals": ["Contexto canónico disponible."],
+            },
+            "solution": {
+                "problem_detected": "Falta evidencia objetiva.",
+                "compliance_impact": "Requiere revisión humana antes de cualquier decisión de cumplimiento.",
+                "solution_summary": "Solicitar evidencia trazable.",
+                "concrete_actions": ["Solicitar evidencia"],
+                "corrective_actions": ["Adjuntar registro aprobado"],
+                "expected_deliverables": ["Registro aprobado"],
+                "minimum_content": ["Fecha", "Responsable"],
+                "accepted_formats": ["PDF"],
+                "invalid_evidence": ["Captura sin fecha"],
+                "closure_conditions": ["Evidencia revisada"],
+                "validation_criteria": ["Validación por responsable"],
+                "rejection_reasons": ["Evidencia insuficiente"],
+                "health_impact": "No se modifica Health sin evidencia.",
+                "kpi_impact": "No se modifica KPI sin evidencia.",
+                "next_best_action": "Solicitar evidencia trazable.",
+            },
+        }
+        payload = {
+            "tenant_id": self.TENANT_A,
+            "iso_code": "ISO27001",
+            "title": "Falta evidencia de control",
+            "description": "No existe evidencia objetiva del periodo actual.",
+            "severity": "alta",
+        }
+
+        with patch.object(adapter, "_safe_legacy_call", return_value={"ok": True}), \
+             patch.object(adapter, "generate_guided_solution", return_value=canonical_guided):
+            finding = adapter.generate_finding_analysis(payload)
+            action = adapter.generate_action_plan(payload)
+
+        self.assertTrue(finding["ok"])
+        self.assertTrue(action["ok"])
+        self.assertEqual(finding["source"], "ai-engine-guided-v2")
+        self.assertEqual(action["source"], "ai-engine-guided-v2")
+        self.assertEqual(finding["confidence"], 0.86)
+        self.assertEqual(action["confidence"], 0.86)
+
+
 if __name__ == "__main__":
     unittest.main()

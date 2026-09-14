@@ -39,6 +39,15 @@ def _merge_lists(primary: Any, secondary: Any, max_items: int = 12) -> List[Any]
     return out
 
 
+def _number_or_none(value: Any) -> Optional[float]:
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
 
 
 def _override_content(domain_knowledge: Dict[str, Any]) -> Dict[str, Any]:
@@ -70,23 +79,19 @@ def _summarize_tenant_health(context: Dict[str, Any]) -> str:
     health_rows = context.get("tenant_health") or []
 
     if not health_rows:
-        return "No se encontró resumen de salud del tenant en el contexto disponible."
+        return "No se encontraron métricas publicadas del tenant en el contexto disponible."
 
     parts = []
 
     for row in health_rows[:5]:
-        standard = row.get("standard_code") or "norma no informada"
-        total = row.get("total_controls") or 0
-        healthy = row.get("healthy_controls") or 0
-        attention = row.get("attention_controls") or 0
-        deteriorated = row.get("deteriorated_controls") or 0
-        percentage = row.get("healthy_percentage")
+        metric_code = row.get("metric_code") or "métrica no informada"
+        numeric_value = row.get("numeric_value")
+        publication_state = row.get("publication_state") or "estado no informado"
+        coverage = row.get("coverage")
 
-        parts.append(
-            f"{standard}: {total} controles; {healthy} saludables, "
-            f"{attention} en atención y {deteriorated} deteriorados"
-            + (f"; salud {percentage}%." if percentage is not None else ".")
-        )
+        value_text = "valor no informado" if numeric_value is None else f"valor {numeric_value}"
+        coverage_text = "" if coverage is None else f", cobertura {coverage}"
+        parts.append(f"{metric_code}: {value_text}, publicación {publication_state}{coverage_text}.")
 
     return " ".join(parts)
 
@@ -101,27 +106,12 @@ def _detect_contextual_signals(context: Dict[str, Any]) -> List[str]:
 
     if critical_controls:
         signals.append(
-            f"Existen {len(critical_controls)} controles deteriorados relevantes en el contexto consultado."
+            f"Existen {len(critical_controls)} controles con estado de implementación crítico o no implementado en el contexto consultado."
         )
 
-    controls_without_evidence = [
-        c for c in critical_controls + attention_controls
-        if int(c.get("evidence_count") or 0) == 0
-    ]
-
-    if controls_without_evidence:
+    if attention_controls:
         signals.append(
-            f"Se detectaron {len(controls_without_evidence)} controles sin evidencia asociada."
-        )
-
-    controls_with_findings = [
-        c for c in critical_controls + attention_controls
-        if int(c.get("finding_count") or 0) > 0
-    ]
-
-    if controls_with_findings:
-        signals.append(
-            f"Hay {len(controls_with_findings)} controles con hallazgos asociados."
+            f"Existen {len(attention_controls)} controles con implementación parcial, pendiente o en revisión."
         )
 
     if recent_findings:
@@ -129,14 +119,14 @@ def _detect_contextual_signals(context: Dict[str, Any]) -> List[str]:
             f"El contexto contiene {len(recent_findings)} hallazgos recientes o relacionados."
         )
 
-    negative_kpis = [
+    partial_coverage_metrics = [
         k for k in recent_kpis
-        if str(k.get("status_color") or "").lower() in {"red", "rojo", "critical", "deteriorado"}
+        if (coverage := _number_or_none(k.get("coverage"))) is not None and coverage < 1
     ]
 
-    if negative_kpis:
+    if partial_coverage_metrics:
         signals.append(
-            f"Se detectaron {len(negative_kpis)} KPIs con estado negativo o crítico."
+            f"Se detectaron {len(partial_coverage_metrics)} métricas publicadas con cobertura parcial."
         )
 
     return signals
@@ -436,35 +426,26 @@ def generate_executive_recommendations(
     priorities = []
 
     for control in critical_controls[:5]:
-        evidence_count = int(control.get("evidence_count") or 0)
-        finding_count = int(control.get("finding_count") or 0)
-
-        if evidence_count == 0:
-            priorities.append({
-                "type": "control",
-                "priority": "alta",
-                "title": control.get("control_title") or control.get("control_description") or control.get("control_code") or "Control deteriorado sin evidencia",
-                "reason": "El control está deteriorado y no tiene evidencia objetiva asociada.",
-                "recommended_action": "Solicitar evidencia vigente con fecha, responsable, resultado y aprobación.",
-            })
-        elif finding_count > 0:
-            priorities.append({
-                "type": "control",
-                "priority": "alta",
-                "title": control.get("control_title") or control.get("control_description") or control.get("control_code") or "Control con hallazgos",
-                "reason": "El control está deteriorado y mantiene hallazgos asociados.",
-                "recommended_action": "Crear o actualizar plan de acción con evidencia de cierre y validación.",
-            })
+        priorities.append({
+            "type": "control",
+            "priority": "alta",
+            "title": control.get("title") or control.get("code") or "Control con brecha de implementación",
+            "reason": (
+                "El contexto canónico informa un estado de implementación crítico "
+                f"o no implementado: {control.get('implementation_status') or 'sin estado informado'}."
+            ),
+            "recommended_action": "Revisar la causa, definir responsable y solicitar evidencia objetiva antes de cerrar la brecha.",
+        })
 
     for kpi in recent_kpis[:5]:
-        status_color = str(kpi.get("status_color") or "").lower()
-        if status_color in {"red", "rojo", "critical", "deteriorado"}:
+        coverage = _number_or_none(kpi.get("coverage"))
+        if coverage is not None and coverage < 1:
             priorities.append({
                 "type": "kpi",
                 "priority": "media",
-                "title": kpi.get("kpi_name") or kpi.get("kpi_code") or "KPI deteriorado",
-                "reason": "El KPI presenta estado negativo o crítico.",
-                "recommended_action": "Identificar controles, evidencias o acciones que están arrastrando el indicador antes de modificar el valor.",
+                "title": kpi.get("metric_code") or "Métrica con cobertura parcial",
+                "reason": "La métrica publicada informa cobertura parcial en el contexto autorizado.",
+                "recommended_action": "Validar cobertura, fuente y periodo antes de usar la métrica como base de decisión.",
             })
 
     if not priorities and attention_controls:
@@ -472,8 +453,8 @@ def generate_executive_recommendations(
             "type": "health",
             "priority": "media",
             "title": "Controles en atención",
-            "reason": "Existen controles que aún requieren evidencia, seguimiento o validación.",
-            "recommended_action": "Priorizar controles en atención sin evidencia o con fecha de revisión vencida.",
+            "reason": "Existen controles con implementación parcial, pendiente o en revisión.",
+            "recommended_action": "Priorizar revisión de estado, responsable, causa y evidencia disponible antes de tomar decisiones de cierre.",
         })
 
     if not priorities:

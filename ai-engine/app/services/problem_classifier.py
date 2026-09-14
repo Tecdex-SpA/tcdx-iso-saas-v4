@@ -152,22 +152,22 @@ def classify_problem(
         recent_findings = context.get("recent_findings") or []
 
         if critical_controls:
-            scores.append(("control_not_executed", 1, ["contexto: controles deteriorados"]))
+            scores.append(("control_not_executed", 1, ["contexto: controles con brecha de implementación"]))
 
             for control in critical_controls:
-                evidence_count = int(control.get("evidence_count") or 0)
-                finding_count = int(control.get("finding_count") or 0)
-
-                if evidence_count == 0:
-                    scores.append(("missing_evidence", 3, ["contexto: control sin evidencias"]))
-                if finding_count > 0:
-                    scores.append(("finding_open", 2, ["contexto: control con hallazgos"]))
+                implementation_status = _normalize_text(control.get("implementation_status"))
+                if implementation_status:
+                    scores.append((
+                        "control_not_executed",
+                        1,
+                        [f"contexto: estado implementación {implementation_status}"],
+                    ))
 
         if recent_kpis:
             for kpi in recent_kpis:
-                status_color = _normalize_text(kpi.get("status_color"))
-                if status_color in {"red", "rojo", "critical", "deteriorado"}:
-                    scores.append(("kpi_deteriorated", 3, ["contexto: KPI en rojo"]))
+                publication_state = _normalize_text(kpi.get("publication_state"))
+                if publication_state and publication_state not in {"published", "publicado"}:
+                    scores.append(("kpi_deteriorated", 1, ["contexto: métrica no publicada"]))
 
         if recent_findings:
             for finding in recent_findings:

@@ -4,6 +4,89 @@ from app.services.ai_core_db import fetch_all, fetch_one
 
 CANONICAL_INTELLIGENCE_CONTEXT_CONTRACT_VERSION = "canonical-intelligence-context-v1"
 
+CONTROL_IMPLEMENTATION_CRITICAL_STATUSES = {
+    "not_implemented",
+    "no_implementado",
+    "not implemented",
+    "failed",
+    "failure",
+    "non_compliant",
+    "non-compliant",
+    "no_conforme",
+    "incumplido",
+    "deteriorado",
+    "critical",
+}
+
+CONTROL_IMPLEMENTATION_ATTENTION_STATUSES = {
+    "partial",
+    "partially_implemented",
+    "parcial",
+    "in_progress",
+    "in progress",
+    "en_progreso",
+    "pendiente",
+    "pending",
+    "atencion",
+    "atención",
+    "warning",
+    "requires_review",
+}
+
+
+def _canonical_int_limit(limit: int, default: int = 20, maximum: int = 100) -> int:
+    try:
+        normalized = int(limit)
+    except (TypeError, ValueError):
+        normalized = default
+    return max(1, min(normalized, maximum))
+
+
+def _normalize_status(value: Any) -> str:
+    return str(value or "").strip().lower()
+
+
+def _control_context_bucket(row: Dict[str, Any]) -> str:
+    status = _normalize_status(row.get("implementation_status"))
+    if status in CONTROL_IMPLEMENTATION_CRITICAL_STATUSES:
+        return "implementation_gap"
+    if status in CONTROL_IMPLEMENTATION_ATTENTION_STATUSES:
+        return "implementation_attention"
+    return "implementation_context"
+
+
+def _with_control_bucket(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    enriched: List[Dict[str, Any]] = []
+    for row in rows:
+        enriched.append({
+            **row,
+            "context_bucket": _control_context_bucket(row),
+            "context_bucket_source": "implementation_status",
+        })
+    return enriched
+
+
+def _filter_controls_by_context_bucket(
+    rows: List[Dict[str, Any]],
+    context_bucket_filter: Optional[str],
+    limit: int,
+) -> List[Dict[str, Any]]:
+    if not context_bucket_filter:
+        return rows[:limit]
+
+    normalized = _normalize_status(context_bucket_filter)
+    if normalized in {"implementation_gap", "deteriorado", "red", "critical", "critico", "crítico"}:
+        expected = "implementation_gap"
+    elif normalized in {"implementation_attention", "atencion", "atención", "warning", "yellow"}:
+        expected = "implementation_attention"
+    else:
+        expected = None
+
+    if not expected:
+        return rows[:limit]
+
+    return [row for row in rows if row.get("context_bucket") == expected][:limit]
+
 
 def _empty_tenant_scoped_context(
     tenant_id: Optional[str],
@@ -176,44 +259,44 @@ def get_problem_knowledge(problem_type_code: str) -> Dict[str, Any]:
 def get_tenant_health_context(
     tenant_id: Optional[str] = None,
     standard_code: Optional[str] = None,
+    metric_code: Optional[str] = None,
     limit: int = 50,
 ) -> List[Dict[str, Any]]:
     """
-    Lee resumen de salud por tenant/norma desde vista ai_core.
+    Lee métricas publicadas tenant-scoped desde ai_core.v_tenant_health_context.
+
+    La vista canonica actual es metric-based y no expone agregados por control.
+    standard_code se conserva sólo por compatibilidad de firma.
     """
     where = []
     params = []
 
     if tenant_id:
-        where.append("tenant_id = %s")
+        where.append("tenant_id = %s::uuid")
         params.append(tenant_id)
 
-    if standard_code:
-        where.append("standard_code = %s")
-        params.append(standard_code)
+    if metric_code:
+        where.append("metric_code = %s")
+        params.append(metric_code)
 
     where_sql = f"WHERE {' AND '.join(where)}" if where else ""
+    safe_limit = _canonical_int_limit(limit, default=50)
 
     return fetch_all(
         f"""
         SELECT
-          tenant_id,
-          tenant_name,
-          standard_code,
-          total_controls,
-          healthy_controls,
-          attention_controls,
-          deteriorated_controls,
-          total_evidences,
-          total_findings,
-          total_action_plans,
-          healthy_percentage
+          tenant_id::text AS tenant_id,
+          metric_code,
+          numeric_value,
+          publication_state,
+          coverage,
+          effective_at
         FROM ai_core.v_tenant_health_context
         {where_sql}
-        ORDER BY tenant_name, standard_code
+        ORDER BY tenant_id, metric_code, effective_at DESC NULLS LAST
         LIMIT %s
         """,
-        [*params, limit],
+        [*params, safe_limit],
     )
 
 
@@ -221,68 +304,58 @@ def get_control_context(
     tenant_id: Optional[str] = None,
     tenant_control_id: Optional[str] = None,
     standard_code: Optional[str] = None,
-    health_status: Optional[str] = None,
+    context_bucket_filter: Optional[str] = None,
     limit: int = 20,
 ) -> List[Dict[str, Any]]:
     """
-    Lee controles enriquecidos para análisis IA.
+    Lee controles tenant-scoped desde ai_core.v_control_context.
+
+    La vista canonica expone identidad operacional/catalogo, codigo, titulo,
+    norma e implementation_status. Los buckets de contexto se derivan en
+    aplicacion desde implementation_status; no se consulta estado Health legacy.
     """
     where = []
     params = []
 
     if tenant_id:
-        where.append("tenant_id = %s")
+        where.append("tenant_id = %s::uuid")
         params.append(tenant_id)
 
     if tenant_control_id:
-        where.append("tenant_control_id = %s")
+        where.append("tenant_control_id = %s::uuid")
         params.append(tenant_control_id)
 
     if standard_code:
         where.append("standard_code = %s")
         params.append(standard_code)
 
-    if health_status:
-        where.append("lower(coalesce(health_status, '')) = lower(%s)")
-        params.append(health_status)
-
     where_sql = f"WHERE {' AND '.join(where)}" if where else ""
+    requested_limit = _canonical_int_limit(limit, default=20)
+    sql_limit = requested_limit
+    if context_bucket_filter:
+        sql_limit = max(requested_limit, min(requested_limit * 5, 100))
 
-    return fetch_all(
+    rows = fetch_all(
         f"""
         SELECT
-          tenant_control_id,
-          tenant_id,
-          tenant_name,
+          tenant_id::text AS tenant_id,
+          tenant_control_id::text AS tenant_control_id,
+          catalog_control_id::text AS catalog_control_id,
+          code,
+          title,
           standard_code,
-          control_code,
-          control_title,
-          control_description,
-          control_category,
-          status,
-          score,
-          health_status,
-          responsible_user_id,
-          last_reviewed_at,
-          due_date,
-          priority,
-          applicability,
-          evidence_count,
-          finding_count,
-          action_plan_count
+          implementation_status
         FROM ai_core.v_control_context
         {where_sql}
-        ORDER BY
-          CASE
-            WHEN lower(coalesce(health_status, '')) IN ('deteriorado', 'red', 'critical') THEN 1
-            WHEN lower(coalesce(health_status, '')) IN ('atencion', 'atención', 'warning', 'yellow') THEN 2
-            ELSE 3
-          END,
-          evidence_count ASC,
-          finding_count DESC
+        ORDER BY tenant_id, standard_code, code
         LIMIT %s
         """,
-        [*params, limit],
+        [*params, sql_limit],
+    )
+    return _filter_controls_by_context_bucket(
+        _with_control_bucket(rows),
+        context_bucket_filter,
+        requested_limit,
     )
 
 
@@ -298,84 +371,76 @@ def get_finding_context(
     params = []
 
     if tenant_id:
-        where.append("tenant_id = %s")
+        where.append("tenant_id = %s::uuid")
         params.append(tenant_id)
 
     if finding_id:
-        where.append("finding_id = %s")
+        where.append("finding_id = %s::uuid")
         params.append(finding_id)
 
     where_sql = f"WHERE {' AND '.join(where)}" if where else ""
+    safe_limit = _canonical_int_limit(limit, default=20)
 
     return fetch_all(
         f"""
         SELECT
-          finding_id,
-          tenant_id,
-          tenant_control_id,
-          control_id,
+          tenant_id::text AS tenant_id,
+          finding_id::text AS finding_id,
+          tenant_control_id::text AS tenant_control_id,
           title,
-          description,
           severity,
           status,
-          finding_type,
-          responsible_user_id,
-          due_date,
-          closed_at,
           created_at
         FROM ai_core.v_finding_context
         {where_sql}
         ORDER BY created_at DESC NULLS LAST
         LIMIT %s
         """,
-        [*params, limit],
+        [*params, safe_limit],
     )
 
 
 def get_kpi_context(
     tenant_id: Optional[str] = None,
     standard_code: Optional[str] = None,
+    metric_code: Optional[str] = None,
     limit: int = 20,
 ) -> List[Dict[str, Any]]:
     """
-    Lee KPIs para análisis IA.
+    Lee metric_snapshots publicados desde ai_core.v_kpi_context.
+
+    La vista canonica actual no expone standard_code ni campos legacy kpi_*.
+    standard_code se conserva sólo por compatibilidad de firma.
     """
     where = []
     params = []
 
     if tenant_id:
-        where.append("tenant_id = %s")
+        where.append("tenant_id = %s::uuid")
         params.append(tenant_id)
 
-    if standard_code:
-        where.append("standard_code = %s")
-        params.append(standard_code)
+    if metric_code:
+        where.append("metric_code = %s")
+        params.append(metric_code)
 
     where_sql = f"WHERE {' AND '.join(where)}" if where else ""
+    safe_limit = _canonical_int_limit(limit, default=20)
 
     return fetch_all(
         f"""
         SELECT
-          kpi_snapshot_id,
-          tenant_id,
-          standard_code,
-          kpi_code,
-          kpi_name,
-          kpi_category,
-          period_type,
-          period_start,
-          period_end,
-          value,
-          calculated_value,
-          score,
-          status_color,
-          calculated_at
+          tenant_id::text AS tenant_id,
+          metric_code,
+          numeric_value,
+          publication_state,
+          coverage,
+          effective_at
         FROM ai_core.v_kpi_context
         {where_sql}
-        ORDER BY calculated_at DESC NULLS LAST, created_at DESC NULLS LAST
+        ORDER BY tenant_id, metric_code, effective_at DESC NULLS LAST
         LIMIT %s
         """,
-        [*params, limit],
+        [*params, safe_limit],
     )
 
 
@@ -415,7 +480,7 @@ def build_context_pack(
     critical_controls = get_control_context(
         tenant_id=tenant_id,
         standard_code=standard_code,
-        health_status="deteriorado",
+        context_bucket_filter="implementation_gap",
         limit=10,
     )
 
@@ -423,14 +488,14 @@ def build_context_pack(
         critical_controls = get_control_context(
             tenant_id=tenant_id,
             standard_code=None,
-            health_status="deteriorado",
+            context_bucket_filter="implementation_gap",
             limit=10,
         )
 
     attention_controls = get_control_context(
         tenant_id=tenant_id,
         standard_code=standard_code,
-        health_status="atencion",
+        context_bucket_filter="implementation_attention",
         limit=10,
     )
 
@@ -438,7 +503,7 @@ def build_context_pack(
         attention_controls = get_control_context(
             tenant_id=tenant_id,
             standard_code=None,
-            health_status="atencion",
+            context_bucket_filter="implementation_attention",
             limit=10,
         )
 
@@ -477,6 +542,9 @@ def build_context_pack(
             "contract_version": CANONICAL_INTELLIGENCE_CONTEXT_CONTRACT_VERSION,
             "tenant_id": tenant_id,
             "backend_authorized_scope_required": True,
+            "health_context_source": "ai_core.v_tenant_health_context",
+            "control_context_source": "ai_core.v_control_context",
+            "control_context_bucket_source": "implementation_status",
             "standard_fallback_allowed": allow_standard_fallback,
             "no_cross_tenant_fallback": True,
             "missing_is_not_zero": True,

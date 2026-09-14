@@ -1,5 +1,17 @@
 # CURRENT_STATE — TCDX ISO SaaS V4
 
+## AI Context Canonical Schema — 2026-09-14
+
+Status: `AI_CONTEXT_CANONICAL_SCHEMA_READY`.
+
+Local-only correction on branch `main` / current HEAD `e76e0cac6270d0fbd0a77880c1e3297bca97450a`, preserving the inherited DGX hardening worktree. Codex did not commit, push, merge, deploy, edit `.env`, read or print API keys, call the real DGX, or write to any database.
+
+Root cause closed: `ai-engine/app/services/context_builder.py` still consumed legacy-expanded AI context views and failed guided endpoints when `ai_core.v_tenant_health_context` did not expose `tenant_name` and related aggregate columns. The drift was broader than `tenant_name`: control, finding and KPI context readers also selected fields not published by the canonical fresh baseline views.
+
+Implemented correction: `context_builder.py` now reads the canonical shapes of `ai_core.v_tenant_health_context`, `ai_core.v_control_context`, `ai_core.v_finding_context` and `ai_core.v_kpi_context`. Health/KPI context is metric-snapshot based; controls expose tenant/control/catalog identity, code/title, standard and `implementation_status`; app-level buckets are derived explicitly from `implementation_status`. No legacy DB columns, aliases, compatibility views or migration were added. `solution_engine.py` and `problem_classifier.py` no longer infer evidence/finding counts or Health state from columns that are not present; missing context is not converted to zero or an operational fact.
+
+Validation PASS before doc closeout: Python compile over touched AI Engine files and `PYTHONPATH=/private/tmp/tcdx-ai-engine-test-deps-reqonly python3 ai-engine/app/scripts/test_dgx_litellm_hardening.py` with 11 tests OK. Coverage includes canonical context shapes, tenant filtering/no cross-tenant fallback, control filters, guided finding/action adapters without 500, and existing DGX/OpenAI-compatible plus Ollama regressions. Final `git diff --check` and search gates are rerun at closeout.
+
 ## DGX Integration Hardening — 2026-09-14
 
 Status: `DGX_INTEGRATION_HARDENING_REVIEW_READY`.
