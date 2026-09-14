@@ -2,15 +2,17 @@
 
 ## AI Core Runtime Grants — 2026-09-14
 
-Status: `AI_CORE_RUNTIME_GRANTS_READY`.
+Status: `AI_CORE_RUNTIME_GRANTS_ALLOWLIST_REVIEW_READY`.
 
-Local-only forward-only correction on branch `main` / current HEAD `3833263a1aafb3496a88d2727b5d8ee93ba91b20`. Codex did not commit, push, merge, deploy, edit `.env`, read or print secrets, write to QA/production DB, or execute manual grants.
+Review correction on branch `main` / current HEAD `42cc8327b161917e199bc2cf8aea5d2d71976784`. Codex did not commit, push, merge, deploy, edit `.env`, read or print secrets, write to QA/production DB, or execute manual grants.
 
 Root cause closed: the AI Engine context builder now consumes the canonical `ai_core` views, but `tcdx_backend_runtime` lacked explicit `SELECT` on `ai_core.v_tenant_health_context`, `ai_core.v_control_context`, `ai_core.v_finding_context` and `ai_core.v_kpi_context`; `tcdx_backend_app` therefore could not inherit access and guided AI endpoints failed with `permission denied for view v_tenant_health_context`.
 
-Implemented correction: new migration `20260914_ai_core_runtime_context_view_grants` grants only `SELECT` on those four views to `tcdx_backend_runtime`, validates `ai_core`/view existence, keeps `tcdx_backend_runtime` NOLOGIN, verifies `tcdx_backend_app -> tcdx_backend_runtime` membership, denies `ai_reader`, denies DML, and avoids `GRANT ALL`, schema-wide grants, ownership changes and direct grants to `tcdx_backend_app`. Runner `scripts/normalization/apply-ai-core-runtime-context-grants.js` supports `--checksum`, `--preflight`, `--apply`, `schema_migrations`, idempotent already-applied state and sanitized output. Fresh deploy registry includes the runner after post-lifecycle runtime consumers.
+Review correction: the first QA apply of `20260914_ai_core_runtime_context_view_grants` failed closed with `unexpected_runtime_ai_core_select_count=4`; rollback completed, the migration was not recorded in `schema_migrations`, and the four new grants were reverted. The failure was caused by an incomplete runner allowlist that recognized only `ai_core.v_external_lookup_usage_monthly` from the prior External Lookup runtime contract and falsely treated `ai_core.external_lookup_extra_charges`, `ai_core.external_lookup_logs`, `ai_core.external_lookup_quota_audit` and `ai_core.external_lookup_quotas` as unexpected. Repository evidence in `20260910_tcdx_saasv2_fresh_runtime_contract_closeout` confirms those five External Lookup objects are intentional runtime privileges.
 
-Validation PASS: runner/test syntax, checksum, isolated PostgreSQL preflight/apply/already-applied/reapply/checksum-mismatch, `node scripts/deploy-vms-strategy.test.js`, `node scripts/normalization/db-n05-production-role-privileges.postgres.test.js`, `PYTHONPATH=/private/tmp/tcdx-ai-engine-test-deps-reqonly python3 ai-engine/app/scripts/test_dgx_litellm_hardening.py`, Python compile for touched AI files, static no-wide-grant search over migration/runner, and `git diff --check`.
+Implemented correction: migration `20260914_ai_core_runtime_context_view_grants` remains unchanged and grants only `SELECT` on the four AI context views to `tcdx_backend_runtime`. Runner `scripts/normalization/apply-ai-core-runtime-context-grants.js` now uses one explicit fail-closed allowlist composed of the five pre-existing External Lookup runtime relations plus the four context views added by this migration. Any other `ai_core` object with `SELECT` for `tcdx_backend_runtime` still fails the gate. The isolated PostgreSQL test now applies the prior fresh runtime contract before this migration and includes a negative probe with an extra `ai_core` table grant.
+
+Validation PASS: runner/test syntax, checksum, isolated PostgreSQL previous External Lookup contract setup, pending preflight/apply/already-applied/reapply/checksum-mismatch, negative unexpected `ai_core` SELECT rejection, `node scripts/deploy-vms-strategy.test.js`, `node scripts/normalization/db-n05-production-role-privileges.postgres.test.js`, static no-wide-grant search over migration/runner/test, and `git diff --check`.
 
 ## AI Context Canonical Schema — 2026-09-14
 

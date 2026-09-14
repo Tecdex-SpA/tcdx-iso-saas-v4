@@ -18,8 +18,8 @@ Este archivo registra comandos reutilizables. Codex NO ejecuta automáticamente 
 | AI tests/evals | Consultar `ai-engine` scripts cuando corresponda | `ai-engine/` | NOT CONFIRMED IN CONT-00 |
 | AI Engine DGX/LiteLLM hardening focal | `PYTHONPATH=/private/tmp/tcdx-ai-engine-test-deps-reqonly python3 ai-engine/app/scripts/test_dgx_litellm_hardening.py` | repo root | VERIFIED_LOCAL/DGX-INTEGRATION-HARDENING |
 | AI Engine context canonical schema focal | `PYTHONPATH=/private/tmp/tcdx-ai-engine-test-deps-reqonly python3 ai-engine/app/scripts/test_dgx_litellm_hardening.py` | repo root | VERIFIED_LOCAL/AI-CONTEXT-CANONICAL-SCHEMA |
-| AI Core runtime context grants isolated PostgreSQL | `node scripts/normalization/apply-ai-core-runtime-context-grants.test.js` | repo root | VERIFIED_LOCAL/AI-CORE-RUNTIME-GRANTS |
-| AI Core runtime context grants checksum | `node scripts/normalization/apply-ai-core-runtime-context-grants.js --checksum` | repo root | VERIFIED_LOCAL/AI-CORE-RUNTIME-GRANTS |
+| AI Core runtime context grants isolated PostgreSQL | `node scripts/normalization/apply-ai-core-runtime-context-grants.test.js` | repo root | VERIFIED_LOCAL/AI-CORE-RUNTIME-GRANTS-ALLOWLIST |
+| AI Core runtime context grants checksum | `node scripts/normalization/apply-ai-core-runtime-context-grants.js --checksum` | repo root | VERIFIED_LOCAL/AI-CORE-RUNTIME-GRANTS-ALLOWLIST |
 | AI Core runtime context grants postdeploy preflight/apply | `MIGRATION_DATABASE_URL="$DATABASE_URL" node scripts/normalization/apply-ai-core-runtime-context-grants.js --preflight` then human-approved `--apply` then `--preflight` | authorized clone/staging/production DB only | MANUAL_AFTER_HUMAN_REVIEW |
 | Runtime/post-deploy | Manual por el usuario | entorno autorizado | MANUAL |
 | F6.11-A regulatory foundation focal | `node backend/src/services/knowledge-base/regulatoryFoundation.service.test.js` | repo root | VERIFIED/F6.11-B |

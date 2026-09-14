@@ -23,6 +23,23 @@ const AI_CORE_CONTEXT_VIEWS = Object.freeze([
   'ai_core.v_kpi_context',
 ]);
 
+const PREEXISTING_AI_CORE_RUNTIME_SELECT_RELATIONS = Object.freeze([
+  'ai_core.external_lookup_extra_charges',
+  'ai_core.external_lookup_logs',
+  'ai_core.external_lookup_quota_audit',
+  'ai_core.external_lookup_quotas',
+  'ai_core.v_external_lookup_usage_monthly',
+]);
+
+const AUTHORIZED_AI_CORE_RUNTIME_SELECT_RELATIONS = Object.freeze([
+  ...PREEXISTING_AI_CORE_RUNTIME_SELECT_RELATIONS,
+  ...AI_CORE_CONTEXT_VIEWS,
+]);
+
+const authorizedAiCoreRuntimeSelectValuesSql = AUTHORIZED_AI_CORE_RUNTIME_SELECT_RELATIONS
+  .map((relation) => `('${relation}')`)
+  .join(',\n        ');
+
 function sanitize(error) {
   return String(error?.message || 'AI Core runtime context grants migration error')
     .replace(/postgres(?:ql)?:\/\/\S+/gi, '[redacted-database-url]')
@@ -174,6 +191,10 @@ async function fetchCurrentState(client) {
         ('ai_core.v_finding_context'),
         ('ai_core.v_kpi_context')
     ),
+    authorized_runtime_select(name) AS (
+      VALUES
+        ${authorizedAiCoreRuntimeSelectValuesSql}
+    ),
     view_oids AS (
       SELECT name, to_regclass(name) AS view_oid
       FROM required_views
@@ -205,8 +226,11 @@ async function fetchCurrentState(client) {
         WHERE n.nspname = 'ai_core'
           AND c.relkind IN ('r','v','m','p')
           AND has_table_privilege('tcdx_backend_runtime', c.oid, 'SELECT')
-          AND c.oid NOT IN (SELECT view_oid FROM view_oids WHERE view_oid IS NOT NULL)
-          AND c.relname <> 'v_external_lookup_usage_monthly'
+          AND NOT EXISTS (
+            SELECT 1
+            FROM authorized_runtime_select allowed
+            WHERE to_regclass(allowed.name) = c.oid
+          )
       ) AS unexpected_runtime_ai_core_select_count
     FROM view_oids
   `);
@@ -376,9 +400,11 @@ if (require.main === module) {
 
 module.exports = {
   AI_CORE_CONTEXT_VIEWS,
+  AUTHORIZED_AI_CORE_RUNTIME_SELECT_RELATIONS,
   LOCK_KEY,
   LOCK_NAMESPACE,
   MIGRATION,
+  PREEXISTING_AI_CORE_RUNTIME_SELECT_RELATIONS,
   readMigration,
   validateSql,
 };
