@@ -18,64 +18,16 @@ const {
   publishAffectedOfficialIndicators,
   recordControlSoAAssessment,
 } = require('../services/grcCalculationOrchestration.service');
+const { insertActionPlan } = require('../utils/actionPlanPersistence');
 
 
-function deriveWorkbenchHealthStatus(row) {
-  const explicitHealth = String(
-    row.derived_health_status ||
-    row.health_status ||
-    row.tenant_health_status ||
-    ''
-  ).toLowerCase().trim()
-
-  const declaredStatus = String(
-    row.declared_status ||
-    row.status ||
-    ''
-  ).toLowerCase().trim()
-
-  const score = Number(
-    row.declared_score ??
-    row.score ??
-    row.health_score ??
-    0
-  )
-
-  const evidenceCount = Number(row.evidence_count || 0)
-  const pendingEvidenceCount = Number(row.pending_evidence_count || 0)
-  const openFindings = Number(row.open_findings_count || 0)
-  const openNonconformities = Number(row.open_nonconformities_count || 0)
-
-  if (
-    ['saludable', 'atencion', 'deteriorado', 'critico'].includes(explicitHealth) &&
-    Number(row.health_score || 0) > 0
-  ) {
-    return explicitHealth
-  }
-
-  if (
-    ['cumple', 'aprobada', 'aprobado'].includes(declaredStatus) &&
-    score >= 80 &&
-    evidenceCount > 0 &&
-    pendingEvidenceCount === 0 &&
-    openFindings === 0 &&
-    openNonconformities === 0
-  ) {
-    return 'saludable'
-  }
-
-  if (
-    ['cumple', 'parcial'].includes(declaredStatus) &&
-    score >= 50 &&
-    evidenceCount > 0
-  ) {
-    return 'atencion'
-  }
-
-  if (explicitHealth) return explicitHealth
-
-  return 'deteriorado'
-}
+const MEASURED_WORKBENCH_HEALTH_STATUSES = new Set([
+  'saludable',
+  'atencion',
+  'deteriorado',
+  'critico',
+]);
+const UNMEASURED_WORKBENCH_HEALTH_STATUS = 'sin_datos';
 
 async function publishControlOrchestration(req, tenantId, factType, metadata = {}) {
   return publishAffectedOfficialIndicators({
@@ -90,79 +42,65 @@ async function publishControlOrchestration(req, tenantId, factType, metadata = {
   });
 }
 
-function deriveWorkbenchHealthScore(row) {
-  const existing = Number(row.health_score || 0)
-  const declaredScore = Number(row.declared_score ?? row.score ?? 0)
-  const evidenceCount = Number(row.evidence_count || 0)
-
-  if (existing > 0) return existing
-  if (declaredScore > 0 && evidenceCount > 0) return Math.max(0, Math.min(100, declaredScore))
-
-  return existing
+function finiteHealthScore(value) {
+  if (value === null || value === undefined || value === '') return null;
+  const score = Number(value);
+  return Number.isFinite(score) ? score : null;
 }
 
-
-function getWorkbenchDerivedHealth(row) {
-  const hasHealthScore = row.health_score !== null && row.health_score !== undefined && row.health_score !== ''
-  const healthScore = hasHealthScore ? Number(row.health_score) : null
-  const existingHealth = String(
-    row.derived_health_status ||
-    row.tenant_health_status ||
-    row.health_status ||
-    ''
-  ).toLowerCase().trim()
-
-  const status = String(
-    row.declared_status ||
-    row.status ||
-    ''
-  ).toLowerCase().trim()
-
-  const score = Number(row.declared_score || row.score || 0)
-  const evidenceCount = Number(row.evidence_count || 0)
-  const pendingEvidenceCount = Number(row.pending_evidence_count || 0)
-  const openFindings = Number(row.open_findings_count || 0)
-  const openNonconformities = Number(row.open_nonconformities_count || 0)
+function normalizeWorkbenchHealthProjection(row = {}) {
+  const score = finiteHealthScore(row.effective_health_score);
+  const status = String(row.effective_health_status || '').toLowerCase().trim();
 
   if (
-    Number(healthScore || 0) > 0 &&
-    ['saludable', 'atencion', 'deteriorado', 'critico'].includes(existingHealth)
+    score === null ||
+    status === UNMEASURED_WORKBENCH_HEALTH_STATUS ||
+    !MEASURED_WORKBENCH_HEALTH_STATUSES.has(status)
   ) {
     return {
-      derived_health_status: existingHealth,
-      health_score: healthScore,
-    }
-  }
-
-  if (
-    status === 'cumple' &&
-    score >= 80 &&
-    evidenceCount > 0 &&
-    pendingEvidenceCount === 0 &&
-    openFindings === 0 &&
-    openNonconformities === 0
-  ) {
-    return {
-      derived_health_status: 'saludable',
-      health_score: Math.max(0, Math.min(100, score)),
-    }
-  }
-
-  if (
-    ['cumple', 'parcial'].includes(status) &&
-    score >= 50 &&
-    evidenceCount > 0
-  ) {
-    return {
-      derived_health_status: 'atencion',
-      health_score: Math.max(0, Math.min(100, score)),
-    }
+      effective_health_status: UNMEASURED_WORKBENCH_HEALTH_STATUS,
+      effective_health_score: null,
+    };
   }
 
   return {
-    derived_health_status: existingHealth || 'sin_datos',
-    health_score: healthScore,
+    effective_health_status: status,
+    effective_health_score: score,
+  };
+}
+
+function summarizeWorkbenchHealth(items = []) {
+  const summary = {
+    healthy_controls: 0,
+    attention_controls: 0,
+    deteriorated_controls: 0,
+    unmeasured_controls: 0,
+    average_health_score: null,
+  };
+  const measuredScores = [];
+
+  for (const item of items) {
+    const health = normalizeWorkbenchHealthProjection(item);
+    if (health.effective_health_status === 'saludable') summary.healthy_controls += 1;
+    else if (health.effective_health_status === 'atencion') summary.attention_controls += 1;
+    else if (['deteriorado', 'critico'].includes(health.effective_health_status)) {
+      summary.deteriorated_controls += 1;
+    } else {
+      summary.unmeasured_controls += 1;
+    }
+
+    if (health.effective_health_score !== null) {
+      measuredScores.push(health.effective_health_score);
+    }
   }
+
+  if (measuredScores.length > 0) {
+    summary.average_health_score = Number(
+      (measuredScores.reduce((sum, score) => sum + score, 0) / measuredScores.length).toFixed(2)
+    );
+  }
+
+  return summary;
 }
 
 function normalizeRole(role) {
@@ -763,22 +701,7 @@ router.get('/workbench/:tenant_id/:iso', auth, async (req, res) => {
 
     const result = await client.query(
       `
-      WITH latest_health AS (
-        SELECT DISTINCT ON (veh.tenant_control_id)
-          veh.tenant_control_id,
-          veh.standard_code,
-          veh.effective_health_status AS health_status,
-          veh.effective_health_score AS health_score,
-          COALESCE(
-            NULLIF(veh.health_trace_json->>'effective_at', '')::timestamptz,
-            NULLIF(veh.health_trace_json->>'published_at', '')::timestamptz
-          ) AS calculated_at
-        FROM public.v_iso_control_effective_health veh
-        WHERE veh.tenant_id = $1
-          AND veh.standard_code = $3
-        ORDER BY veh.tenant_control_id, calculated_at DESC NULLS LAST
-      ),
-      evidence_stats AS (
+      WITH evidence_stats AS (
         SELECT
           tc.id AS tenant_control_id,
           (
@@ -889,17 +812,16 @@ router.get('/workbench/:tenant_id/:iso', auth, async (req, res) => {
 
           tc.status AS declared_status,
           tc.score AS declared_score,
-          tc.health_status AS tenant_health_status,
-        veh.effective_health_score AS effective_health_score,
-        veh.effective_health_status AS effective_health_status,
-        veh.compliance_bucket AS effective_compliance_bucket,
-        veh.evidence_quality_status AS effective_evidence_quality_status,
-        veh.approved_evidence_count AS effective_approved_evidence_count,
-        veh.official_evidence_count AS effective_official_evidence_count,
-        veh.open_action_plans_count AS effective_open_action_plans_count,
-        veh.overdue_action_plans_count AS effective_overdue_action_plans_count,
-        veh.is_in_active_operational_scope AS effective_is_in_active_operational_scope,
-        veh.health_trace_json AS effective_health_trace_json,
+          veh.effective_health_score AS effective_health_score,
+          veh.effective_health_status AS effective_health_status,
+          veh.compliance_bucket AS effective_compliance_bucket,
+          veh.evidence_quality_status AS effective_evidence_quality_status,
+          veh.approved_evidence_count AS effective_approved_evidence_count,
+          veh.official_evidence_count AS effective_official_evidence_count,
+          veh.open_action_plans_count AS effective_open_action_plans_count,
+          veh.overdue_action_plans_count AS effective_overdue_action_plans_count,
+          veh.is_in_active_operational_scope AS effective_is_in_active_operational_scope,
+          veh.health_trace_json AS effective_health_trace_json,
           tc.last_reviewed_at,
           tc.due_date,
           tc.priority,
@@ -908,10 +830,6 @@ router.get('/workbench/:tenant_id/:iso', auth, async (req, res) => {
 
           u.email AS responsible_user_email,
           COALESCE(NULLIF(TRIM(u.full_name), ''), NULLIF(TRIM(u.name), ''), u.email) AS responsible_user_name,
-
-          lh.health_status AS derived_health_status,
-          lh.health_score,
-          lh.calculated_at AS health_calculated_at,
 
           COALESCE(es.evidence_count, 0) AS evidence_count,
           COALESCE(es.pending_evidence_count, 0) AS pending_evidence_count,
@@ -963,10 +881,9 @@ router.get('/workbench/:tenant_id/:iso', auth, async (req, res) => {
         LEFT JOIN public.v_iso_control_effective_health veh
           ON veh.tenant_control_id = tc.id
          AND veh.tenant_id = tc.tenant_id
+         AND veh.standard_code = $3
         LEFT JOIN users u
           ON u.id = tc.responsible_user_id
-        LEFT JOIN latest_health lh
-          ON lh.tenant_control_id = tc.id
         LEFT JOIN evidence_stats es
           ON es.tenant_control_id = tc.id
         LEFT JOIN nonconformity_stats ns
@@ -1008,11 +925,8 @@ router.get('/workbench/:tenant_id/:iso', auth, async (req, res) => {
       WHERE rn = 1
       ORDER BY
         clause NULLS LAST,
-        CASE
-          WHEN COALESCE(health_score, 0) < 50 THEN 1
-          WHEN COALESCE(health_score, 0) < 80 THEN 2
-          ELSE 3
-        END,
+        CASE WHEN effective_health_score IS NULL THEN 1 ELSE 0 END,
+        effective_health_score ASC NULLS LAST,
         COALESCE(evidence_count, 0) ASC,
         COALESCE(open_findings_count, 0) DESC,
         COALESCE(open_nonconformities_count, 0) DESC,
@@ -1024,17 +938,9 @@ router.get('/workbench/:tenant_id/:iso', auth, async (req, res) => {
     );
 
     const rawItems = result.rows.map((row) => {
-      const fallbackHealth = getWorkbenchDerivedHealth(row);
-
-      const effectiveHealthScore =
-        row.effective_health_score !== null && row.effective_health_score !== undefined
-          ? Number(row.effective_health_score || 0)
-          : fallbackHealth.health_score;
-
-      const effectiveHealthStatus =
-        row.effective_health_status ||
-        fallbackHealth.derived_health_status ||
-        'sin_datos';
+      const canonicalHealth = normalizeWorkbenchHealthProjection(row);
+      const effectiveHealthScore = canonicalHealth.effective_health_score;
+      const effectiveHealthStatus = canonicalHealth.effective_health_status;
 
       let complianceBucket =
         row.effective_compliance_bucket ||
@@ -1042,10 +948,7 @@ router.get('/workbench/:tenant_id/:iso', auth, async (req, res) => {
         null;
 
       if (!complianceBucket) {
-        if (effectiveHealthScore !== null && effectiveHealthScore >= 80) complianceBucket = 'cumple';
-        else if (effectiveHealthScore !== null && effectiveHealthScore >= 50) complianceBucket = 'parcial';
-        else if (effectiveHealthScore !== null && effectiveHealthScore > 0) complianceBucket = 'no_cumple';
-        else complianceBucket = 'sin_datos';
+        complianceBucket = 'sin_datos';
       }
 
       return {
@@ -1083,35 +986,20 @@ router.get('/workbench/:tenant_id/:iso', auth, async (req, res) => {
       ? rawItems
       : await filterApplicableControls(rawItems, tenant_id, { standardCode: iso });
 
+    const healthSummary = summarizeWorkbenchHealth(items);
     const summary = {
       total_controls: items.length,
-      healthy_controls: items.filter(
-        (item) => Number(item.health_score || 0) >= 80
-      ).length,
-      attention_controls: items.filter((item) => {
-        const score = Number(item.health_score || 0);
-        return score >= 50 && score < 80;
-      }).length,
-      deteriorated_controls: items.filter(
-        (item) => Number(item.health_score || 0) < 50
-      ).length,
+      healthy_controls: healthSummary.healthy_controls,
+      attention_controls: healthSummary.attention_controls,
+      deteriorated_controls: healthSummary.deteriorated_controls,
+      unmeasured_controls: healthSummary.unmeasured_controls,
       controls_without_evidence: items.filter(
         (item) => Number(item.evidence_count || 0) === 0
       ).length,
       controls_with_open_nc: items.filter(
         (item) => Number(item.open_nonconformities_count || 0) > 0
       ).length,
-      average_health_score:
-        items.length > 0
-          ? Number(
-              (
-                items.reduce(
-                  (acc, item) => acc + Number(item.health_score || 0),
-                  0
-                ) / items.length
-              ).toFixed(2)
-            )
-          : 0,
+      average_health_score: healthSummary.average_health_score,
       catalog_mode: catalogMode,
       applicability_scope: {
         tenant_filter_enforced: true,
@@ -1559,44 +1447,18 @@ router.post('/workbench/:tenant_control_id/quick-action-plan', auth, async (req,
         ? 'media'
         : 'media';
 
-    const created = await client.query(
-      `
-      INSERT INTO action_plans (
-        tenant_id,
-        iso_code,
-        title,
-        description,
-        priority,
-        owner,
-        status,
-        source_type,
-        tenant_control_id,
-        source_id
-      )
-      VALUES (
-        $1,
-        $2,
-        $3,
-        $4,
-        $5,
-        '',
-        'abierto',
-        'control',
-        $6,
-        $7
-      )
-      RETURNING *
-      `,
-      [
-        tenant_id,
-        effectiveIso,
-        `Plan de acción para control ${control.clause || ''}`.trim(),
-        control.description || 'Plan generado automáticamente desde Controles.',
-        priority,
-        control.tenant_control_id,
-        control.tenant_control_id,
-      ]
-    );
+    const created = await insertActionPlan(client, {
+      tenant_id,
+      iso_code: effectiveIso,
+      title: `Plan de acción para control ${control.clause || ''}`.trim(),
+      description: control.description || 'Plan generado automáticamente desde Controles.',
+      priority,
+      owner: '',
+      status: 'abierto',
+      source_type: 'control',
+      tenant_control_id: control.tenant_control_id,
+      source_id: control.tenant_control_id,
+    });
 
     const officialRecalculation = await publishControlOrchestration(req, tenant_id, 'action', {
       endpoint: 'POST /api/controls/workbench/:tenant_control_id/quick-action-plan',
@@ -2501,5 +2363,10 @@ router.put('/:id', auth, async (req, res) => {
     });
   }
 });
+
+router._private = {
+  normalizeWorkbenchHealthProjection,
+  summarizeWorkbenchHealth,
+};
 
 module.exports = router;

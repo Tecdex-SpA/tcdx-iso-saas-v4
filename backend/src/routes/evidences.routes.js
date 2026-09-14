@@ -1682,7 +1682,7 @@ router.get('/:tenant_id', auth, async (req, res) => {
           ap.id,
           ap.title,
           ap.status,
-          ap.priority
+          COALESCE(NULLIF(to_jsonb(ap)->>'priority', ''), NULLIF(ap.metadata->>'priority', ''), 'media') AS priority
         FROM action_plans ap
         WHERE ap.tenant_id = e.tenant_id
           AND (

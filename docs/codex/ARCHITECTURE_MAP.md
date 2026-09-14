@@ -263,3 +263,21 @@ Controls initialization uses `tenant_standards.id -> tenant_controls.tenant_stan
 Per-control Health remains a projection over `metric_snapshots` with `metric_code='F5_5_CONTROL_EFFECTIVENESS'`. `controls_catalog.category` is the source of category in the view. `control_health_scores`, KPI-HLT and global `F5_5_GRC_HEALTH` are not per-control Health authorities in this fresh path.
 
 Optional dependencies are explicit: `search_history` remains optional empty/no-op from commercial closeout; `tenant_controls.notes` is not a fresh contract; `document_index` same-tenant FKs to source/integration are added only when those parent contracts exist. RLS remains staged according to DB-N03/DB-N04; this closeout does not enable universal RLS.
+
+## GRC runtime functional repair — 2026-09-11
+
+The repaired runtime path remains:
+
+`GRC mutation -> committed fact -> grcCalculationOrchestration.service.js adapter -> indicatorGovernance -> officialCalculationOrchestrator/source contracts -> calculation_runs/calculation_outputs/calculation_snapshots -> metric_snapshots -> canonical projections -> consumers`.
+
+The adapter maps fact types to official metrics only: diagnostic/SoA/compliance affect COMPLIANCE/DATA-TRUST/GRC-HEALTH, evidence affects EVIDENCE-FRESH/DATA-TRUST/GRC-HEALTH, finding affects remediation/severity-derived metrics, action affects REMEDIATION/DATA-TRUST/GRC-HEALTH, and risk affects inherent/residual risk metrics. Nonconformity currently publishes no direct metric unless a governed formula covers it; it still returns a post-mutation orchestration result.
+
+Action plan persistence is schema-aware. `action_plans.description`, `priority` and `owner` are not assumed physical runtime columns; projections use real columns through `to_jsonb(row)` or `metadata`, and writers never recreate legacy schema. Control workbench Health reads canonical effective Health state and keeps `sin_datos`/N/A when no per-control Health measurement exists. IA-assisted NC drafting reuses existing AI Compliance endpoint and does not update compliance status, evidence or official scores.
+
+## GRC runtime final directed correction — 2026-09-11
+
+The GRC repair now fails closed for schema drift in action plan persistence: only declared optional fallback fields may move to `metadata`; unknown fields and missing structural columns are contract errors. This prevents misspelled relationship fields from becoming silent metadata.
+
+ISO Express standard eligibility is data-driven. Tenant standard codes are normalized syntactically and matched against `iso_standard_versions` identity candidates; no code path owns a whitelist of individual ISO numbers. Compact labels such as `ISO27001` are presentation-only formatting.
+
+Control workbench Health consumes `public.v_iso_control_effective_health` as a single canonical pair. A null score cannot coexist with `saludable`, `atencion`, `deteriorado` or `critico`; it normalizes to `sin_datos` with null score. Summary counts, average, badges and frontend filters use that same normalized state.

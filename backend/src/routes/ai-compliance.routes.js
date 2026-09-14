@@ -214,6 +214,10 @@ const {
 const {
   upsertActionPlanOriginRelation,
 } = require('../services/actionPlanTraceability.service');
+const {
+  insertActionPlan,
+  updateActionPlan,
+} = require('../utils/actionPlanPersistence');
 
 const AI_ENGINE_URL = String(process.env.AI_ENGINE_URL || '').replace(/\/+$/, '');
 
@@ -1969,50 +1973,20 @@ async function createDraftActionPlanFromSuggestion(tenantId, suggestion) {
   const priority = normalizePriority(payload.priority || input.priority);
   const status = 'abierto';
 
-  const result = await pool.query(
-    `
-    INSERT INTO action_plans (
-      tenant_id,
-      iso_code,
-      title,
-      description,
-      source_type,
-      source_id,
-      priority,
-      status,
-      owner,
-      finding_id,
-      created_at,
-      updated_at
-    )
-    VALUES (
-      $1::uuid,
-      $2,
-      $3,
-      $4,
-      $5,
-      $8::uuid,
-      $6,
-      $7,
-      NULL,
-      $9::uuid,
-      NOW(),
-      NOW()
-    )
-    RETURNING *
-    `,
-    [
-      tenantId,
-      input.iso_code || null,
-      title,
-      description,
-      sourceType,
-      priority,
-      status,
-      suggestion.id,
-      input.finding_id || null,
-    ]
-  );
+  const result = await insertActionPlan(pool, {
+    tenant_id: tenantId,
+    iso_code: input.iso_code || null,
+    title,
+    description,
+    source_type: sourceType,
+    source_id: suggestion.id,
+    priority,
+    status,
+    owner: null,
+    finding_id: input.finding_id || null,
+    created_at: new Date(),
+    updated_at: new Date(),
+  });
 
   return result.rows[0];
 }
@@ -3247,47 +3221,23 @@ router.post('/apply/action-plan-suggestion-to-plan', auth, async (req, res) => {
 
     await client.query('BEGIN');
 
-    const updateRes = await client.query(
-      `
-      UPDATE action_plans
-      SET
-        description = $2,
-        priority = $3,
-        status = $4,
-        ai_trace_id = COALESCE(NULLIF($5::text, '')::uuid, ai_trace_id),
-        ai_source_level = COALESCE(NULLIF($6::text, ''), ai_source_level),
-        ai_source_label = COALESCE(NULLIF($7::text, ''), ai_source_label),
-        ai_confidence = COALESCE(NULLIF($8::text, ''), ai_confidence),
-        ai_confidence_score = COALESCE($9::numeric, ai_confidence_score),
-        ai_orchestration_json = CASE
-          WHEN COALESCE($10::jsonb, '{}'::jsonb) = '{}'::jsonb
-            THEN ai_orchestration_json
-          ELSE $10::jsonb
-        END,
-        ai_enhanced_answer_json = CASE
-          WHEN COALESCE($11::jsonb, '{}'::jsonb) = '{}'::jsonb
-            THEN ai_enhanced_answer_json
-          ELSE $11::jsonb
-        END,
-        updated_at = NOW()
-      WHERE id = $1::uuid
-        AND tenant_id = $12::uuid
-      RETURNING *
-      `,
-      [
-        actionPlan.id,
-        nextDescription,
-        nextPriority,
-        nextStatus,
-        aiTrace.traceId || '',
-        aiTrace.sourceLevel || '',
-        aiTrace.sourceLabel || '',
-        aiTrace.confidence || '',
-        aiTrace.confidenceScore,
-        JSON.stringify(aiTrace.orchestrationJson || {}),
-        JSON.stringify(aiTrace.enhancedAnswerJson || {}),
-        tenantId,
-      ]
+    const updateRes = await updateActionPlan(
+      client,
+      actionPlan.id,
+      {
+        description: nextDescription,
+        priority: nextPriority,
+        status: nextStatus,
+        ai_trace_id: aiTrace.traceId || undefined,
+        ai_source_level: aiTrace.sourceLevel || undefined,
+        ai_source_label: aiTrace.sourceLabel || undefined,
+        ai_confidence: aiTrace.confidence || undefined,
+        ai_confidence_score: aiTrace.confidenceScore ?? undefined,
+        ai_orchestration_json: JSON.stringify(aiTrace.orchestrationJson || {}),
+        ai_enhanced_answer_json: JSON.stringify(aiTrace.enhancedAnswerJson || {}),
+        updated_at: new Date(),
+      },
+      { whereTenantId: tenantId, returning: '*' }
     );
 
     await insertActionPlanUpdate(client, {
@@ -3467,55 +3417,27 @@ router.post('/apply/nonconformity-draft-to-action-plan', auth, async (req, res) 
     await client.query('BEGIN');
 
     if (reusablePlan) {
-      const updateRes = await client.query(
-        `
-        UPDATE action_plans
-        SET
-          iso_code = $2,
-          title = $3,
-          description = $4,
-          priority = $5,
-          owner = $6,
-          due_date = $7,
-          tenant_control_id = $8::uuid,
-          ai_trace_id = COALESCE(NULLIF($9::text, '')::uuid, ai_trace_id),
-          ai_source_level = COALESCE(NULLIF($10::text, ''), ai_source_level),
-          ai_source_label = COALESCE(NULLIF($11::text, ''), ai_source_label),
-          ai_confidence = COALESCE(NULLIF($12::text, ''), ai_confidence),
-          ai_confidence_score = COALESCE($13::numeric, ai_confidence_score),
-          ai_orchestration_json = CASE
-            WHEN COALESCE($14::jsonb, '{}'::jsonb) = '{}'::jsonb
-              THEN ai_orchestration_json
-            ELSE $14::jsonb
-          END,
-          ai_enhanced_answer_json = CASE
-            WHEN COALESCE($15::jsonb, '{}'::jsonb) = '{}'::jsonb
-              THEN ai_enhanced_answer_json
-            ELSE $15::jsonb
-          END,
-          updated_at = NOW()
-        WHERE id = $1::uuid
-          AND tenant_id = $16::uuid
-        RETURNING *
-        `,
-        [
-          reusablePlan.id,
-          finalIsoCode,
+      const updateRes = await updateActionPlan(
+        client,
+        reusablePlan.id,
+        {
+          iso_code: finalIsoCode,
           title,
           description,
           priority,
-          owner || null,
-          due_date || null,
-          finalTenantControlId || null,
-          aiTrace.traceId || '',
-          aiTrace.sourceLevel || '',
-          aiTrace.sourceLabel || '',
-          aiTrace.confidence || '',
-          aiTrace.confidenceScore,
-          JSON.stringify(aiTrace.orchestrationJson || {}),
-          JSON.stringify(aiTrace.enhancedAnswerJson || {}),
-          tenantId,
-        ]
+          owner: owner || null,
+          due_date: due_date || null,
+          tenant_control_id: finalTenantControlId || null,
+          ai_trace_id: aiTrace.traceId || undefined,
+          ai_source_level: aiTrace.sourceLevel || undefined,
+          ai_source_label: aiTrace.sourceLabel || undefined,
+          ai_confidence: aiTrace.confidence || undefined,
+          ai_confidence_score: aiTrace.confidenceScore ?? undefined,
+          ai_orchestration_json: JSON.stringify(aiTrace.orchestrationJson || {}),
+          ai_enhanced_answer_json: JSON.stringify(aiTrace.enhancedAnswerJson || {}),
+          updated_at: new Date(),
+        },
+        { whereTenantId: tenantId, returning: '*' }
       );
 
       savedRow = updateRes.rows[0];
@@ -3549,75 +3471,29 @@ router.post('/apply/nonconformity-draft-to-action-plan', auth, async (req, res) 
         },
       });
     } else {
-      const insertRes = await client.query(
-        `
-        INSERT INTO action_plans (
-          tenant_id,
-          iso_code,
-          title,
-          description,
-          source_type,
-          source_id,
-          priority,
-          status,
-          owner,
-          due_date,
-          nonconformity_id,
-          tenant_control_id,
-          ai_trace_id,
-          ai_source_level,
-          ai_source_label,
-          ai_confidence,
-          ai_confidence_score,
-          ai_orchestration_json,
-          ai_enhanced_answer_json,
-          created_at,
-          updated_at
-        )
-        VALUES (
-          $1::uuid,
-          $2,
-          $3,
-          $4,
-          'nonconformity',
-          $8::uuid,
-          $5,
-          'abierto',
-          $6,
-          $7,
-          $8::uuid,
-          $9::uuid,
-          NULLIF($10::text, '')::uuid,
-          NULLIF($11::text, ''),
-          NULLIF($12::text, ''),
-          NULLIF($13::text, ''),
-          $14::numeric,
-          COALESCE($15::jsonb, '{}'::jsonb),
-          COALESCE($16::jsonb, '{}'::jsonb),
-          NOW(),
-          NOW()
-        )
-        RETURNING *
-        `,
-        [
-          tenantId,
-          finalIsoCode,
-          title,
-          description,
-          priority,
-          owner || null,
-          due_date || null,
-          nonconformity_id || null,
-          finalTenantControlId || null,
-          aiTrace.traceId || '',
-          aiTrace.sourceLevel || '',
-          aiTrace.sourceLabel || '',
-          aiTrace.confidence || '',
-          aiTrace.confidenceScore,
-          JSON.stringify(aiTrace.orchestrationJson || {}),
-          JSON.stringify(aiTrace.enhancedAnswerJson || {}),
-        ]
-      );
+      const insertRes = await insertActionPlan(client, {
+        tenant_id: tenantId,
+        iso_code: finalIsoCode,
+        title,
+        description,
+        source_type: 'nonconformity',
+        source_id: nonconformity_id || null,
+        priority,
+        status: 'abierto',
+        owner: owner || null,
+        due_date: due_date || null,
+        nonconformity_id: nonconformity_id || null,
+        tenant_control_id: finalTenantControlId || null,
+        ai_trace_id: aiTrace.traceId || null,
+        ai_source_level: aiTrace.sourceLevel || null,
+        ai_source_label: aiTrace.sourceLabel || null,
+        ai_confidence: aiTrace.confidence || null,
+        ai_confidence_score: aiTrace.confidenceScore ?? undefined,
+        ai_orchestration_json: JSON.stringify(aiTrace.orchestrationJson || {}),
+        ai_enhanced_answer_json: JSON.stringify(aiTrace.enhancedAnswerJson || {}),
+        created_at: new Date(),
+        updated_at: new Date(),
+      });
 
       savedRow = insertRes.rows[0];
 

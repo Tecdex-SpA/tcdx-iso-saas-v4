@@ -350,8 +350,8 @@ async function globalSearch(req, res) {
         WHERE ap.tenant_id = $1
           AND (
             COALESCE(ap.title, '') ILIKE $2
-            OR COALESCE(ap.description, '') ILIKE $2
-            OR COALESCE(ap.owner, '') ILIKE $2
+            OR COALESCE(NULLIF(to_jsonb(ap)->>'description', ''), NULLIF(ap.metadata->>'description', '')) ILIKE $2
+            OR COALESCE(NULLIF(to_jsonb(ap)->>'owner', ''), NULLIF(ap.metadata->>'owner', '')) ILIKE $2
             OR COALESCE(ap.status, '') ILIKE $2
             OR COALESCE(ap.iso_code, '') ILIKE $2
           )

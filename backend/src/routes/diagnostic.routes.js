@@ -136,6 +136,7 @@ async function getDiagnosticControlById(client, id) {
       tc.applicability,
       cc.id AS catalog_control_id,
       cc.iso,
+      active_standard.standard_code AS active_standard_code,
       cc.clause,
       cc.category,
       cc.description,
@@ -148,6 +149,17 @@ async function getDiagnosticControlById(client, id) {
       ON tc.control_id = cc.id
     LEFT JOIN tenant_operations op
       ON op.id = tc.operation_id
+     AND op.tenant_id = tc.tenant_id
+    LEFT JOIN LATERAL (
+      SELECT ts.standard_code
+      FROM tenant_standards ts
+      WHERE ts.tenant_id = tc.tenant_id
+        AND ts.is_active IS DISTINCT FROM false
+        AND ts.lifecycle_status IS DISTINCT FROM 'permanently_deactivated'
+        AND ${getStandardMembershipWhere('ts.standard_code')}
+      ORDER BY ts.standard_code
+      LIMIT 1
+    ) active_standard ON TRUE
     WHERE tc.id = $1::uuid
     LIMIT 1
     `,
@@ -505,7 +517,7 @@ router.put('/:id', auth, async (req, res) => {
       client,
       tenantId: control.tenant_id,
       tenantControlId: control.id,
-      isoCode: control.iso,
+      isoCode: current.active_standard_code || current.iso,
       implementationStatus: requestedStatus,
       userId: req.user?.user_id || req.user?.userId || req.user?.id || null,
       metadata: {

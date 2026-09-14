@@ -15,6 +15,7 @@ const {
 const {
   publishAffectedOfficialIndicators,
 } = require('../services/grcCalculationOrchestration.service');
+const { insertActionPlan } = require('../utils/actionPlanPersistence');
 
 function getUserTenantId(user) {
   return (
@@ -1236,47 +1237,25 @@ router.post('/:id/create-action', auth, async (req, res) => {
       });
     }
 
-    const actionResult = await client.query(
-      `
-      INSERT INTO action_plans (
-        tenant_id,
-        iso_code,
-        title,
-        description,
-        source_type,
-        source_id,
-        priority,
-        status,
-        owner,
-        due_date,
-        created_by,
-        finding_id,
-        tenant_control_id,
-        nonconformity_id,
-        audit_id,
-        asset_id,
-        approval_status
-      )
-      VALUES ($1,$2,$3,$4,'finding',$5,$6,'abierto',$7,$8,$9,$10,$11,$12,$13,$14,'no_requerida')
-      RETURNING *
-      `,
-      [
-        finding.tenant_id,
-        finding.iso_code,
-        `Acción derivada: ${finding.title}`,
-        finding.description || null,
-        finding.id,
-        finding.severity || 'media',
-        finding.owner || null,
-        finding.due_date || null,
-        getUserId(req.user),
-        finding.id,
-        resolvedControl.tenant_control_id_moderno,
-        finding.nonconformity_id || null,
-        finding.audit_id || null,
-        finding.asset_id || null
-      ]
-    );
+    const actionResult = await insertActionPlan(client, {
+      tenant_id: finding.tenant_id,
+      iso_code: finding.iso_code,
+      title: `Acción derivada: ${finding.title}`,
+      description: finding.description || null,
+      source_type: 'finding',
+      source_id: finding.id,
+      priority: finding.severity || 'media',
+      status: 'abierto',
+      owner: finding.owner || null,
+      due_date: finding.due_date || null,
+      created_by: getUserId(req.user),
+      finding_id: finding.id,
+      tenant_control_id: resolvedControl.tenant_control_id_moderno,
+      nonconformity_id: finding.nonconformity_id || null,
+      audit_id: finding.audit_id || null,
+      asset_id: finding.asset_id || null,
+      approval_status: 'no_requerida',
+    });
 
     await upsertActionPlanOriginRelation(client, {
       tenantId: finding.tenant_id,

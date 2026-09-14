@@ -20,6 +20,7 @@ const {
   isPlatformUser,
   normalizeRoleKey,
 } = require('../services/auth/roleCompatibility.service');
+const { insertActionPlan } = require('../utils/actionPlanPersistence');
 
 // =====================================================
 // Middleware local de autenticación para rutas Health
@@ -1645,50 +1646,20 @@ router.post('/remediation-plan/create-action', async (req, res) => {
       .filter(Boolean)
       .join('\n');
 
-    const insert = await client.query(
-      `
-      INSERT INTO action_plans (
-        tenant_id,
-        iso_code,
-        title,
-        description,
-        source_type,
-        source_id,
-        priority,
-        status,
-        owner,
-        due_date,
-        created_by,
-        tenant_control_id
-      )
-      VALUES (
-        $1,
-        $2,
-        $3,
-        $4,
-        'control',
-        $5,
-        $6,
-        'abierto',
-        $7,
-        $8,
-        $9,
-        $5
-      )
-      RETURNING *
-      `,
-      [
-        finalTenantId,
-        isoCode,
-        title,
-        metadataText,
-        tenantControlId,
-        priority,
-        owner,
-        dueDate,
-        getUserId(req.user),
-      ]
-    );
+    const insert = await insertActionPlan(client, {
+      tenant_id: finalTenantId,
+      iso_code: isoCode,
+      title,
+      description: metadataText,
+      source_type: 'control',
+      source_id: tenantControlId,
+      priority,
+      status: 'abierto',
+      owner,
+      due_date: dueDate,
+      created_by: getUserId(req.user),
+      tenant_control_id: tenantControlId,
+    });
 
     await client.query('COMMIT');
 

@@ -11,6 +11,18 @@ import { getUserFromToken, isAuditorRole } from '@/utils/auth';
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL || '';
 
+function formatCompactIsoCode(value: unknown) {
+  const original = String(value || '').trim();
+  if (!original) return '';
+
+  const withoutTrailingYear = original.replace(/(?:[_\s:\/-]+)(?:19|20)\d{2}\b/g, '');
+  return withoutTrailingYear
+    .toUpperCase()
+    .replace(/ISO\/IEC/g, 'ISO')
+    .replace(/ISOIEC/g, 'ISO')
+    .replace(/[^A-Z0-9]/g, '') || original;
+}
+
 type ScopeStandard = {
   code: string;
   name?: string;
@@ -327,18 +339,10 @@ function translateKnownSystemText(value: string | null | undefined, locale: 'es'
 }
 
 function standardLabel(code?: string | null, name?: string | null) {
-  const standardCode = String(code || '').replace(/\s+/g, '').toUpperCase();
   const normalizedName = String(name || '').trim();
-
-  if (standardCode === 'ISO9001') return normalizedName || 'ISO 9001';
-  if (standardCode === 'ISO27001') return normalizedName || 'ISO 27001';
-  if (standardCode === 'ISO22301') return normalizedName || 'ISO 22301';
-  if (standardCode === 'ISO14001') return normalizedName || 'ISO 14001';
-  if (standardCode === 'ISO20000-1' || standardCode === 'ISO200001') {
-    return normalizedName || 'ISO 20000-1';
-  }
-
-  return normalizedName ? `${code} - ${normalizedName}` : String(code || '');
+  const compactCode = formatCompactIsoCode(code);
+  if (normalizedName && compactCode) return `${compactCode} - ${normalizedName}`;
+  return normalizedName || compactCode || String(code || '');
 }
 
 export default function DiagnosticoPage() {
@@ -966,7 +970,7 @@ export default function DiagnosticoPage() {
                 key={`${option.standard_code}:${option.version_code}`}
                 value={`${option.standard_code}:${option.version_code}`}
               >
-                {option.display_name} · {Number(option.catalog_coverage_pct || 0).toFixed(2)}%
+                {formatCompactIsoCode(option.standard_code)} {option.version_code} · {Number(option.catalog_coverage_pct || 0).toFixed(2)}%
               </option>
             ))}
           </select>
@@ -1100,7 +1104,7 @@ export default function DiagnosticoPage() {
             {expressLatest.slice(0, 6).map((assessment) => (
               <div key={assessment?.id} className="border rounded p-3 text-sm">
                 <div className="font-medium">
-                  {assessment?.standard_code} {assessment?.version_code}
+                  {formatCompactIsoCode(assessment?.standard_code)} {assessment?.version_code}
                 </div>
                 <div className="text-gray-500">
                   {copy.readiness}: {Math.round(Number(assessment?.readiness_score || 0))}% ·{' '}

@@ -45,13 +45,34 @@ function normalizeStandardCode(value) {
   return String(value || '')
     .trim()
     .toUpperCase()
-    .replace(/\s+/g, '')
-    .replace('ISO/IEC', 'ISO')
-    .replace('ISO-', 'ISO');
+    .replace(/ISO\/IEC/g, 'ISO')
+    .replace(/ISOIEC/g, 'ISO')
+    .replace(/[^A-Z0-9]/g, '');
 }
 
 function normalizeVersionCode(value) {
   return String(value || '').trim().toUpperCase();
+}
+
+function normalizeStandardSql(valueSql) {
+  return `regexp_replace(replace(upper(COALESCE(${valueSql}, '')), 'ISOIEC', 'ISO'), '[^A-Z0-9]', '', 'g')`;
+}
+
+function standardVersionIdentityListSql(alias = 'v') {
+  return [
+    normalizeStandardSql(`${alias}.standard_code`),
+    normalizeStandardSql(`${alias}.standard_code || ${alias}.version_code`),
+    normalizeStandardSql(`${alias}.standard_code || '_' || ${alias}.version_code`),
+  ].join(', ');
+}
+
+function standardVersionIdentityPredicate(candidateSql, alias = 'v') {
+  return `${normalizeStandardSql(candidateSql)} IN (${standardVersionIdentityListSql(alias)})`;
+}
+
+function isTransitionOnlyVersion(version) {
+  const publicationStatus = String(version?.publication_status || '').toLowerCase().trim();
+  return version?.certifiable !== true && publicationStatus !== 'published';
 }
 
 function ensureTenantAccess(user, tenantId) {
@@ -69,7 +90,7 @@ function assertTenantAccess(user, tenantId) {
 }
 
 function normalizeAssessmentType(value, version) {
-  const requested = String(value || '').trim() || (version === '2026_FDIS' ? 'transition_readiness' : 'express');
+  const requested = String(value || '').trim() || (isTransitionOnlyVersion(version) ? 'transition_readiness' : 'express');
 
   if (!ALLOWED_ASSESSMENT_TYPES.has(requested)) {
     throw publicError(400, 'INVALID_ASSESSMENT_TYPE', 'assessment_type invalido');
@@ -166,7 +187,7 @@ function buildGap({ item, gapType, severity, title, description, recommendation,
   };
 }
 
-function buildPlan(gaps, assessmentType, standardCode, versionCode) {
+function buildPlan(gaps, assessmentType) {
   const byPriority = [...gaps].sort((a, b) => severityRank(b.severity) - severityRank(a.severity));
   const plan30 = byPriority
     .filter((gap) => ['critica', 'alta'].includes(gap.severity) || ['missing_evidence', 'missing_tenant_control'].includes(gap.gap_type))
@@ -205,21 +226,12 @@ function buildPlan(gaps, assessmentType, standardCode, versionCode) {
     },
   ];
 
-  if (standardCode === 'ISO42001') {
-    plan90.unshift({
-      title: 'Gobierno operativo de IA',
-      control_code: null,
-      due_days: 90,
-      recommendation: 'Definir inventario IA, responsables, datos usados, supervision humana y monitoreo de sesgo/desempeno.',
-    });
-  }
-
-  if (versionCode === '2026_FDIS') {
+  if (assessmentType === 'transition_readiness') {
     plan30.unshift({
       title: 'Caveat de no certificabilidad',
       control_code: null,
       due_days: 30,
-      recommendation: 'Comunicar que ISO9001 2026_FDIS es solo preparacion de transicion y no certificacion final.',
+      recommendation: 'Comunicar que la version seleccionada es solo preparacion de transicion y no certificacion final.',
     });
   }
 
@@ -237,10 +249,10 @@ async function getStandardVersion(standardCode, versionCode) {
       publication_status,
       certifiable,
       notes
-    FROM iso_standard_versions
-    WHERE standard_code = $1
-      AND version_code = $2
-      AND is_active = true
+    FROM iso_standard_versions v
+    WHERE ${standardVersionIdentityPredicate('$1', 'v')}
+      AND v.version_code = $2
+      AND v.is_active = true
     LIMIT 1
     `,
     [standardCode, versionCode]
@@ -253,27 +265,89 @@ async function getStandardVersion(standardCode, versionCode) {
   return result.rows[0];
 }
 
-async function tenantHasStandard(tenantId, standardCode) {
+async function tenantHasStandard(tenantId, standardCode, versionCode = null) {
   const result = await pool.query(
     `
+    WITH requested_versions AS (
+      SELECT
+        v.standard_code,
+        v.version_code
+      FROM iso_standard_versions v
+      WHERE ${standardVersionIdentityPredicate('$2', 'v')}
+        AND ($3::text IS NULL OR v.version_code = $3)
+        AND v.is_active IS TRUE
+    )
     SELECT 1
-    FROM tenant_standards
-    WHERE tenant_id = $1::uuid
-      AND standard_code = $2
-      AND is_active IS DISTINCT FROM false
+    FROM tenant_standards ts
+    JOIN requested_versions rv
+      ON ${normalizeStandardSql('ts.standard_code')} IN (
+        ${normalizeStandardSql('rv.standard_code')},
+        ${normalizeStandardSql("rv.standard_code || rv.version_code")},
+        ${normalizeStandardSql("rv.standard_code || '_' || rv.version_code")}
+      )
+    WHERE ts.tenant_id = $1::uuid
+      AND ts.is_active IS DISTINCT FROM false
+      AND ts.lifecycle_status IS DISTINCT FROM 'permanently_deactivated'
     LIMIT 1
     `,
-    [tenantId, standardCode]
+    [tenantId, normalizeStandardCode(standardCode), versionCode ? normalizeVersionCode(versionCode) : null]
   );
 
   return result.rowCount > 0;
 }
 
+async function fetchActiveTenantStandardOptions(tenantId) {
+  const result = await pool.query(
+    `
+    WITH tenant_norms AS (
+      SELECT
+        ts.tenant_id,
+        ts.standard_code AS tenant_standard_code
+      FROM tenant_standards ts
+      WHERE ts.tenant_id = $1::uuid
+        AND ts.is_active IS DISTINCT FROM false
+        AND ts.lifecycle_status IS DISTINCT FROM 'permanently_deactivated'
+    )
+    SELECT DISTINCT ON (tn.tenant_id, v.standard_code, v.version_code)
+      tn.tenant_id,
+      v.standard_code,
+      v.version_code,
+      v.display_name,
+      v.certifiable,
+      v.publication_status,
+      true AS tenant_standard_active,
+      COALESCE(c.coverage_pct, 0)::numeric AS catalog_coverage_pct,
+      COALESCE(s.sync_status, 'not_started') AS sync_status,
+      CASE
+        WHEN v.certifiable IS TRUE AND COALESCE(c.coverage_pct, 0) >= 70 THEN 'certification_readiness'
+        ELSE 'express'
+      END AS recommended_assessment_type,
+      CASE
+        WHEN COALESCE(c.coverage_pct, 0) < 70 THEN 'Cobertura de catalogo inferior al umbral recomendado.'
+        ELSE NULL::text
+      END AS warning_text
+    FROM tenant_norms tn
+    JOIN iso_standard_versions v
+      ON ${standardVersionIdentityPredicate('tn.tenant_standard_code', 'v')}
+     AND v.is_active IS TRUE
+    LEFT JOIN v_iso_control_catalog_coverage c
+      ON c.standard_code = v.standard_code
+     AND c.version_code = v.version_code
+    LEFT JOIN iso_catalog_sync_status s
+      ON s.standard_code = v.standard_code
+     AND s.version_code = v.version_code
+     AND s.sync_target = 'controls_catalog'
+    ORDER BY tn.tenant_id, v.standard_code, v.version_code
+    `,
+    [tenantId]
+  );
+
+  return result.rows;
+}
+
 async function getAssessmentOptions(tenantId, user) {
   assertTenantAccess(user, tenantId);
 
-  const role = normalizeRole(user?.role || user?.user_role || user?.userRole);
-  const platform = isPlatformRole(role);
   const result = await pool.query(
     `
     SELECT
@@ -294,51 +368,28 @@ async function getAssessmentOptions(tenantId, user) {
      AND v.version_code = r.version_code
     WHERE r.tenant_id = $1::uuid
     ORDER BY
-      CASE
-        WHEN r.standard_code = 'ISO9001' AND r.version_code = '2015' THEN 1
-        WHEN r.standard_code = 'ISO27001' THEN 2
-        WHEN r.standard_code = 'ISO42001' THEN 3
-        WHEN r.version_code = '2026_FDIS' THEN 4
-        ELSE 9
-      END,
+      r.tenant_standard_active DESC,
+      v.certifiable DESC,
       r.standard_code,
       r.version_code
     `,
     [tenantId]
   );
 
-  let rows = result.rows;
-
-  if (platform && !rows.some((row) => row.standard_code === 'ISO42001')) {
-    const extra = await pool.query(
-      `
-      SELECT
-        $1::uuid AS tenant_id,
-        v.standard_code,
-        v.version_code,
-        v.display_name,
-        v.certifiable,
-        v.publication_status,
-        false AS tenant_standard_active,
-        COALESCE(c.coverage_pct, 0)::numeric AS catalog_coverage_pct,
-        COALESCE(s.sync_status, 'not_started') AS sync_status,
-        'express' AS recommended_assessment_type,
-        'Evaluacion preliminar: la norma no esta activa para este tenant.' AS warning_text
-      FROM iso_standard_versions v
-      LEFT JOIN v_iso_control_catalog_coverage c
-        ON c.standard_code = v.standard_code
-       AND c.version_code = v.version_code
-      LEFT JOIN iso_catalog_sync_status s
-        ON s.standard_code = v.standard_code
-       AND s.version_code = v.version_code
-       AND s.sync_target = 'controls_catalog'
-      WHERE v.standard_code = 'ISO42001'
-        AND v.version_code = '2023'
-      `,
-      [tenantId]
-    );
-    rows = rows.concat(extra.rows);
+  const keyedRows = new Map();
+  for (const row of result.rows) {
+    keyedRows.set(`${row.standard_code}:${row.version_code}`, row);
   }
+
+  for (const row of await fetchActiveTenantStandardOptions(tenantId)) {
+    keyedRows.set(`${row.standard_code}:${row.version_code}`, {
+      ...keyedRows.get(`${row.standard_code}:${row.version_code}`),
+      ...row,
+      tenant_standard_active: true,
+    });
+  }
+
+  let rows = Array.from(keyedRows.values());
 
   return rows.map((row) => ({
     tenant_id: row.tenant_id,
@@ -350,10 +401,7 @@ async function getAssessmentOptions(tenantId, user) {
     assessment_type: row.recommended_assessment_type,
     catalog_coverage_pct: Number(row.catalog_coverage_pct || 0),
     sync_status: row.sync_status,
-    recommended:
-      row.standard_code === 'ISO9001' &&
-      row.version_code === '2015' &&
-      Number(row.catalog_coverage_pct || 0) >= 70,
+    recommended: row.certifiable === true && Number(row.catalog_coverage_pct || 0) >= 70,
     warnings: row.warning_text ? [row.warning_text] : [],
   }));
 }
@@ -581,14 +629,6 @@ function evaluateItem(row) {
 }
 
 function buildCoverageWarning({ standardCode, versionCode, certifiable, coveragePct }) {
-  if (standardCode === 'ISO9001' && versionCode === '2026_FDIS') {
-    return 'ISO9001 2026_FDIS es solo preparacion de transicion, no version final certificable.';
-  }
-
-  if (standardCode === 'ISO42001' && coveragePct <= 0) {
-    return 'ISO42001 se evaluara preliminarmente con iso_* porque no hay mapeo operativo suficiente.';
-  }
-
   if (coveragePct < 30) {
     return 'Cobertura operativa baja: el diagnostico es preliminar y requiere revision humana.';
   }
@@ -607,16 +647,17 @@ function buildCoverageWarning({ standardCode, versionCode, certifiable, coverage
 async function calculateAssessment({ tenantId, user, standardCode, versionCode, assessmentType, answers = [] }) {
   assertTenantAccess(user, tenantId);
 
-  const normalizedStandard = normalizeStandardCode(standardCode);
-  const normalizedVersion = normalizeVersionCode(versionCode);
-  const version = await getStandardVersion(normalizedStandard, normalizedVersion);
-  const effectiveType = normalizeAssessmentType(assessmentType, normalizedVersion);
+  const version = await getStandardVersion(normalizeStandardCode(standardCode), normalizeVersionCode(versionCode));
+  const normalizedStandard = version.standard_code;
+  const normalizedVersion = version.version_code;
+  const effectiveType = normalizeAssessmentType(assessmentType, version);
+  const transitionOnly = isTransitionOnlyVersion(version);
 
-  if (normalizedVersion === '2026_FDIS' && effectiveType !== 'transition_readiness') {
+  if (transitionOnly && effectiveType !== 'transition_readiness') {
     throw publicError(
       400,
-      'ISO9001_2026_TRANSITION_ONLY',
-      'ISO9001 2026_FDIS solo permite diagnostico de preparacion/transicion'
+      'ISO_VERSION_TRANSITION_ONLY',
+      'La version seleccionada solo permite diagnostico de preparacion/transicion'
     );
   }
 
@@ -624,17 +665,14 @@ async function calculateAssessment({ tenantId, user, standardCode, versionCode, 
     throw publicError(400, 'VERSION_NOT_CERTIFIABLE', 'La version seleccionada no es certificable');
   }
 
-  if (normalizedVersion === '2026_FDIS') {
-    const has9001 = await tenantHasStandard(tenantId, 'ISO9001');
-    if (!has9001) {
-      throw publicError(400, 'ISO9001_REQUIRED_FOR_TRANSITION', 'El tenant debe tener ISO9001 activa para evaluar transicion FDIS');
-    }
-  } else {
-    const hasStandard = await tenantHasStandard(tenantId, normalizedStandard);
-    const platform = isPlatformRole(user?.role || user?.user_role || user?.userRole);
-    if (!hasStandard && !(platform && normalizedStandard === 'ISO42001')) {
-      throw publicError(400, 'TENANT_STANDARD_NOT_ACTIVE', 'La norma no esta activa para este tenant');
-    }
+  const hasStandard = await tenantHasStandard(
+    tenantId,
+    normalizedStandard,
+    transitionOnly ? null : normalizedVersion
+  );
+
+  if (!hasStandard) {
+    throw publicError(400, 'TENANT_STANDARD_NOT_ACTIVE', 'La norma no esta activa para este tenant');
   }
 
   const [controlRows, coverageRows] = await Promise.all([
@@ -685,14 +723,14 @@ async function calculateAssessment({ tenantId, user, standardCode, versionCode, 
     gaps.unshift({
       iso_control_id: null,
       control_code: null,
-      gap_type: normalizedVersion === '2026_FDIS' ? 'transition_warning' : 'coverage_warning',
-      severity: normalizedVersion === '2026_FDIS' ? 'critica' : 'media',
-      title: normalizedVersion === '2026_FDIS'
+      gap_type: transitionOnly ? 'transition_warning' : 'coverage_warning',
+      severity: transitionOnly ? 'critica' : 'media',
+      title: transitionOnly
         ? 'Version de transicion no certificable'
         : 'Cobertura operativa parcial',
       description: coverageWarning,
-      recommendation: normalizedVersion === '2026_FDIS'
-        ? 'Usar este resultado solo para preparacion de transicion y mantener ISO9001:2015 como base certificable.'
+      recommendation: transitionOnly
+        ? 'Usar este resultado solo para preparacion de transicion y validar alcance certificable vigente.'
         : 'Completar mapeos gobernados antes de auditoria formal.',
       suggested_action_type: 'review',
       suggested_owner_role: 'Responsable de compliance',
@@ -701,7 +739,7 @@ async function calculateAssessment({ tenantId, user, standardCode, versionCode, 
     });
   }
 
-  const plans = buildPlan(gaps, effectiveType, normalizedStandard, normalizedVersion);
+  const plans = buildPlan(gaps, effectiveType);
   const summary = {
     display_name: version.display_name,
     certifiable: version.certifiable,
@@ -1131,4 +1169,10 @@ module.exports = {
   getPlan,
   archiveAssessment,
   getReadiness,
+  _private: {
+    normalizeStandardCode,
+    normalizeStandardSql,
+    standardVersionIdentityPredicate,
+    isTransitionOnlyVersion,
+  },
 };

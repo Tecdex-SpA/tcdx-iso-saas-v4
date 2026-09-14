@@ -66,7 +66,7 @@ function configureRuntimeDatabase(pg) {
   };
 }
 
-async function seedRuntimeTenant(client, { tenantId, suffix, assessmentStatus, evidenceCreatedAt, evidenceExpiresAt }) {
+async function seedRuntimeTenant(client, { tenantId, suffix, standardCode = 'ISO_27001_2022', assessmentStatus, evidenceCreatedAt, evidenceExpiresAt }) {
   const tenantStandardId = uuid(`runtime-${suffix}-standard`);
   const operationId = uuid(`runtime-${suffix}-operation`);
   const tenantControlId = uuid(`runtime-${suffix}-tenant-control`);
@@ -92,11 +92,11 @@ async function seedRuntimeTenant(client, { tenantId, suffix, assessmentStatus, e
   const catalog = await client.query(`
     SELECT id
     FROM controls_catalog
-    WHERE iso = 'ISO_27001_2022'
+    WHERE iso = $1
     ORDER BY code
     LIMIT 1
-  `);
-  assert.ok(catalog.rows[0]?.id, 'runtime E2E requires an ISO_27001_2022 catalog control');
+  `, [standardCode]);
+  assert.ok(catalog.rows[0]?.id, `runtime E2E requires a ${standardCode} catalog control`);
 
   await client.query(`
     INSERT INTO tenants (id, name, slug, service_status)
@@ -104,8 +104,8 @@ async function seedRuntimeTenant(client, { tenantId, suffix, assessmentStatus, e
   `, [tenantId, `Runtime Formula Tenant ${suffix.toUpperCase()}`, `runtime-formula-${suffix}`]);
   await client.query(`
     INSERT INTO tenant_standards (id, tenant_id, standard_code, is_active, lifecycle_status)
-    VALUES ($1, $2, 'ISO_27001_2022', true, 'active')
-  `, [tenantStandardId, tenantId]);
+    VALUES ($1, $2, $3, true, 'active')
+  `, [tenantStandardId, tenantId, standardCode]);
   await client.query(`
     INSERT INTO tenant_operations (id, tenant_id, operation_key, code, name, is_active, status)
     VALUES ($1, $2, $3, $3, $4, true, 'active')
@@ -122,15 +122,15 @@ async function seedRuntimeTenant(client, { tenantId, suffix, assessmentStatus, e
       id, tenant_id, tenant_control_id, iso_code, source, status,
       suggested_applicable, suggested_implementation_status, confidence_score, created_at, updated_at
     )
-    VALUES ($1, $2, $3, 'ISO_27001_2022', 'db_integral_runtime_e2e_history', 'applied', true, $4, 0.20, '2026-09-01T00:00:00Z', '2026-09-01T00:00:00Z')
-  `, [oldSoaAssessmentId, tenantId, tenantControlId, historicalImplementationStatus]);
+    VALUES ($1, $2, $3, $4, 'db_integral_runtime_e2e_history', 'applied', true, $5, 0.20, '2026-09-01T00:00:00Z', '2026-09-01T00:00:00Z')
+  `, [oldSoaAssessmentId, tenantId, tenantControlId, standardCode, historicalImplementationStatus]);
   await client.query(`
     INSERT INTO control_soa_assessments (
       id, tenant_id, tenant_control_id, iso_code, source, status,
       suggested_applicable, suggested_implementation_status, confidence_score, created_at, updated_at
     )
-    VALUES ($1, $2, $3, 'ISO_27001_2022', 'db_integral_runtime_e2e', 'applied', true, $4, 0.95, '2026-09-08T00:00:00Z', '2026-09-08T00:00:00Z')
-  `, [soaAssessmentId, tenantId, tenantControlId, suggestedImplementationStatus]);
+    VALUES ($1, $2, $3, $4, 'db_integral_runtime_e2e', 'applied', true, $5, 0.95, '2026-09-08T00:00:00Z', '2026-09-08T00:00:00Z')
+  `, [soaAssessmentId, tenantId, tenantControlId, standardCode, suggestedImplementationStatus]);
   await client.query(`
     INSERT INTO evidences (
       id, tenant_id, tenant_control_id, catalog_control_id, title,
@@ -213,6 +213,7 @@ async function runRuntimeOrchestratorE2E({ pool, pg }) {
     await seedRuntimeTenant(client, {
       tenantId: runtimeTenantB,
       suffix: 'b',
+      standardCode: 'ISO_9001_2015',
       assessmentStatus: 'non_compliant',
       evidenceCreatedAt: '2026-08-01T00:00:00Z',
       evidenceExpiresAt: '2026-08-31',
@@ -305,6 +306,17 @@ async function runRuntimeOrchestratorE2E({ pool, pg }) {
         AND a.formula_code = 'F5_5_COMPLIANCE_WEIGHTED'
         AND (ao.output_value->>'value')::numeric = (bo.output_value->>'value')::numeric
     `, [runtimeTenantA, runtimeTenantB]);
+    const standardLeakage = await pool.query(`
+      SELECT count(*)::int AS count
+      FROM calculation_runs cr
+      JOIN calculation_snapshots cs
+        ON cs.tenant_id = cr.tenant_id
+       AND cs.run_id = cr.id
+       AND cs.snapshot_type = 'source_dataset'
+      WHERE cr.tenant_id = $1
+        AND cr.correlation_id = 'db-integral-runtime-b'
+        AND cs.payload::text LIKE '%ISO_27001_2022%'
+    `, [runtimeTenantB]);
 
     console.log(`RUNTIME_ORCHESTRATOR_FORMULAS=${body.formula_codes.length}`);
     console.log(`RUNTIME_ORCHESTRATOR_CALCULATED=${resultA.summary.calculated}`);
@@ -315,9 +327,11 @@ async function runRuntimeOrchestratorE2E({ pool, pg }) {
     console.log(`RUNTIME_INDICATOR_SNAPSHOTS=${published.filter((item) => item.published.status === 'published' || item.published.status === 'already_published').length}`);
     console.log(`RUNTIME_GRC_HEALTH_STATUS=${byCodeA.get('F5_5_GRC_HEALTH')?.status || 'missing'}`);
     console.log(`FORMULA_CROSS_TENANT_LEAKAGE=${leakage.rows[0].count}`);
+    console.log(`FORMULA_CROSS_STANDARD_LEAKAGE=${standardLeakage.rows[0].count}`);
     console.log('RUNTIME_ORCHESTRATOR_END_TO_END PASS');
 
     assert.equal(leakage.rows[0].count, 0);
+    assert.equal(standardLeakage.rows[0].count, 0);
     assert.ok(Number(lineage.rows[0].runs) >= 6, 'runtime orchestrator must persist calculation runs');
     assert.ok(Number(lineage.rows[0].outputs) >= 6, 'runtime orchestrator must persist calculation outputs');
     assert.ok(Number(lineage.rows[0].source_snapshots) >= 6, 'runtime orchestrator must persist source dataset snapshots');

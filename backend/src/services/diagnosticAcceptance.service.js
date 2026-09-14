@@ -6,6 +6,7 @@ const {
 
 const pool = require('../config/db');
 const diagnosticService = require('./diagnostic.service');
+const { insertActionPlan } = require('../utils/actionPlanPersistence');
 
 
 const GAP_ACCEPT_ROLES = new Set([
@@ -316,44 +317,28 @@ async function acceptAction({ user, payload = {} } = {}) {
       human_review_required: true,
     };
 
-    const result = await client.query(
-      `
-      INSERT INTO action_plans (
-        tenant_id,
-        iso_code,
+    const result = await insertActionPlan(
+      client,
+      {
+        tenant_id: diagnostic.tenant_id,
+        iso_code: diagnostic.standard.standard_code,
         title,
         description,
-        source_type,
-        source_id,
-        priority,
-        status,
-        owner,
-        due_date,
-        created_by,
-        tenant_control_id,
-        approval_status,
-        ai_source_level,
-        ai_source_label,
-        ai_confidence,
-        ai_orchestration_json
-      )
-      VALUES ($1,$2,$3,$4,'ia',$5,$6,'abierto',$7,$8,$9,$10,'no_requerida','suggested','diagnostic_recommendation',$11,$12::jsonb)
-      RETURNING id, tenant_id, iso_code, title, status, priority, source_type, source_id, created_at
-      `,
-      [
-        diagnostic.tenant_id,
-        diagnostic.standard.standard_code,
-        title,
-        description,
-        control.tenant_control_id,
-        finalPriority,
-        text(action.suggested_owner || evidence.owner_role || payload.owner, '', 220) || null,
-        dueDate || null,
-        getUserId(user),
-        control.tenant_control_id,
-        text(payload.ai_assessment?.confidence || control.confidence, 'medium', 40),
-        JSON.stringify(orchestration),
-      ]
+        source_type: 'ia',
+        source_id: control.tenant_control_id,
+        priority: finalPriority,
+        status: 'abierto',
+        owner: text(action.suggested_owner || evidence.owner_role || payload.owner, '', 220) || null,
+        due_date: dueDate || null,
+        created_by: getUserId(user),
+        tenant_control_id: control.tenant_control_id,
+        approval_status: 'no_requerida',
+        ai_source_level: 'suggested',
+        ai_source_label: 'diagnostic_recommendation',
+        ai_confidence: text(payload.ai_assessment?.confidence || control.confidence, 'medium', 40),
+        ai_orchestration_json: JSON.stringify(orchestration),
+      },
+      { returning: 'id, tenant_id, iso_code, title, status, created_at' }
     );
 
     await client.query(

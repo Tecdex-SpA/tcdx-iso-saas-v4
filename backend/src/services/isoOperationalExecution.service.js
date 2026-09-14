@@ -6,6 +6,7 @@ const pool = require('../config/db');
 const {
   ACTIVE_CONTROL_REMEDIATION_STATUSES,
 } = require('./actionPlanTraceability.service');
+const { insertActionPlan } = require('../utils/actionPlanPersistence');
 
 
 const ALLOWED_TARGETS = new Set([
@@ -1119,48 +1120,25 @@ async function createActionPlan(client, suggestionRow, user, override = {}) {
     return reusablePlan.id;
   }
 
-  const insert = await client.query(
-    `
-    INSERT INTO action_plans (
-      tenant_id,
-      iso_code,
-      title,
-      description,
-      source_type,
-      source_id,
-      priority,
-      status,
-      owner,
-      due_date,
-      created_by,
-      tenant_control_id,
-      finding_id,
-      nonconformity_id,
-      audit_id,
-      asset_id,
-      approval_status
-    )
-    VALUES ($1,$2,$3,$4,$5,$6,$7,'abierto',$8,$9,$10,$11,$12,$13,$14,$15,'no_requerida')
-    RETURNING id
-    `,
-    [
-      tenantId,
-      standardCode || tenantControl?.iso || null,
-      target.title || suggestionRow.title,
-      target.description || suggestionRow.description || suggestionRow.rationale,
-      sourceType,
-      sourceId,
-      actionPlanPriority(target.priority || suggestionRow.priority),
-      target.owner || suggestionRow.suggested_owner || null,
-      target.due_date || suggestionRow.suggested_due_date || null,
-      getUserId(user),
-      tenantControl?.tenant_control_id || null,
-      target.finding_id || (suggestionRow.source_entity_type === 'finding' ? suggestionRow.source_entity_id : null),
-      target.nonconformity_id || (suggestionRow.source_entity_type === 'tenant_nonconformity' ? suggestionRow.source_entity_id : null),
-      target.audit_id || null,
-      target.asset_id || suggestionRow.payload_json?.asset_id || null,
-    ]
-  );
+  const insert = await insertActionPlan(client, {
+    tenant_id: tenantId,
+    iso_code: standardCode || tenantControl?.iso || null,
+    title: target.title || suggestionRow.title,
+    description: target.description || suggestionRow.description || suggestionRow.rationale,
+    source_type: sourceType,
+    source_id: sourceId,
+    priority: actionPlanPriority(target.priority || suggestionRow.priority),
+    status: 'abierto',
+    owner: target.owner || suggestionRow.suggested_owner || null,
+    due_date: target.due_date || suggestionRow.suggested_due_date || null,
+    created_by: getUserId(user),
+    tenant_control_id: tenantControl?.tenant_control_id || null,
+    finding_id: target.finding_id || (suggestionRow.source_entity_type === 'finding' ? suggestionRow.source_entity_id : null),
+    nonconformity_id: target.nonconformity_id || (suggestionRow.source_entity_type === 'tenant_nonconformity' ? suggestionRow.source_entity_id : null),
+    audit_id: target.audit_id || null,
+    asset_id: target.asset_id || suggestionRow.payload_json?.asset_id || null,
+    approval_status: 'no_requerida',
+  }, { returning: 'id' });
 
   await client.query(
     `

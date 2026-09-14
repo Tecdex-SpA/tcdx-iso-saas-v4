@@ -32,16 +32,45 @@ function standardMembershipPredicate({
     throw new Error('standardCodeSql is required');
   }
 
-  const normalizedStandard = `upper(trim(${standardCodeSql}))`;
+  const normalizeSql = (valueSql) => {
+    return `regexp_replace(replace(upper(COALESCE(${valueSql}, '')), 'ISOIEC', 'ISO'), '[^A-Z0-9]', '', 'g')`;
+  };
+
+  const normalizedStandard = normalizeSql(standardCodeSql);
+  const normalizedCatalogIso = normalizeSql(`${catalogAlias}.iso`);
+  const normalizedRelationStandard = normalizeSql('ccs_scope.standard_code');
+  const matchesVersionIdentity = (candidateSql, versionAlias) => `
+    ${normalizeSql(candidateSql)} IN (
+      ${normalizeSql(`${versionAlias}.standard_code`)},
+      ${normalizeSql(`${versionAlias}.standard_code || ${versionAlias}.version_code`)},
+      ${normalizeSql(`${versionAlias}.standard_code || '_' || ${versionAlias}.version_code`)}
+    )
+  `;
 
   return `
     (
-      upper(trim(${catalogAlias}.iso)) = ${normalizedStandard}
+      ${normalizedCatalogIso} = ${normalizedStandard}
+      OR EXISTS (
+        SELECT 1
+        FROM iso_standard_versions isv_scope
+        WHERE isv_scope.is_active IS TRUE
+          AND ${matchesVersionIdentity(standardCodeSql, 'isv_scope')}
+          AND ${matchesVersionIdentity(`${catalogAlias}.iso`, 'isv_scope')}
+      )
       OR EXISTS (
         SELECT 1
         FROM controls_catalog_standards ccs_scope
         WHERE ccs_scope.control_id = ${catalogAlias}.id
-          AND upper(trim(ccs_scope.standard_code)) = ${normalizedStandard}
+          AND (
+            ${normalizedRelationStandard} = ${normalizedStandard}
+            OR EXISTS (
+              SELECT 1
+              FROM iso_standard_versions isv_relation_scope
+              WHERE isv_relation_scope.is_active IS TRUE
+                AND ${matchesVersionIdentity(standardCodeSql, 'isv_relation_scope')}
+                AND ${matchesVersionIdentity('ccs_scope.standard_code', 'isv_relation_scope')}
+            )
+          )
       )
     )
   `;

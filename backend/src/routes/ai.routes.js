@@ -10,6 +10,7 @@ const pool = require('../config/db');
 const auth = require('../middleware/auth');
 const { requireCommercialCapability } = require('../middleware/commercialEntitlement.middleware');
 const { resolveLocale } = require('../utils/locale');
+const { insertActionPlan } = require('../utils/actionPlanPersistence');
 
 const requireAiComplianceRead = requireCommercialCapability('ai.compliance', {
   requiredPermission: 'ai.view',
@@ -268,64 +269,42 @@ router.put('/apply/:tenant_control_id', auth, requireAiComplianceRead, requireAc
         'La IA no aplica cambios directamente. Este borrador debe revisarse y gestionarse dentro del flujo normal de planes de acción.'
       ].join('\n');
 
-      const insertPlan = await client.query(
-        `
-        INSERT INTO action_plans (
-          tenant_id,
-          iso_code,
-          title,
-          description,
-          source_type,
-          source_id,
-          priority,
-          status,
-          owner,
-          due_date,
-          created_by,
+      const insertPlan = await insertActionPlan(client, {
+        tenant_id: control.tenant_id,
+        iso_code: control.iso,
+        title,
+        description,
+        source_type: 'ia',
+        source_id: tenant_control_id,
+        priority,
+        status: 'abierto',
+        owner: null,
+        due_date: null,
+        created_by: getUserId(req.user),
+        tenant_control_id,
+        approval_status: 'no_requerida',
+        ai_source_level: 'legacy_deterministic',
+        ai_source_label: 'legacy_ai_recommendations',
+        ai_confidence: 'low',
+        ai_confidence_score: 0.35,
+        ai_orchestration_json: JSON.stringify({
+          origin: 'legacy_ai_apply_replacement',
+          direct_apply_disabled: true,
           tenant_control_id,
-          approval_status,
-          ai_source_level,
-          ai_source_label,
-          ai_confidence,
-          ai_confidence_score,
-          ai_orchestration_json,
-          ai_enhanced_answer_json
-        )
-        VALUES (
-          $1,$2,$3,$4,'ia',$5,$6,'abierto',NULL,NULL,$7,$8,'no_requerida',
-          'legacy_deterministic','legacy_ai_recommendations','low',0.35,
-          $9::jsonb,$10::jsonb
-        )
-        RETURNING id
-        `,
-        [
-          control.tenant_id,
-          control.iso,
-          title,
-          description,
-          tenant_control_id,
-          priority,
-          getUserId(req.user),
-          tenant_control_id,
-          JSON.stringify({
-            origin: 'legacy_ai_apply_replacement',
-            direct_apply_disabled: true,
-            tenant_control_id,
-            catalog_control_id: control.catalog_control_id,
-            iso: control.iso,
-            clause: control.clause,
-            status: control.status,
-            suggested_action: control.accion,
-            suggested_evidence: control.evidencia
-          }),
-          JSON.stringify({
-            human_review_required: true,
-            action: control.accion,
-            evidence: control.evidencia,
-            auditor_explanation: auditorExplanation
-          })
-        ]
-      );
+          catalog_control_id: control.catalog_control_id,
+          iso: control.iso,
+          clause: control.clause,
+          status: control.status,
+          suggested_action: control.accion,
+          suggested_evidence: control.evidencia
+        }),
+        ai_enhanced_answer_json: JSON.stringify({
+          human_review_required: true,
+          action: control.accion,
+          evidence: control.evidencia,
+          auditor_explanation: auditorExplanation
+        })
+      }, { returning: 'id' });
 
       actionPlanId = insertPlan.rows[0].id;
     }

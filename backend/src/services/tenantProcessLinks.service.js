@@ -221,7 +221,7 @@ async function validateTarget(tenantId, targetType, targetId) {
   if (targetType === 'action') {
     const result = await pool.query(
       `
-      SELECT id, tenant_id, COALESCE(title, description, 'Plan de acción') AS label
+      SELECT id, tenant_id, COALESCE(title, NULLIF(to_jsonb(action_plans)->>'description', ''), NULLIF(metadata->>'description', ''), 'Plan de acción') AS label
       FROM action_plans
       WHERE tenant_id = $1::uuid
         AND id = $2::uuid
@@ -372,7 +372,7 @@ async function attachTargetSummaries(tenantId, rows) {
   }
 
   await addRows('action', `
-    SELECT id, 'action_plans' AS target_table, COALESCE(title, description, 'Plan de acción') AS target_label
+    SELECT id, 'action_plans' AS target_table, COALESCE(title, NULLIF(to_jsonb(action_plans)->>'description', ''), NULLIF(metadata->>'description', ''), 'Plan de acción') AS target_label
     FROM action_plans
     WHERE tenant_id = $1::uuid
       AND id = ANY($2::uuid[])
@@ -569,11 +569,11 @@ async function listCandidates({ user, targetType, search = '' }) {
         SELECT
           id,
           'action' AS target_type,
-          COALESCE(title, description, 'Plan de acción') AS label,
-          COALESCE(status, priority, 'Sin estado') AS subtitle
+          COALESCE(title, NULLIF(to_jsonb(action_plans)->>'description', ''), NULLIF(metadata->>'description', ''), 'Plan de acción') AS label,
+          COALESCE(status, NULLIF(to_jsonb(action_plans)->>'priority', ''), NULLIF(metadata->>'priority', ''), 'Sin estado') AS subtitle
         FROM action_plans
         WHERE tenant_id = $1::uuid
-          AND ($2 = '%%' OR title ILIKE $2 OR description ILIKE $2 OR status ILIKE $2)
+          AND ($2 = '%%' OR title ILIKE $2 OR NULLIF(to_jsonb(action_plans)->>'description', '') ILIKE $2 OR NULLIF(metadata->>'description', '') ILIKE $2 OR status ILIKE $2)
         ORDER BY due_date ASC NULLS LAST, created_at DESC NULLS LAST
         LIMIT 50
         `,

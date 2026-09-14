@@ -14,6 +14,18 @@ import { EnterpriseFilterBar } from '@/components/ui/enterprise';
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL || '';
 
+function formatCompactIsoCode(value: unknown) {
+  const original = String(value || '').trim();
+  if (!original) return '';
+
+  const withoutTrailingYear = original.replace(/(?:[_\s:\/-]+)(?:19|20)\d{2}\b/g, '');
+  return withoutTrailingYear
+    .toUpperCase()
+    .replace(/ISO\/IEC/g, 'ISO')
+    .replace(/ISOIEC/g, 'ISO')
+    .replace(/[^A-Z0-9]/g, '') || original;
+}
+
 type UnknownRecord = Record<string, unknown>;
 
 type AuthUser = {
@@ -192,10 +204,18 @@ type WorkbenchResponse = {
     deteriorated_controls: number;
     controls_without_evidence: number;
     controls_with_open_nc: number;
-    average_health_score: number;
+    average_health_score: number | null;
     catalog_mode: string;
   };
   items: WorkbenchItem[];
+};
+
+type NonconformityAiDraft = {
+  statement?: string;
+  corrective_action?: string;
+  root_cause?: string;
+  recommended_action?: string;
+  risk?: string;
 };
 
 type DraftItem = {
@@ -322,11 +342,18 @@ function evidenceStatusClass(status?: string | null) {
   return 'bg-yellow-100 text-yellow-700 border border-yellow-200';
 }
 
-function normalizeHealthStatus(status?: string | null) {
+type HealthFilter = 'todos' | 'saludable' | 'atencion' | 'deteriorado' | 'sin_datos';
+type CanonicalHealthProjection = {
+  status: Exclude<HealthFilter, 'todos'>;
+  score: number | null;
+};
+
+function normalizeHealthStatus(status?: string | null): Exclude<HealthFilter, 'todos'> {
   const value = String(status || '').toLowerCase().trim();
   if (value === 'saludable') return 'saludable';
   if (value === 'atencion' || value === 'atención') return 'atencion';
-  return 'deteriorado';
+  if (value === 'deteriorado' || value === 'critico' || value === 'crítico') return 'deteriorado';
+  return 'sin_datos';
 }
 
 function isOperationalStandard(s: ScopeStandard) {
@@ -347,6 +374,7 @@ function healthBadgeClass(status?: string | null) {
   const value = normalizeHealthStatus(status);
   if (value === 'saludable') return 'bg-green-100 text-green-700 border border-green-200';
   if (value === 'atencion') return 'bg-yellow-100 text-yellow-700 border border-yellow-200';
+  if (value === 'sin_datos') return 'bg-slate-100 text-slate-600 border border-slate-200';
   return 'bg-red-100 text-red-700 border border-red-200';
 }
 
@@ -357,6 +385,9 @@ function healthCardClass(status?: string | null) {
   }
   if (value === 'atencion') {
     return 'border-yellow-200 bg-yellow-50/40';
+  }
+  if (value === 'sin_datos') {
+    return 'border-slate-200 bg-slate-50/60';
   }
   return 'border-red-200 bg-red-50/40';
 }
@@ -394,13 +425,27 @@ function getIntegratedEvidenceCompliancePct(evidence: EvidenceItem): number | nu
 }
 
 
-function getEffectiveHealthStatus(item: WorkbenchItem): string | null {
-  return item.effective_health_status || item.derived_health_status || null;
+function getCanonicalHealthProjection(item: WorkbenchItem): CanonicalHealthProjection {
+  const raw = item.effective_health_score ?? null;
+  if (raw === null || raw === undefined || raw === '') {
+    return { status: 'sin_datos', score: null };
+  }
+  const score = Number(raw);
+  const status = normalizeHealthStatus(item.effective_health_status || null);
+
+  if (!Number.isFinite(score) || status === 'sin_datos') {
+    return { status: 'sin_datos', score: null };
+  }
+
+  return { status, score };
 }
 
-function getEffectiveHealthScore(item: WorkbenchItem): number {
-  const raw = item.effective_health_score ?? item.health_score ?? 0;
-  return toNumber(raw);
+function getEffectiveHealthStatus(item: WorkbenchItem): Exclude<HealthFilter, 'todos'> {
+  return getCanonicalHealthProjection(item).status;
+}
+
+function getEffectiveHealthScore(item: WorkbenchItem): number | null {
+  return getCanonicalHealthProjection(item).score;
 }
 
 function getWorkbenchAttentionMessage(item: WorkbenchItem, t: (key: string) => string): string | null {
@@ -486,6 +531,8 @@ function ControlesPageContent() {
     if (raw === 'saludable') return t('statuses.controls.saludable');
     if (raw === 'atencion') return t('statuses.controls.atencion');
     if (raw === 'deteriorado') return t('statuses.controls.deteriorado');
+    if (raw === 'critico' || raw === 'crítico') return t('statuses.controls.deteriorado');
+    if (raw === 'sin_datos') return t('common.noData');
     return value || t('common.noData');
   };
 
@@ -500,9 +547,7 @@ function ControlesPageContent() {
 
   const [selectedISO, setSelectedISO] = useState('');
   const [selectedOperationId, setSelectedOperationId] = useState('');
-  const [healthFilter, setHealthFilter] = useState<
-    'todos' | 'saludable' | 'atencion' | 'deteriorado'
-  >('todos');
+  const [healthFilter, setHealthFilter] = useState<HealthFilter>('todos');
   const [searchText, setSearchText] = useState('');
 
   const [catalog, setCatalog] = useState<CatalogResponse | null>(null);
@@ -533,6 +578,9 @@ function ControlesPageContent() {
   >({});
   const [uploadFiles, setUploadFiles] = useState<Record<string, File | null>>({});
   const [approvalNotes, setApprovalNotes] = useState<Record<string, string>>({});
+  const [nonconformityAiDrafts, setNonconformityAiDrafts] = useState<
+    Record<string, NonconformityAiDraft>
+  >({});
   const [focusMessage, setFocusMessage] = useState('');
   const [focusedControlId, setFocusedControlId] = useState('');
 
@@ -884,7 +932,7 @@ function ControlesPageContent() {
 
     if (healthFilter !== 'todos') {
       base = base.filter(
-        (item) => normalizeHealthStatus(getEffectiveHealthStatus(item)) === healthFilter
+        (item) => getEffectiveHealthStatus(item) === healthFilter
       );
     }
 
@@ -1245,7 +1293,30 @@ function ControlesPageContent() {
         return;
       }
 
-      router.push(`/no-conformidades?iso=${encodeURIComponent(selectedISO)}`);
+      const nonconformityId = json?.nonconformity?.id || json?.data?.nonconformity?.id || null;
+
+      if (nonconformityId) {
+        const aiRes = await fetch(`${API_URL}/api/ai-compliance/nonconformity-draft`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            tenant_id: tenantId,
+            nonconformity_id: nonconformityId,
+          }),
+        });
+        const aiJson = await aiRes.json().catch(() => null);
+        if (aiRes.ok && aiJson?.ai) {
+          setNonconformityAiDrafts((prev) => ({
+            ...prev,
+            [item.tenant_control_id]: aiJson.ai,
+          }));
+        }
+      }
+
+      await loadWorkbench(tenantId, token, selectedISO, selectedOperationId);
     } catch (err) {
       console.error('ERROR QUICK NC:', err);
       setErrorMessage(getErrorMessage(err, 'Error creando no conformidad'));
@@ -1542,7 +1613,7 @@ function ControlesPageContent() {
                 value={healthFilter}
                 onChange={(e) =>
                   setHealthFilter(
-                    e.target.value as 'todos' | 'saludable' | 'atencion' | 'deteriorado'
+                    e.target.value as HealthFilter
                   )
                 }
                 className="mt-1 min-h-10 w-full rounded-[var(--tcdx-radius-tecdex-sm)] border border-slate-200 px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-[var(--tcdx-color-primary)]"
@@ -1551,6 +1622,7 @@ function ControlesPageContent() {
                 <option value="saludable">{t('statuses.controls.saludable')}</option>
                 <option value="atencion">{t('statuses.controls.atencion')}</option>
                 <option value="deteriorado">{t('statuses.controls.deteriorado')}</option>
+                <option value="sin_datos">{t('common.noData')}</option>
               </select>
             </label>
 
@@ -1583,7 +1655,7 @@ function ControlesPageContent() {
               />
               <MetricCard
                 title={t('controls.averageHealth')}
-                value={summary.average_health_score}
+                value={summary.average_health_score ?? 'N/A'}
                 tone="blue"
               />
             </div>
@@ -1761,6 +1833,8 @@ function ControlesPageContent() {
                               evidencesByControl[item.tenant_control_id] || [];
                             const workbenchAttentionMessage =
                               getWorkbenchAttentionMessage(item, t);
+                            const nonconformityAiDraft =
+                              nonconformityAiDrafts[item.tenant_control_id];
 
                             return (
                               <article
@@ -1785,7 +1859,7 @@ function ControlesPageContent() {
                                         {mapHealthLabel(getEffectiveHealthStatus(item))}
                                       </span>
                                       <span className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">
-                                        Health {getEffectiveHealthScore(item)}
+                                        Health {getEffectiveHealthScore(item) ?? 'N/A'}
                                       </span>
                                       <span
                                         className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold ${getEvidenceQualityClass(
@@ -1837,6 +1911,19 @@ function ControlesPageContent() {
                                     {workbenchAttentionMessage && (
                                       <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
                                         {workbenchAttentionMessage}
+                                      </div>
+                                    )}
+
+                                    {nonconformityAiDraft && (
+                                      <div className="rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
+                                        <div className="font-semibold">IA NC</div>
+                                        <div className="mt-2 space-y-1">
+                                          {nonconformityAiDraft.statement && <p>{nonconformityAiDraft.statement}</p>}
+                                          {nonconformityAiDraft.root_cause && <p>{nonconformityAiDraft.root_cause}</p>}
+                                          {(nonconformityAiDraft.corrective_action || nonconformityAiDraft.recommended_action) && (
+                                            <p>{nonconformityAiDraft.corrective_action || nonconformityAiDraft.recommended_action}</p>
+                                          )}
+                                        </div>
                                       </div>
                                     )}
                                   </div>
@@ -2177,7 +2264,7 @@ function ControlesPageContent() {
 
                                               <div className="mt-2 grid gap-2 text-xs text-blue-800 md:grid-cols-2 xl:grid-cols-4">
                                                 <span>
-                                                  Norma: <b>{String(getEvidenceMetadataForDisplay(evidence).suggested_standard_code || '—')}</b>
+                                                  Norma: <b>{formatCompactIsoCode(getEvidenceMetadataForDisplay(evidence).suggested_standard_code) || '—'}</b>
                                                 </span>
                                                 <span>
                                                   Control: <b>{String(getEvidenceMetadataForDisplay(evidence).suggested_control_ref || '—')}</b>

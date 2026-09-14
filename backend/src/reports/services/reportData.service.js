@@ -2007,11 +2007,11 @@ async function getOpenActionPlans(tenantId) {
       ap.id,
       ap.iso_code,
       ap.title,
-      ap.description,
+      COALESCE(NULLIF(to_jsonb(ap)->>'description', ''), NULLIF(ap.metadata->>'description', ''), ap.title) AS description,
       ap.source_type,
-      ap.priority,
+      COALESCE(NULLIF(to_jsonb(ap)->>'priority', ''), NULLIF(ap.metadata->>'priority', ''), 'media') AS priority,
       ap.status,
-      ap.owner,
+      COALESCE(NULLIF(to_jsonb(ap)->>'owner', ''), NULLIF(ap.metadata->>'owner', '')) AS owner,
       ap.due_date,
       ap.completed_at,
       ap.tenant_control_id,
@@ -2019,7 +2019,7 @@ async function getOpenActionPlans(tenantId) {
       ap.nonconformity_id,
       ap.audit_id,
       ap.asset_id,
-      ap.approval_status,
+      COALESCE(NULLIF(to_jsonb(ap)->>'approval_status', ''), NULLIF(ap.metadata->>'approval_status', ''), 'no_requerida') AS approval_status,
       ap.created_at,
       ap.updated_at
     FROM action_plans ap
@@ -2033,9 +2033,9 @@ async function getOpenActionPlans(tenantId) {
         ELSE 2
       END ASC,
       CASE
-        WHEN LOWER(COALESCE(ap.priority, '')) IN ('critical', 'critico', 'crítico') THEN 1
-        WHEN LOWER(COALESCE(ap.priority, '')) IN ('alta', 'alto', 'high') THEN 2
-        WHEN LOWER(COALESCE(ap.priority, '')) IN ('media', 'medio', 'medium') THEN 3
+        WHEN LOWER(COALESCE(NULLIF(to_jsonb(ap)->>'priority', ''), NULLIF(ap.metadata->>'priority', ''))) IN ('critical', 'critico', 'crítico') THEN 1
+        WHEN LOWER(COALESCE(NULLIF(to_jsonb(ap)->>'priority', ''), NULLIF(ap.metadata->>'priority', ''))) IN ('alta', 'alto', 'high') THEN 2
+        WHEN LOWER(COALESCE(NULLIF(to_jsonb(ap)->>'priority', ''), NULLIF(ap.metadata->>'priority', ''))) IN ('media', 'medio', 'medium') THEN 3
         ELSE 4
       END ASC,
       ap.due_date ASC NULLS LAST,

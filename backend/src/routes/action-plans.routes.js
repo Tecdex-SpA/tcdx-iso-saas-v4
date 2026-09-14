@@ -16,6 +16,11 @@ const {
 const {
   publishAffectedOfficialIndicators,
 } = require('../services/grcCalculationOrchestration.service');
+const {
+  actionPlanRuntimeProjection,
+  insertActionPlan,
+  updateActionPlan,
+} = require('../utils/actionPlanPersistence');
 
 function getUserTenantId(user) {
   return (
@@ -355,6 +360,7 @@ const resolveModernTenantControlIdFromFinding = async (
 const enrichedActionPlansSelect = `
   SELECT
     ap.*,
+    ${actionPlanRuntimeProjection('ap')},
 
     f.title AS finding_title,
     f.finding_type AS finding_type,
@@ -823,18 +829,12 @@ router.post('/:id/updates', auth, requireActionsManage, async (req, res) => {
       const completedAt =
         nextStatus === 'completado' ? row.completed_at || new Date() : null;
 
-      await client.query(
-        `
-        UPDATE action_plans
-        SET
-          status = $1,
-          completed_at = $2,
-          approval_status = $3,
-          updated_at = NOW()
-        WHERE id = $4
-        `,
-        [nextStatus, completedAt, nextApprovalStatus, id]
-      );
+      await updateActionPlan(client, id, {
+        status: nextStatus,
+        completed_at: completedAt,
+        approval_status: nextApprovalStatus,
+        updated_at: new Date(),
+      });
 
       if (nextStatus === 'completado') {
         if (row.finding_id) {
@@ -975,21 +975,15 @@ router.post('/:id/request-approval', auth, requireActionsManage, async (req, res
 
     await client.query('BEGIN');
 
-    await client.query(
-      `
-      UPDATE action_plans
-      SET
-        approval_status = 'pendiente_aprobacion',
-        approval_requested_at = NOW(),
-        approval_requested_by = $1,
-        approval_reviewed_at = NULL,
-        approval_reviewed_by = NULL,
-        approval_comment = $2,
-        updated_at = NOW()
-      WHERE id = $3
-      `,
-      [getUserId(req.user), requestComment, id]
-    );
+    await updateActionPlan(client, id, {
+      approval_status: 'pendiente_aprobacion',
+      approval_requested_at: new Date(),
+      approval_requested_by: getUserId(req.user),
+      approval_reviewed_at: null,
+      approval_reviewed_by: null,
+      approval_comment: requestComment,
+      updated_at: new Date(),
+    });
 
     await client.query(
       `
@@ -1095,21 +1089,15 @@ router.post('/:id/review-approval', auth, requireActionsApprove, async (req, res
     if (decision === 'approved') {
       const finalComment = reviewComment || 'Cierre aprobado.';
 
-      await client.query(
-        `
-        UPDATE action_plans
-        SET
-          status = 'completado',
-          completed_at = COALESCE(completed_at, NOW()),
-          approval_status = 'aprobada',
-          approval_reviewed_at = NOW(),
-          approval_reviewed_by = $1,
-          approval_comment = $2,
-          updated_at = NOW()
-        WHERE id = $3
-        `,
-        [getUserId(req.user), finalComment, id]
-      );
+      await updateActionPlan(client, id, {
+        status: 'completado',
+        completed_at: row.completed_at || new Date(),
+        approval_status: 'aprobada',
+        approval_reviewed_at: new Date(),
+        approval_reviewed_by: getUserId(req.user),
+        approval_comment: finalComment,
+        updated_at: new Date(),
+      });
 
       await client.query(
         `
@@ -1137,21 +1125,15 @@ router.post('/:id/review-approval', auth, requireActionsApprove, async (req, res
     }
 
     if (decision === 'rework') {
-      await client.query(
-        `
-        UPDATE action_plans
-        SET
-          status = 'en progreso',
-          completed_at = NULL,
-          approval_status = 'devuelta',
-          approval_reviewed_at = NOW(),
-          approval_reviewed_by = $1,
-          approval_comment = $2,
-          updated_at = NOW()
-        WHERE id = $3
-        `,
-        [getUserId(req.user), reviewComment, id]
-      );
+      await updateActionPlan(client, id, {
+        status: 'en progreso',
+        completed_at: null,
+        approval_status: 'devuelta',
+        approval_reviewed_at: new Date(),
+        approval_reviewed_by: getUserId(req.user),
+        approval_comment: reviewComment,
+        updated_at: new Date(),
+      });
 
       await client.query(
         `
@@ -1649,48 +1631,28 @@ router.post('/', auth, requireActionsManage, async (req, res) => {
       }
     }
 
-    const insertResult = await client.query(
-      `
-      INSERT INTO action_plans (
+    const insertResult = await insertActionPlan(
+      client,
+      {
         tenant_id,
         iso_code,
         title,
-        description,
-        source_type,
-        source_id,
-        priority,
-        status,
-        owner,
-        due_date,
-        created_by,
-        tenant_control_id,
-        finding_id,
-        nonconformity_id,
-        audit_id,
-        asset_id,
-        approval_status
-      )
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,'no_requerida')
-      RETURNING id
-      `,
-      [
-        tenant_id,
-        iso_code,
-        title,
-        description || null,
-        source.source_type,
-        source.source_id,
-        finalPriority,
-        finalStatus,
-        owner || null,
-        due_date || null,
-        getUserId(req.user),
-        tenant_control_id || null,
-        finding_id || null,
-        nonconformity_id || null,
-        audit_id || null,
-        asset_id || null,
-      ]
+        description: description || null,
+        source_type: source.source_type,
+        source_id: source.source_id,
+        priority: finalPriority,
+        status: finalStatus,
+        owner: owner || null,
+        due_date: due_date || null,
+        created_by: getUserId(req.user),
+        tenant_control_id: tenant_control_id || null,
+        finding_id: finding_id || null,
+        nonconformity_id: nonconformity_id || null,
+        audit_id: audit_id || null,
+        asset_id: asset_id || null,
+        approval_status: 'no_requerida',
+      },
+      { returning: 'id' }
     );
 
     await client.query(
@@ -1864,33 +1826,17 @@ router.put('/:id', auth, requireActionsManage, async (req, res) => {
 
     await client.query('BEGIN');
 
-    await client.query(
-      `
-      UPDATE action_plans
-      SET
-        title = $1,
-        description = $2,
-        priority = $3,
-        status = $4,
-        owner = $5,
-        due_date = $6,
-        completed_at = $7,
-        approval_status = $8,
-        updated_at = NOW()
-      WHERE id = $9
-      `,
-      [
-        title ?? row.title,
-        description ?? row.description,
-        finalPriority,
-        nextStatus,
-        owner ?? row.owner,
-        due_date ?? row.due_date,
-        completedAt,
-        nextApprovalStatus,
-        id,
-      ]
-    );
+    await updateActionPlan(client, id, {
+      title: title ?? row.title,
+      description: description ?? row.description,
+      priority: finalPriority,
+      status: nextStatus,
+      owner: owner ?? row.owner,
+      due_date: due_date ?? row.due_date,
+      completed_at: completedAt,
+      approval_status: nextApprovalStatus,
+      updated_at: new Date(),
+    });
 
     if (nextStatus === 'completado') {
       if (row.finding_id) {

@@ -1794,7 +1794,7 @@ async function validateTarget(tenantId, targetType, targetId) {
     process: { table: 'tenant_processes', label: "COALESCE(t.name, t.code, 'Proceso')" },
     operation: { table: 'tenant_operations', label: "COALESCE(t.name, t.code, 'Operacion')" },
     risk: { table: 'iso_risk_matrix_items', label: "COALESCE(t.risk_title, t.risk_code, t.risk_description, 'Riesgo')" },
-    action: { table: 'action_plans', label: "COALESCE(t.title, t.description, 'Plan de accion')" },
+    action: { table: 'action_plans', label: "COALESCE(t.title, NULLIF(to_jsonb(t)->>'description', ''), NULLIF(t.metadata->>'description', ''), 'Plan de accion')" },
   };
   const config = configs[targetType];
   if (!(await tableExists(config.table))) {
@@ -2048,9 +2048,9 @@ async function listTargetCandidates({ user, targetType, search = '' }) {
       ORDER BY created_at DESC NULLS LAST LIMIT 80
     `,
     action: `
-      SELECT id, 'action' AS target_type, COALESCE(title, description, 'Plan de accion') AS label, COALESCE(status, priority, '') AS subtitle
+      SELECT id, 'action' AS target_type, COALESCE(title, NULLIF(to_jsonb(action_plans)->>'description', ''), NULLIF(metadata->>'description', ''), 'Plan de accion') AS label, COALESCE(status, NULLIF(to_jsonb(action_plans)->>'priority', ''), NULLIF(metadata->>'priority', ''), '') AS subtitle
       FROM action_plans
-      WHERE tenant_id = $1::uuid AND ($2 = '%%' OR title ILIKE $2 OR description ILIKE $2 OR status ILIKE $2)
+      WHERE tenant_id = $1::uuid AND ($2 = '%%' OR title ILIKE $2 OR NULLIF(to_jsonb(action_plans)->>'description', '') ILIKE $2 OR NULLIF(metadata->>'description', '') ILIKE $2 OR status ILIKE $2)
       ORDER BY created_at DESC NULLS LAST LIMIT 80
     `,
   };

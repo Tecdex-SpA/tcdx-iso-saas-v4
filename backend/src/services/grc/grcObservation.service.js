@@ -111,7 +111,7 @@ const SOURCE_ADAPTERS = Object.freeze({
   }],
   action: [{
     table: 'action_plans',
-    query: `SELECT id, tenant_id, COALESCE(title, description, 'Action plan') AS label FROM action_plans WHERE tenant_id = $1::uuid AND id = $2::uuid LIMIT 1`,
+    query: `SELECT id, tenant_id, COALESCE(title, NULLIF(to_jsonb(action_plans)->>'description', ''), NULLIF(metadata->>'description', ''), 'Action plan') AS label FROM action_plans WHERE tenant_id = $1::uuid AND id = $2::uuid LIMIT 1`,
   }],
   audit: [{
     table: 'audits',

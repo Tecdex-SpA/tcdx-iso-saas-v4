@@ -220,8 +220,8 @@ async function getRelations(audit) {
           jsonb_build_object(
             'id', ap.id,
             'title', ap.title,
-            'description', ap.description,
-            'priority', ap.priority,
+            'description', COALESCE(NULLIF(to_jsonb(ap)->>'description', ''), NULLIF(ap.metadata->>'description', ''), ap.title),
+            'priority', COALESCE(NULLIF(to_jsonb(ap)->>'priority', ''), NULLIF(ap.metadata->>'priority', ''), 'media'),
             'status', ap.status,
             'tenant_control_id', ap.tenant_control_id,
             'created_at', ap.created_at
