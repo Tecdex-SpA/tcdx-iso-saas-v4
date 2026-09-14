@@ -239,6 +239,10 @@ def _intelligence_knowledge_items(context: Dict[str, Any], limit: int = 12) -> L
 
 
 def _intelligence_fallback_contract(context: Dict[str, Any], reason: str = "deterministic") -> Dict[str, Any]:
+    authorized_facts = _authorized_context_facts(context)
+    if authorized_facts and not _has_operational_evidence(context):
+        return _insufficient_evidence_intelligence_contract(context, reason=reason)
+
     tenant = context.get("tenant_summary") if isinstance(context.get("tenant_summary"), dict) else {}
     scores = context.get("scores") if isinstance(context.get("scores"), dict) else {}
     findings = context.get("findings") if isinstance(context.get("findings"), list) else []
@@ -283,7 +287,217 @@ def _normalize_intelligence_contract(data: Dict[str, Any], context: Dict[str, An
         result["should_escalate_to_human"] = True
         result["limitations"].append("Salida IA degradada: faltaba knowledge_basis aplicable.")
     result["should_escalate_to_human"] = bool(result.get("should_escalate_to_human"))
+    return _apply_intelligence_grounding_contract(result, context)
+
+
+def _authorized_context_facts(context: Dict[str, Any]) -> List[str]:
+    facts: List[str] = []
+    purpose = _safe_text(context.get("purpose"))
+    if purpose:
+        facts.append(f"Propósito: {purpose}")
+    raw_facts = context.get("facts")
+    if isinstance(raw_facts, list):
+        for item in raw_facts:
+            text = _safe_text(item)
+            if text:
+                facts.append(text)
+    for key in ("authorized_facts", "grounded_facts"):
+        value = context.get(key)
+        if isinstance(value, list):
+            for item in value:
+                text = _safe_text(item)
+                if text:
+                    facts.append(text)
+    return list(dict.fromkeys(facts))[:12]
+
+
+def _has_operational_evidence(context: Dict[str, Any]) -> bool:
+    evidence_keys = (
+        "test_results",
+        "metrics",
+        "controls",
+        "control_health",
+        "evidences",
+        "evidence_context",
+        "findings",
+        "action_plans",
+        "risks",
+        "kpis",
+        "scores",
+        "audits",
+        "compliance_results",
+        "security_assessments",
+        "policy_checks",
+        "knowledge_context",
+        "retrieved_knowledge",
+        "regulatory_context",
+    )
+    for key in evidence_keys:
+        value = context.get(key)
+        if isinstance(value, list) and value:
+            return True
+        if isinstance(value, dict) and any(v not in (None, "", [], {}) for v in value.values()):
+            return True
+        if value not in (None, "", [], {}):
+            return True
+    return False
+
+
+def _insufficient_evidence_intelligence_contract(context: Dict[str, Any], reason: str = "insufficient_evidence") -> Dict[str, Any]:
+    facts = _authorized_context_facts(context)
+    fact_text = "; ".join(facts[:6]) if facts else "no se entregaron hechos verificables"
+    missing = (
+        "No se entregaron resultados de pruebas, métricas, evidencias, controles, "
+        "validaciones formales ni conclusiones de cumplimiento autorizadas."
+    )
+    return {
+        "executive_summary": f"Contexto autorizado recibido: {fact_text}. {missing}",
+        "technical_summary": "Evidencia insuficiente para concluir desempeño técnico, resultados de pruebas, métricas de infraestructura o tiempos de ejecución.",
+        "audit_summary": "Evidencia insuficiente para concluir cumplimiento, certificación, eficacia de controles o resultado auditor autorizado. Requiere revisión humana.",
+        "assumptions": ["La respuesta usa únicamente los hechos entregados en el contexto autorizado."],
+        "limitations": [missing, f"Modo de grounding: {reason}"],
+        "recommendations": [{
+            "title": "Completar evidencia autorizada antes de concluir",
+            "action_basis": "Faltan evidencias, métricas o resultados verificables en el contexto recibido.",
+        }],
+        "knowledge_basis": [],
+        "confidence": "baja",
+        "should_escalate_to_human": True,
+        "fallback": reason != "llm_grounding_repair",
+        "fallback_reason": reason,
+        "grounding_status": "insufficient_evidence",
+        "unsupported_claims_removed": True,
+    }
+
+
+def _apply_intelligence_grounding_contract(result: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
+    facts = _authorized_context_facts(context)
+    if facts and not _has_operational_evidence(context):
+        return _insufficient_evidence_intelligence_contract(context, reason="llm_grounding_repair")
+
+    if not _has_operational_evidence(context):
+        result.setdefault("grounding_status", "insufficient_evidence")
+        result.setdefault("unsupported_claims_removed", False)
+        result["should_escalate_to_human"] = True
+        result["confidence"] = "baja"
+        return result
+
+    validation = _validate_grounding_claims(result, context)
+    result["claim_validation"] = validation
+    if validation.get("validated") is True:
+        result["grounding_status"] = "grounded"
+        result["unsupported_claims_removed"] = False
+        return result
+
+    if validation.get("claims_present"):
+        result["grounding_status"] = "partially_grounded"
+    else:
+        result["grounding_status"] = "human_review_required"
+    result["unsupported_claims_removed"] = False
+    if result.get("confidence") == "alta":
+        result["confidence"] = "media"
+    elif result.get("confidence") not in {"media", "baja"}:
+        result["confidence"] = "baja"
+    result["should_escalate_to_human"] = True
+    limitations = _as_list(result.get("limitations"), 12)
+    limitations.append("Las conclusiones sensibles requieren claims con fuentes autorizadas y revisión humana.")
+    result["limitations"] = list(dict.fromkeys(limitations))
     return result
+
+
+def _collect_authorized_source_refs(value: Any, path: str = "context", refs: Optional[set] = None) -> set:
+    if refs is None:
+        refs = set()
+    if isinstance(value, dict):
+        if any(item not in (None, "", [], {}) for item in value.values()):
+            refs.add(path)
+        for key, item in value.items():
+            key_text = str(key)
+            next_path = f"{path}.{key_text}"
+            if key_text in {
+                "id",
+                "source_id",
+                "source_ref",
+                "source_record_id",
+                "record_id",
+                "citation_id",
+                "item_key",
+                "metric_code",
+                "control_code",
+                "evidence_id",
+                "finding_id",
+            }:
+                text = _safe_text(item)
+                if text:
+                    refs.add(text)
+                    refs.add(next_path)
+            _collect_authorized_source_refs(item, next_path, refs)
+    elif isinstance(value, list):
+        if value:
+            refs.add(path)
+        for index, item in enumerate(value):
+            _collect_authorized_source_refs(item, f"{path}[{index}]", refs)
+    elif value not in (None, ""):
+        refs.add(path)
+    return refs
+
+
+def _normalize_claims(value: Any) -> List[Dict[str, Any]]:
+    if isinstance(value, dict):
+        value = value.get("claims") or value.get("items") or []
+    if not isinstance(value, list):
+        return []
+    claims: List[Dict[str, Any]] = []
+    for item in value[:20]:
+        if isinstance(item, dict):
+            text = _safe_text(item.get("claim") or item.get("text") or item.get("statement"))
+            source_refs = item.get("source_refs") or item.get("sources") or item.get("evidence_refs") or []
+            if isinstance(source_refs, str):
+                source_refs = [source_refs]
+            source_refs = [str(ref).strip() for ref in source_refs if str(ref or "").strip()] if isinstance(source_refs, list) else []
+            claims.append({
+                "claim": text,
+                "source_refs": source_refs,
+                "requires_human_review": bool(item.get("requires_human_review")),
+            })
+        elif isinstance(item, str) and item.strip():
+            claims.append({"claim": item.strip(), "source_refs": [], "requires_human_review": True})
+    return claims
+
+
+def _validate_grounding_claims(result: Dict[str, Any], context: Dict[str, Any]) -> Dict[str, Any]:
+    claims = _normalize_claims(
+        result.get("grounding_claims")
+        or result.get("claims")
+        or result.get("claim_grounding")
+    )
+    authorized_refs = _collect_authorized_source_refs(context)
+    if not claims:
+        return {
+            "validated": False,
+            "claims_present": False,
+            "reason": "missing_claim_grounding_contract",
+            "authorized_source_refs_count": len(authorized_refs),
+        }
+
+    unsupported = []
+    for index, claim in enumerate(claims):
+        refs = claim.get("source_refs") or []
+        if not refs or not all(ref in authorized_refs for ref in refs):
+            unsupported.append({
+                "index": index,
+                "claim": claim.get("claim"),
+                "source_refs": refs,
+            })
+
+    return {
+        "validated": not unsupported,
+        "claims_present": True,
+        "claims_count": len(claims),
+        "unsupported_claims_count": len(unsupported),
+        "unsupported_claims": unsupported[:5],
+        "authorized_source_refs_count": len(authorized_refs),
+    }
 
 
 def _parse_jsonish(value: Any) -> Dict[str, Any]:
@@ -661,9 +875,11 @@ def _llm_structured_enrichment(payload: Dict[str, Any], base: Dict[str, Any], *,
     try:
         started = time.perf_counter()
         print({
-            "event": "OLLAMA REQUEST START",
+            "event": "LLM REQUEST START",
             "request_id": request_id,
             "endpoint": endpoint,
+            "provider": metadata.get("provider"),
+            "tenant_id": payload.get("tenant_id"),
             "model_mode": model_mode,
             "selected_model": metadata.get("model"),
             "timeout_ms": payload.get("timeout_ms"),
@@ -678,9 +894,11 @@ def _llm_structured_enrichment(payload: Dict[str, Any], base: Dict[str, Any], *,
             model_mode=model_mode,
         )
         print({
-            "event": "OLLAMA REQUEST OK",
+            "event": "LLM REQUEST OK",
             "request_id": request_id,
             "endpoint": endpoint,
+            "provider": metadata.get("provider"),
+            "tenant_id": payload.get("tenant_id"),
             "model_mode": model_mode,
             "selected_model": metadata.get("model"),
             "duration_ms": int((time.perf_counter() - started) * 1000),
@@ -688,9 +906,11 @@ def _llm_structured_enrichment(payload: Dict[str, Any], base: Dict[str, Any], *,
         return {"used": True, "data": data if isinstance(data, dict) else {}, "error": "", "metadata": metadata}
     except Exception as exc:
         print({
-            "event": "OLLAMA REQUEST ERROR",
+            "event": "LLM REQUEST ERROR",
             "request_id": request_id,
             "endpoint": endpoint,
+            "provider": metadata.get("provider"),
+            "tenant_id": payload.get("tenant_id"),
             "model_mode": model_mode,
             "selected_model": metadata.get("model"),
             "error_type": type(exc).__name__,
@@ -757,14 +977,21 @@ async def intelligence_narrative(
         try:
             data = call_llm_json(
                 prompt=json.dumps({
-                    "instruction": "Devuelve exclusivamente JSON valido con narrativa ejecutiva, tecnica y auditora. No inventes datos. Usa solo el contexto curado.",
+                    "instruction": (
+                        "Devuelve exclusivamente JSON valido con narrativa ejecutiva, tecnica y auditora. "
+                        "Usa exclusivamente hechos presentes en el contexto autorizado. "
+                        "No infieras resultados de pruebas, metricas, cumplimiento, certificacion, controles, evidencias ni politicas no entregadas. "
+                        "Si falta evidencia, declaralo explicitamente. No conviertas conocimiento general del modelo en hechos del tenant. "
+                        "Incluye grounding_claims[] con cada conclusion sensible y source_refs[] que apunten a fuentes del contexto autorizado."
+                    ),
                     "context": context,
                     "output_contract": context.get("output_contract"),
                 }, ensure_ascii=False),
                 system_prompt=(
                     "Eres una capa de sintesis GRC/ISO multi-tenant. "
                     "Los datos tenant-scoped, reglas, scoring y knowledge_basis son la fuente de verdad. "
-                    "No prometas certificacion ni auditoria automatica. No uses busqueda web."
+                    "No prometas certificacion ni auditoria automatica. No uses busqueda web. "
+                    "El LLM no tiene autoridad de cumplimiento, evidencia, metricas, pruebas, politicas ni decisiones; la revision humana permanece obligatoria."
                 ),
                 temperature=0.2,
                 timeout=int(os.getenv("INTELLIGENCE_AI_TIMEOUT_SECONDS", "45") or "45"),
@@ -774,7 +1001,9 @@ async def intelligence_narrative(
                 response_contract_instruction=(
                     "JSON obligatorio: executive_summary, technical_summary, audit_summary, "
                     "assumptions[], limitations[], recommendations[], knowledge_basis[], "
-                    "confidence alta|media|baja, should_escalate_to_human boolean."
+                    "confidence alta|media|baja, should_escalate_to_human boolean, "
+                    "grounding_status grounded|partially_grounded|insufficient_evidence|human_review_required, "
+                    "unsupported_claims_removed boolean, grounding_claims[]."
                 ),
             )
             normalized = _normalize_llm_data(data)

@@ -907,7 +907,7 @@ def analyze_with_senior_auditor_v2(payload: Dict[str, Any]) -> Dict[str, Any]:
     elif is_llm_available():
         try:
             print(json.dumps({
-                "event": "OLLAMA REQUEST START" if llm_metadata.get("provider") == "ollama" else "LLM REQUEST START",
+                "event": "LLM REQUEST START",
                 "request_id": request_id or None,
                 "tenant_id": tenant_id,
                 "model_mode": model_mode,
@@ -945,11 +945,12 @@ def analyze_with_senior_auditor_v2(payload: Dict[str, Any]) -> Dict[str, Any]:
             llm_used = True
             engine_model = f"{llm_metadata.get('provider')}/{llm_metadata.get('model')}"
             print(json.dumps({
-                "event": "OLLAMA REQUEST OK" if llm_metadata.get("provider") == "ollama" else "LLM REQUEST OK",
+                "event": "LLM REQUEST OK",
                 "request_id": request_id or None,
                 "tenant_id": tenant_id,
                 "model_mode": model_mode,
                 "selected_model": llm_metadata.get("model"),
+                "provider": llm_metadata.get("provider"),
                 "duration_ms": timings_ms.get("llm_ms", 0),
                 "used_company_profile": used_company_profile,
             }, ensure_ascii=False, default=str))
@@ -964,12 +965,14 @@ def analyze_with_senior_auditor_v2(payload: Dict[str, Any]) -> Dict[str, Any]:
             limitations.append(f"Proveedor LLM falló — análisis generado por fallback determinístico. Modelo intentado: {model}")
             engine_model = "deterministic_senior_auditor_v2"
             print(json.dumps({
-                "event": "OLLAMA REQUEST ERROR" if llm_metadata.get("provider") == "ollama" else "LLM REQUEST ERROR",
+                "event": "LLM REQUEST ERROR",
                 "request_id": request_id or None,
                 "tenant_id": tenant_id,
                 "model_mode": model_mode,
                 "selected_model": model,
-                "error": str(exc)[:220],
+                "provider": llm_metadata.get("provider"),
+                "error_type": type(exc).__name__,
+                "error_message": str(exc)[:220],
                 "used_company_profile": used_company_profile,
             }, ensure_ascii=False, default=str))
     else:

@@ -1,5 +1,19 @@
 # CURRENT_STATE — TCDX ISO SaaS V4
 
+## DGX Integration Hardening — 2026-09-14
+
+Status: `DGX_INTEGRATION_HARDENING_REVIEW_READY`.
+
+Local-only correction on branch `main` / base HEAD `b0d01993e136f8a41a01443b7e9452778fabf918`. Codex did not commit, push, merge, deploy, edit `.env`, read or print API keys, call the real DGX, or write to any database.
+
+Root causes closed: OpenAI-compatible payloads did not send DGX-required `reasoning_effort`/minimum `max_tokens`; narrative output could preserve unsupported LLM claims in `structured_result`; guided scenario enrichment converted legacy textual `confidence='alta'` with `float(...)`, causing HTTP 500 for `/api/ai/suggest/finding-analysis` and `/api/ai/suggest/action-plan`; AI observability still emitted `OLLAMA REQUEST ...` event names.
+
+Implemented hardening and review correction: `llm_client.py` sends `reasoning_effort` from `LLM_REASONING_EFFORT` with default `low` for `openai_compatible`, enforces `max_tokens >= 2000` from `LLM_MIN_MAX_TOKENS`, preserves JSON mode, parses only `message.content`, and filters Ollama-only overrides away from OpenAI-compatible. Narrative prompt and deterministic normalizer now degrade sparse authorized contexts to explicit `insufficient_evidence`; contexts with operational evidence require generic `grounding_claims`/`claims` with `source_refs` matching authorized context refs, otherwise confidence is degraded and human review is required. No term blacklist is used for grounding. Guided enrichment preserves textual confidence semantics (`alta/media/baja`, `high/medium/low`) and applies numeric floor only to numeric confidence values. Logs now use `LLM REQUEST START|OK|ERROR` with provider/model/request/tenant/duration/error metadata and no secrets/prompts. `.env.example` documents the non-secret DGX/OpenAI-compatible knobs.
+
+Validation PASS: Python compile over touched AI Engine files, `PYTHONPATH=/private/tmp/tcdx-ai-engine-test-deps-reqonly python3 ai-engine/app/scripts/test_dgx_litellm_hardening.py` with 7 tests OK, `git diff --check`, and `rg -n "OLLAMA REQUEST" ai-engine/app` returned no matches. Review evidence: `rg -n "unsupported_terms|spark|cpu|gpu|latencia|memoria|pol[ií]ticas internas|desviaciones|auditor[ií]a aprobada" ai-engine/app/routes/ai.py ai-engine/app/scripts/test_dgx_litellm_hardening.py ai-engine/app/services/scenario_response_enricher.py` returned no matches. Test dependencies were installed only under `/private/tmp/tcdx-ai-engine-test-deps-reqonly`; repository dependency files were not modified. Real DGX smoke remains manual/authorized and was not rerun.
+
+Backlog: model alias routing remains documented but not implemented: fast/reports/auditor -> `general`, deep -> `razonamiento`, code -> `codigo`, multimodal -> `multimodal`, embeddings -> `embeddings`. The versioned systemd template already has no `ollama.service` dependency; reconcile the deployed `ai-v4` unit manually if it still references Ollama.
+
 ## GRC Calculation Orchestration Systemic Closeout — 2026-09-11
 
 Status: `GRC_CALCULATION_ORCHESTRATION_READY_FOR_HUMAN_REVIEW`.

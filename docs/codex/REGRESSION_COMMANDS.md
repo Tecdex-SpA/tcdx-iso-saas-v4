@@ -16,6 +16,7 @@ Este archivo registra comandos reutilizables. Codex NO ejecuta automáticamente 
 | E2E | Consultar scripts existentes | repo/frontend | NOT CONFIRMED IN CONT-00 |
 | Multi-tenant | Usar suite/fixture definida por work package | según dominio | NOT CONFIRMED IN CONT-00 |
 | AI tests/evals | Consultar `ai-engine` scripts cuando corresponda | `ai-engine/` | NOT CONFIRMED IN CONT-00 |
+| AI Engine DGX/LiteLLM hardening focal | `PYTHONPATH=/private/tmp/tcdx-ai-engine-test-deps-reqonly python3 ai-engine/app/scripts/test_dgx_litellm_hardening.py` | repo root | VERIFIED_LOCAL/DGX-INTEGRATION-HARDENING |
 | Runtime/post-deploy | Manual por el usuario | entorno autorizado | MANUAL |
 | F6.11-A regulatory foundation focal | `node backend/src/services/knowledge-base/regulatoryFoundation.service.test.js` | repo root | VERIFIED/F6.11-B |
 | F6.11-B semantic diff/regulatory packs focal | `node backend/src/services/knowledge-base/regulatoryDiffPacks.service.test.js` | repo root | VERIFIED/F6.11-B |

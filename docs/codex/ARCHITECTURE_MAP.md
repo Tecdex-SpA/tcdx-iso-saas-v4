@@ -139,6 +139,15 @@ Backend Node/Express
                     v
               AI Engine Python/FastAPI
                     + specialized routes/services
+                    + OpenAI-compatible DGX/LiteLLM gateway support through existing
+                      `llm_client.py`: JSON mode, content-only parsing,
+                      default `reasoning_effort=low`, effective `max_tokens>=2000`,
+                      Ollama-option filtering and no application use of
+                      `reasoning_content`
+                    + narrative grounding guard: sparse authorized contexts produce
+                      explicit insufficient-evidence/human-review output; contexts
+                      with operational evidence require generic claims with
+                      authorized source_refs before being treated as grounded
                     + context building
                     + trusted external lookup
 ```

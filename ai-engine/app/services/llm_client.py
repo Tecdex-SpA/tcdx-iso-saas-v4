@@ -67,6 +67,7 @@ def get_llm_metadata(depth: str = "standard", local_compact: bool = False, model
             "provider": provider,
             "model": _env("OPENAI_MODEL") or _env("MODEL_NAME") or "gpt-4o-mini",
             "base_url": _env("OPENAI_BASE_URL") or "https://api.openai.com/v1",
+            "model_mode": (model_mode or _env("AI_AUDITOR_MODEL_MODE") or "").lower(),
         }
     if provider == "ollama":
         resolved_mode = (model_mode or _env("AI_AUDITOR_MODEL_MODE") or "fast").lower()
@@ -90,6 +91,41 @@ def _int_env(name: str, fallback: int) -> int:
         return int(os.getenv(name, str(fallback)) or fallback)
     except (TypeError, ValueError):
         return fallback
+
+
+def _openai_compatible_reasoning_effort(provider: str) -> str:
+    value = _env("LLM_REASONING_EFFORT")
+    if value:
+        return value
+    if provider == "openai_compatible":
+        return "low"
+    return ""
+
+
+def _openai_compatible_max_tokens(provider: str) -> Optional[int]:
+    configured = _int_env("LLM_MIN_MAX_TOKENS", 0)
+    if provider == "openai_compatible":
+        return max(configured or 0, 2000)
+    return configured or None
+
+
+def _filtered_openai_generation_options(options: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    if not isinstance(options, dict):
+        return {}
+    allowed = {
+        "max_tokens",
+        "top_p",
+        "frequency_penalty",
+        "presence_penalty",
+        "stop",
+        "seed",
+        "user",
+    }
+    return {
+        key: value
+        for key, value in options.items()
+        if key in allowed and value is not None
+    }
 
 
 def get_ollama_generation_options(
@@ -215,6 +251,13 @@ def call_llm_json(
                 {"role": "user", "content": prompt},
             ],
         }
+        payload.update(_filtered_openai_generation_options(generation_options_override))
+        reasoning_effort = _openai_compatible_reasoning_effort(provider)
+        max_tokens = _openai_compatible_max_tokens(provider)
+        if reasoning_effort:
+            payload["reasoning_effort"] = reasoning_effort
+        if max_tokens is not None:
+            payload["max_tokens"] = max(int(payload.get("max_tokens") or 0), max_tokens)
         data = _request_json(url, headers, payload, int(timeout))
         content = ((data.get("choices") or [{}])[0].get("message") or {}).get("content") or ""
         return _parse_json_text(content)

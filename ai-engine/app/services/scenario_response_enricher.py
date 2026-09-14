@@ -56,6 +56,25 @@ def _build_action_plan_steps(solution_steps: List[Any]) -> List[Dict[str, Any]]:
     return steps
 
 
+def _normalize_confidence(value: Any, numeric_floor: float = 0.85, fallback: str = "media") -> Any:
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        textual = {
+            "alta": "alta",
+            "high": "alta",
+            "media": "media",
+            "medium": "media",
+            "baja": "baja",
+            "low": "baja",
+        }
+        if normalized in textual:
+            return textual[normalized]
+    try:
+        return max(float(value), numeric_floor)
+    except (TypeError, ValueError):
+        return fallback
+
+
 def _build_guided_from_scenario(scenario: Dict[str, Any]) -> Dict[str, Any]:
     solution_steps = _as_list(scenario.get("solution_steps"))
     expected_evidence = _as_list(scenario.get("expected_evidence"))
@@ -196,7 +215,7 @@ def enrich_ai_response_with_scenario(
         result["impact"] = scenario.get("health_impact") or result.get("impact")
         result["recommended_actions"] = solution_steps or result.get("recommended_actions", [])
         result["priority"] = result.get("priority") or "alta"
-        result["confidence"] = max(float(result.get("confidence") or 0.75), 0.85)
+        result["confidence"] = _normalize_confidence(result.get("confidence"), 0.85)
 
     if mode == "action_plan":
         result["objective"] = scenario.get("solution_summary") or result.get("objective")
@@ -204,6 +223,6 @@ def enrich_ai_response_with_scenario(
         result["action_plan"] = _build_action_plan_steps(solution_steps) or result.get("action_plan", [])
         result["success_criteria"] = closure_conditions or result.get("success_criteria", [])
         result["priority"] = result.get("priority") or "alta"
-        result["confidence"] = max(float(result.get("confidence") or 0.75), 0.85)
+        result["confidence"] = _normalize_confidence(result.get("confidence"), 0.85)
 
     return result
