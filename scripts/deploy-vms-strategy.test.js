@@ -71,6 +71,11 @@ assert.match(
   /scripts\/normalization\/apply-ai-core-runtime-context-grants\.js/,
   'fresh deploy must include AI Core runtime context grants forward migration'
 );
+assert.match(
+  freshArray[0],
+  /scripts\/normalization\/apply-ai-guided-canonical-knowledge-runtime-grants\.js/,
+  'fresh deploy must include AI Guided canonical knowledge runtime grants forward migration'
+);
 
 const historicalArray = scriptText.match(/HISTORICAL_MIGRATION_RUNNERS=\([\s\S]*?\n\)/);
 assert.ok(historicalArray, 'historical migration runner registry must exist');

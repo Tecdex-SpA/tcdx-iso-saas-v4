@@ -8,124 +8,100 @@ sys.path.insert(0, str(BASE_DIR))
 from app.services.ai_core_db import fetch_all, fetch_one
 
 
-def check_count(label, query, minimum):
-    row = fetch_one(query)
-    total = int(row["total"] or 0)
+CANONICAL_RELATIONS = [
+    "knowledge_sources",
+    "knowledge_items",
+    "knowledge_mappings",
+    "knowledge_common_gaps",
+    "knowledge_recommended_actions",
+    "knowledge_evidence_expectations",
+    "knowledge_rules",
+    "knowledge_rule_hints",
+    "knowledge_audit_questions",
+    "iso_evidence_expectations",
+]
 
+
+def check_relation(relation):
+    row = fetch_one(
+        """
+        SELECT to_regclass(%s) IS NOT NULL AS exists
+        """,
+        [f"public.{relation}"],
+    )
     return {
-        "label": label,
-        "total": total,
-        "minimum_expected": minimum,
-        "ok": total >= minimum,
+        "relation": f"public.{relation}",
+        "exists": bool(row and row.get("exists")),
     }
 
 
+def count_relation(relation):
+    row = fetch_one(f"SELECT COUNT(*)::int AS total FROM public.{relation}")
+    return int(row["total"] or 0)
+
+
 def main():
-    checks = []
+    relation_checks = [check_relation(relation) for relation in CANONICAL_RELATIONS]
+    missing = [item["relation"] for item in relation_checks if not item["exists"]]
 
-    checks.append(check_count(
-        "Normas ISO registradas",
-        "SELECT COUNT(*)::int AS total FROM ai_core.standards_catalog WHERE is_active = true",
-        26,
-    ))
+    counts = []
+    if not missing:
+        for relation in CANONICAL_RELATIONS:
+            counts.append({
+                "relation": f"public.{relation}",
+                "total": count_relation(relation),
+            })
 
-    checks.append(check_count(
-        "Dominios registrados",
-        "SELECT COUNT(*)::int AS total FROM ai_core.domains_catalog WHERE is_active = true",
-        40,
-    ))
+    knowledge_items_without_source = []
+    active_sources_without_use = []
+    mappings_without_items = []
 
-    checks.append(check_count(
-        "Mapeos norma-dominio",
-        "SELECT COUNT(*)::int AS total FROM ai_core.standard_domain_map WHERE is_active = true",
-        250,
-    ))
+    if not missing:
+        knowledge_items_without_source = fetch_all("""
+            SELECT i.item_key
+            FROM public.knowledge_items i
+            LEFT JOIN public.knowledge_sources s
+              ON s.source_key = i.source_key
+            WHERE i.is_active IS DISTINCT FROM false
+              AND s.source_key IS NULL
+            ORDER BY i.item_key
+            LIMIT 50
+        """)
 
-    checks.append(check_count(
-        "Mapeos dominio-problema",
-        "SELECT COUNT(*)::int AS total FROM ai_core.domain_problem_type_map WHERE is_active = true",
-        120,
-    ))
+        active_sources_without_use = fetch_all("""
+            SELECT source_key, source_name
+            FROM public.knowledge_sources
+            WHERE active IS DISTINCT FROM false
+              AND COALESCE(array_length(use_in_system, 1), 0) = 0
+            ORDER BY source_key
+            LIMIT 50
+        """)
 
-    checks.append(check_count(
-        "Evidencias por dominio",
-        "SELECT COUNT(*)::int AS total FROM ai_core.domain_evidence_expectations WHERE is_active = true",
-        30,
-    ))
-
-    checks.append(check_count(
-        "Playbooks por dominio",
-        "SELECT COUNT(*)::int AS total FROM ai_core.domain_solution_playbooks WHERE is_active = true",
-        15,
-    ))
-
-    checks.append(check_count(
-        "Criterios de cierre por dominio",
-        "SELECT COUNT(*)::int AS total FROM ai_core.domain_closure_criteria WHERE is_active = true",
-        15,
-    ))
-
-    standards_without_domains = fetch_all("""
-        SELECT sc.standard_code, sc.display_code, sc.name
-        FROM ai_core.standards_catalog sc
-        LEFT JOIN ai_core.standard_domain_map sdm
-          ON sdm.standard_code = sc.standard_code
-         AND sdm.is_active = true
-        WHERE sc.is_active = true
-          AND sdm.id IS NULL
-        ORDER BY sc.standard_code
-    """)
-
-    domains_without_mapping = fetch_all("""
-        SELECT dc.domain_code, dc.domain_name
-        FROM ai_core.domains_catalog dc
-        LEFT JOIN ai_core.standard_domain_map sdm
-          ON sdm.domain_code = dc.domain_code
-         AND sdm.is_active = true
-        WHERE dc.is_active = true
-          AND sdm.id IS NULL
-        ORDER BY dc.domain_code
-    """)
-
-    problem_domains_without_knowledge = fetch_all("""
-        SELECT dptm.domain_code, dc.domain_name, COUNT(*)::int AS problem_types
-        FROM ai_core.domain_problem_type_map dptm
-        JOIN ai_core.domains_catalog dc
-          ON dc.domain_code = dptm.domain_code
-        LEFT JOIN ai_core.domain_evidence_expectations dee
-          ON dee.domain_code = dptm.domain_code
-         AND dee.is_active = true
-        LEFT JOIN ai_core.domain_solution_playbooks dsp
-          ON dsp.domain_code = dptm.domain_code
-         AND dsp.is_active = true
-        LEFT JOIN ai_core.domain_closure_criteria dcc
-          ON dcc.domain_code = dptm.domain_code
-         AND dcc.is_active = true
-        WHERE dptm.is_active = true
-        GROUP BY dptm.domain_code, dc.domain_name
-        HAVING COUNT(dee.id) = 0
-            OR COUNT(dsp.id) = 0
-            OR COUNT(dcc.id) = 0
-        ORDER BY dptm.domain_code
-    """)
-
-    overall_ok = (
-        all(item["ok"] for item in checks)
-        and len(standards_without_domains) == 0
-        and len(domains_without_mapping) == 0
-    )
+        mappings_without_items = fetch_all("""
+            SELECT m.item_key, m.mapping_key
+            FROM public.knowledge_mappings m
+            LEFT JOIN public.knowledge_items i
+              ON i.item_key = m.item_key
+            WHERE i.item_key IS NULL
+            ORDER BY m.item_key, m.mapping_key
+            LIMIT 50
+        """)
 
     result = {
-        "ok": overall_ok,
-        "checks": checks,
-        "standards_without_domains": standards_without_domains,
-        "domains_without_mapping": domains_without_mapping,
-        "domains_with_partial_knowledge": problem_domains_without_knowledge[:50],
+        "ok": not missing and not knowledge_items_without_source and not mappings_without_items,
+        "contract": "canonical_knowledge_v1",
+        "relations": relation_checks,
+        "counts": counts,
+        "missing_relations": missing,
+        "knowledge_items_without_source": knowledge_items_without_source,
+        "mappings_without_items": mappings_without_items,
+        "active_sources_without_use_in_system": active_sources_without_use,
+        "legacy_ai_core_model_expected": False,
     }
 
     print(json.dumps(result, indent=2, ensure_ascii=False, default=str))
 
-    if not overall_ok:
+    if not result["ok"]:
         raise SystemExit(1)
 
 

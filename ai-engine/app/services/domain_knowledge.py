@@ -1,6 +1,10 @@
 from typing import Any, Dict, List, Optional
 
-from app.services.ai_core_db import fetch_all, fetch_one
+from app.services.canonical_knowledge_service import (
+    build_knowledge_bundle,
+    canonical_domain_applies_to_standard,
+    infer_domains_from_canonical_knowledge,
+)
 
 
 DOMAIN_KEYWORDS = [
@@ -185,49 +189,28 @@ def get_standard_domains(standard_code: Optional[str]) -> List[Dict[str, Any]]:
     if not standard_code:
         return []
 
-    return fetch_all(
-        """
-        SELECT
-          sdm.standard_code,
-          sdm.domain_code,
-          dc.domain_name,
-          dc.domain_category,
-          sdm.relevance_level,
-          sdm.standard_focus,
-          sdm.expected_emphasis,
-          sdm.typical_findings,
-          sdm.typical_evidence
-        FROM ai_core.standard_domain_map sdm
-        JOIN ai_core.domains_catalog dc
-          ON dc.domain_code = sdm.domain_code
-        WHERE sdm.standard_code = %s
-          AND sdm.is_active = true
-          AND dc.is_active = true
-        ORDER BY
-          CASE WHEN sdm.relevance_level = 'alta' THEN 1 ELSE 2 END,
-          dc.domain_name
-        """,
-        [standard_code],
-    )
+    rows = infer_domains_from_canonical_knowledge(standard_code=standard_code, limit=20)
+    return [
+        {
+            "standard_code": standard_code,
+            "domain_code": row.get("domain_code"),
+            "domain_name": row.get("domain_code"),
+            "domain_category": None,
+            "relevance_level": None,
+            "relevance_basis": "canonical_match_without_criticality_inference",
+            "match_count": int(row.get("match_count") or 0),
+            "standard_focus": None,
+            "expected_emphasis": None,
+            "typical_findings": [],
+            "typical_evidence": [],
+            "source": "canonical_knowledge",
+        }
+        for row in rows
+    ]
 
 
 def _domain_applies_to_standard(domain_code: str, standard_code: Optional[str]) -> bool:
-    if not standard_code:
-        return True
-
-    row = fetch_one(
-        """
-        SELECT 1
-        FROM ai_core.standard_domain_map
-        WHERE standard_code = %s
-          AND domain_code = %s
-          AND is_active = true
-        LIMIT 1
-        """,
-        [standard_code, domain_code],
-    )
-
-    return row is not None
+    return canonical_domain_applies_to_standard(domain_code, standard_code)
 
 
 def infer_domain_code(
@@ -273,27 +256,21 @@ def infer_domain_code(
             "source": "problem_default",
         })
 
-    # Refuerzo por BD domain_problem_type_map.
+    # Refuerzo por Knowledge Base canónica.
     if problem_type_code:
-        rows = fetch_all(
-            """
-            SELECT dptm.domain_code, dptm.relevance_level
-            FROM ai_core.domain_problem_type_map dptm
-            JOIN ai_core.domains_catalog dc
-              ON dc.domain_code = dptm.domain_code
-            WHERE dptm.problem_type_code = %s
-              AND dptm.is_active = true
-              AND dc.is_active = true
-            """,
-            [problem_type_code],
+        rows = infer_domains_from_canonical_knowledge(
+            standard_code=standard_code,
+            problem_type_code=problem_type_code,
+            query_text=user_text,
+            limit=5,
         )
 
         for row in rows:
             matched.append({
                 "domain_code": row["domain_code"],
-                "score": 6 if row.get("relevance_level") == "alta" else 4,
-                "matched_terms": [f"domain_problem_type_map:{problem_type_code}"],
-                "source": "domain_problem_type_map",
+                "score": 4,
+                "matched_terms": [f"canonical_knowledge:{problem_type_code}"],
+                "source": "canonical_knowledge",
             })
 
     if not matched:
@@ -387,156 +364,122 @@ def get_domain_knowledge(
             "overrides": [],
         }
 
-    domain = fetch_one(
-        """
-        SELECT
-          domain_code,
-          domain_name,
-          domain_category,
-          description,
-          is_transversal,
-          metadata
-        FROM ai_core.domains_catalog
-        WHERE domain_code = %s
-          AND is_active = true
-        """,
-        [domain_code],
+    bundle = build_knowledge_bundle(
+        standard_code=standard_code,
+        domain=domain_code,
+        problem_type_code=problem_type_code,
+        query_text=" ".join([domain_code or "", problem_type_code or ""]),
+        limit=5,
     )
+    first_item = (bundle.get("items") or [{}])[0] if bundle.get("items") else {}
 
-    standard_domain = None
+    domain = {
+        "domain_code": domain_code,
+        "domain_name": domain_code,
+        "domain_category": first_item.get("item_type"),
+        "description": first_item.get("intent_summary") or first_item.get("implementation_guidance"),
+        "is_transversal": first_item.get("standard_code") is None,
+        "metadata": {
+            "source": "canonical_knowledge",
+            "item_key": first_item.get("item_key"),
+            "provenance": bundle.get("provenance"),
+        },
+    }
 
-    if standard_code:
-        standard_domain = fetch_one(
-            """
-            SELECT
-              sdm.standard_code,
-              sdm.domain_code,
-              sdm.relevance_level,
-              sdm.standard_focus,
-              sdm.expected_emphasis,
-              sdm.typical_findings,
-              sdm.typical_evidence
-            FROM ai_core.standard_domain_map sdm
-            WHERE sdm.standard_code = %s
-              AND sdm.domain_code = %s
-              AND sdm.is_active = true
-            """,
-            [standard_code, domain_code],
-        )
+    standard_domain = {
+        "standard_code": standard_code,
+        "domain_code": domain_code,
+        "relevance_level": None,
+        "relevance_basis": "canonical_match_without_criticality_inference",
+        "standard_focus": first_item.get("implementation_guidance"),
+        "expected_emphasis": None,
+        "typical_findings": [
+            row.get("gap_text") or row.get("description")
+            for row in bundle.get("gaps", [])[:5]
+            if row.get("gap_text") or row.get("description")
+        ],
+        "typical_evidence": [
+            row.get("expectation_text") or row.get("description")
+            for row in bundle.get("evidence_expectations", [])[:5]
+            if row.get("expectation_text") or row.get("description")
+        ],
+        "source": "canonical_knowledge",
+    } if standard_code else None
 
-    params = [domain_code]
-    problem_filter = ""
+    evidence = []
+    for item in bundle.get("evidence_expectations") or []:
+        expectation_text = item.get("expectation_text") or item.get("description")
+        evidence.append({
+            "domain_code": domain_code,
+            "problem_type_code": problem_type_code,
+            "evidence_context": item.get("description"),
+            "expected_deliverables": [expectation_text] if expectation_text else [],
+            "minimum_content": [],
+            "accepted_formats": [item.get("evidence_type")] if item.get("evidence_type") else [],
+            "invalid_evidence": [],
+            "validation_criteria": [],
+            "metadata": {
+                "source": "knowledge_evidence_expectations",
+                "item_key": item.get("item_key"),
+                "required_level": item.get("required_level"),
+            },
+        })
 
-    if problem_type_code:
-        problem_filter = "AND (problem_type_code = %s OR problem_type_code IS NULL)"
-        params.append(problem_type_code)
+    playbooks = []
+    gaps = bundle.get("gaps") or []
+    for item in bundle.get("recommended_actions") or []:
+        playbooks.append({
+            "domain_code": domain_code,
+            "problem_type_code": problem_type_code,
+            "title": item.get("description") or item.get("action_key") or "Acción recomendada",
+            "diagnosis_template": (gaps[0].get("gap_text") or gaps[0].get("description")) if gaps else None,
+            "solution_summary": item.get("description") or item.get("action_text"),
+            "solution_steps": [item.get("action_text")] if item.get("action_text") else [],
+            "corrective_actions": [item.get("action_text")] if item.get("action_text") else [],
+            "preventive_actions": [],
+            "closure_conditions": [],
+            "health_impact_notes": None,
+            "kpi_impact_notes": None,
+            "metadata": {
+                "source": "knowledge_recommended_actions",
+                "item_key": item.get("item_key"),
+                "action_basis": item.get("action_basis"),
+                "priority_hint": item.get("priority_hint") or item.get("priority_default"),
+            },
+        })
 
-    evidence = fetch_all(
-        f"""
-        SELECT
-          domain_code,
-          problem_type_code,
-          evidence_context,
-          expected_deliverables,
-          minimum_content,
-          accepted_formats,
-          invalid_evidence,
-          validation_criteria,
-          metadata
-        FROM ai_core.domain_evidence_expectations
-        WHERE domain_code = %s
-          {problem_filter}
-          AND is_active = true
-        ORDER BY
-          CASE WHEN problem_type_code = %s THEN 1 ELSE 2 END,
-          id
-        LIMIT 5
-        """,
-        [*params, problem_type_code or ""],
-    )
-
-    playbooks = fetch_all(
-        f"""
-        SELECT
-          domain_code,
-          problem_type_code,
-          title,
-          diagnosis_template,
-          solution_summary,
-          solution_steps,
-          corrective_actions,
-          preventive_actions,
-          closure_conditions,
-          health_impact_notes,
-          kpi_impact_notes,
-          metadata
-        FROM ai_core.domain_solution_playbooks
-        WHERE domain_code = %s
-          {problem_filter}
-          AND is_active = true
-        ORDER BY
-          CASE WHEN problem_type_code = %s THEN 1 ELSE 2 END,
-          id
-        LIMIT 5
-        """,
-        [*params, problem_type_code or ""],
-    )
-
-    closure = fetch_all(
-        f"""
-        SELECT
-          domain_code,
-          problem_type_code,
-          title,
-          required_conditions,
-          validation_questions,
-          rejection_reasons,
-          closure_summary_template,
-          requires_effectiveness_validation,
-          metadata
-        FROM ai_core.domain_closure_criteria
-        WHERE domain_code = %s
-          {problem_filter}
-          AND is_active = true
-        ORDER BY
-          CASE WHEN problem_type_code = %s THEN 1 ELSE 2 END,
-          id
-        LIMIT 5
-        """,
-        [*params, problem_type_code or ""],
-    )
+    closure = []
+    audit_questions = bundle.get("audit_questions") or []
+    rules = bundle.get("rules") or []
+    if audit_questions or rules:
+        closure.append({
+            "domain_code": domain_code,
+            "problem_type_code": problem_type_code,
+            "title": "Validación humana requerida",
+            "required_conditions": [],
+            "validation_questions": [
+                row.get("question_text") or row.get("question")
+                for row in audit_questions
+                if row.get("question_text") or row.get("question")
+            ],
+            "rejection_reasons": [],
+            "closure_summary_template": None,
+            "requires_effectiveness_validation": None,
+            "metadata": {
+                "source": "knowledge_audit_questions_and_rules",
+                "rule_keys": [row.get("rule_key") for row in rules if row.get("rule_key")],
+            },
+        })
 
     overrides = []
 
-    if standard_code:
-        overrides = fetch_all(
-            """
-            SELECT
-              standard_code,
-              domain_code,
-              problem_type_code,
-              override_type,
-              title,
-              content,
-              priority,
-              metadata
-            FROM ai_core.standard_specific_overrides
-            WHERE standard_code = %s
-              AND is_active = true
-              AND (domain_code = %s OR domain_code IS NULL)
-              AND (problem_type_code = %s OR problem_type_code IS NULL)
-            ORDER BY priority DESC, id
-            LIMIT 10
-            """,
-            [standard_code, domain_code, problem_type_code],
-        )
-
     return {
-        "ok": domain is not None,
+        "ok": bool(bundle.get("ok")),
         "domain": domain,
         "standard_domain": standard_domain,
         "playbooks": playbooks,
         "evidence_expectations": evidence,
         "closure_criteria": closure,
         "overrides": overrides,
+        "canonical_bundle": bundle,
     }

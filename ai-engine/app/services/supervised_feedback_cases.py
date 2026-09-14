@@ -1,8 +1,7 @@
 import json
 from typing import Any, Dict, List, Optional
 
-from sqlalchemy import text
-from app.core.db import engine
+from app.services.canonical_knowledge_service import load_supervised_feedback_cases as load_canonical_feedback_cases
 
 
 def _safe_json(value: Any) -> Any:
@@ -102,91 +101,11 @@ def load_useful_feedback_cases(
     scenario_code: Optional[str] = None,
     limit: int = 3,
 ) -> Dict[str, Any]:
-    conditions = ["1 = 1"]
-    params = {
-        "tenant_id": tenant_id,
-        "standard_code": standard_code,
-        "domain_code": domain_code,
-        "problem_type_code": problem_type_code,
-        "scenario_code": scenario_code,
-        "limit": max(1, min(int(limit or 3), 10)),
-    }
-
-    if tenant_id:
-        conditions.append("tenant_id = :tenant_id")
-
-    if scenario_code:
-        conditions.append("scenario_code = :scenario_code")
-
-    if standard_code:
-        conditions.append("(standard_code = :standard_code OR standard_code IS NULL)")
-
-    if domain_code:
-        conditions.append("domain_code = :domain_code")
-
-    if problem_type_code:
-        conditions.append("problem_type_code = :problem_type_code")
-
-    sql = f"""
-      SELECT
-        id,
-        tenant_id,
-        source_entity_type,
-        source_entity_id,
-        standard_code,
-        domain_code,
-        problem_type_code,
-        scenario_code,
-        user_rating,
-        user_comment,
-        was_useful,
-        was_applied,
-        was_corrected,
-        usefulness_score,
-        preferred_response,
-        metadata,
-        created_at
-      FROM ai_core.v_ai_useful_feedback_cases
-      WHERE {' AND '.join(conditions)}
-      ORDER BY usefulness_score DESC, created_at DESC
-      LIMIT :limit
-    """
-
-    with engine.connect() as conn:
-        rows = conn.execute(text(sql), params).mappings().all()
-
-    cases: List[Dict[str, Any]] = []
-
-    for row in rows:
-        preferred_response = _safe_json(row.get("preferred_response"))
-
-        cases.append({
-            "id": str(row.get("id")),
-            "source_entity_type": row.get("source_entity_type"),
-            "source_entity_id": str(row.get("source_entity_id")) if row.get("source_entity_id") else None,
-            "standard_code": row.get("standard_code"),
-            "domain_code": row.get("domain_code"),
-            "problem_type_code": row.get("problem_type_code"),
-            "scenario_code": row.get("scenario_code"),
-            "user_rating": row.get("user_rating"),
-            "user_comment": row.get("user_comment"),
-            "was_useful": row.get("was_useful"),
-            "was_applied": row.get("was_applied"),
-            "was_corrected": row.get("was_corrected"),
-            "usefulness_score": row.get("usefulness_score"),
-            "created_at": str(row.get("created_at")) if row.get("created_at") else None,
-            "response_summary": _extract_response_summary(preferred_response),
-        })
-
-    return {
-        "cases_found": len(cases),
-        "cases": cases,
-        "filters": {
-            "tenant_id": tenant_id,
-            "standard_code": standard_code,
-            "domain_code": domain_code,
-            "problem_type_code": problem_type_code,
-            "scenario_code": scenario_code,
-            "limit": params["limit"],
-        },
-    }
+    return load_canonical_feedback_cases(
+        tenant_id=tenant_id,
+        standard_code=standard_code,
+        domain_code=domain_code,
+        problem_type_code=problem_type_code,
+        scenario_code=scenario_code,
+        limit=limit,
+    )

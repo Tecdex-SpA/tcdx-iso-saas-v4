@@ -1,5 +1,33 @@
 # CURRENT_STATE — TCDX ISO SaaS V4
 
+## AI Guided Canonical Knowledge Runtime Grants — 2026-09-14
+
+Status: `AI_GUIDED_CANONICAL_KNOWLEDGE_RUNTIME_GRANTS_READY`.
+
+Local-only ACL closeout on branch `main` / current HEAD `f3918f13a5e2e605aa32a58db4d1452d9db279d9`, preserving the inherited AI Guided Canonical Knowledge dirty worktree. Codex did not commit, push, merge, deploy, edit `.env`, run manual grants, recreate legacy `ai_core` objects, or write to QA/production DB.
+
+Root cause closed locally: the new Guided AI canonical knowledge runtime reads require child KB/reference tables that were not granted to the backend runtime in QA, while existing runtime grants already covered `public.iso_evidence_expectations`, `public.knowledge_items`, `public.knowledge_sources`, `public.recommendation_decision_ledger` and `public.tenant_applicable_evidence_requirements`.
+
+Implemented correction: forward-only migration `20260914_ai_guided_canonical_knowledge_runtime_grants` grants exactly `SELECT` on `public.knowledge_audit_questions`, `public.knowledge_common_gaps`, `public.knowledge_evidence_expectations`, `public.knowledge_mappings`, `public.knowledge_recommended_actions`, `public.knowledge_rule_hints` and `public.knowledge_rules` to NOLOGIN `tcdx_backend_runtime`. `tcdx_backend_app` receives access only by inherited membership; `ai_reader` receives no access; runtime receives no DML; no `GRANT ALL`, schema-wide grants, ownership changes or compatibility objects are introduced.
+
+Review correction: the runner parser was changed to parse GRANT statements independently before deriving the public runtime SELECT allowlist. This prevents a non-runtime grant from being merged with a later runtime grant and silently omitting legitimate objects such as `iso_evidence_expectations`. The public SELECT gate remains global for the fresh-deploy contract, but its allowlist is derived from versioned fresh strategy SQL plus this migration instead of being manually narrow. Tests cover single object, comma lists, `SELECT, INSERT, UPDATE`, schema-qualified and unqualified objects, `TABLE`/`VIEW`, multiline lists, schema grants ignored, exact fresh runner setup, unexpected public SELECT rejection, partial safe pregrant convergence, reapply idempotence and checksum mismatch fail-closed. Checksum: `3a30ef77a13f77dca2366542d1209f1e873280ac1222667b4316d9b8a6a70206`.
+
+Validation PASS: runner/test syntax, deploy script syntax, checksum, isolated PostgreSQL ACL test with Release RBAC and fresh runners, deploy strategy, DB-N05 production role privileges, AI Guided canonical knowledge Python test, DGX/LiteLLM hardening regression, AI Guided canonical knowledge PostgreSQL test, legacy AI Core runtime grep zero matches, semantic no-invention grep zero matches, ACL unsafe grep reviewed as assertions/checks only, and `git diff --check`.
+
+## AI Guided Canonical Knowledge Migration — 2026-09-14
+
+Status: `AI_GUIDED_CANONICAL_KNOWLEDGE_REVIEW_READY`.
+
+Local-only correction on branch `main` / current HEAD `f3918f13a5e2e605aa32a58db4d1452d9db279d9`. Codex did not commit, push, merge, deploy, edit `.env`, print secrets, call real DGX, or write to QA/production DB.
+
+Root cause closed locally: Guided AI still read removed legacy expert objects such as `ai_core.problem_types`, `ai_core.domain_problem_type_map`, `ai_core.v_finding_scenarios_active`, `ai_core.v_ai_useful_feedback_cases` and `ai_core.trusted_external_sources` after the context views/grants had already been canonicalized. Those reads caused `/api/ai/suggest/finding-analysis` and `/api/ai/suggest/action-plan` to 500 on `tcdx_saasv2`.
+
+Implemented correction: `canonical_knowledge_service.py` centralizes semantic reads over `public.knowledge_items`, `knowledge_mappings`, `knowledge_common_gaps`, `knowledge_recommended_actions`, `knowledge_evidence_expectations`, `knowledge_rules`, `knowledge_rule_hints`, `knowledge_audit_questions`, `knowledge_sources`, `iso_evidence_expectations`, `tenant_applicable_evidence_requirements` and optional `recommendation_decision_ledger`. `get_problem_knowledge`, `domain_knowledge`, finding scenarios, supervised feedback, external lookup trusted sources, `ai_core_db.test_connection()` and the QA coverage script now use canonical contracts. No legacy tables/views/aliases/compatibility schema were created. Missing knowledge/feedback/scenario degrades to empty/provenance with `can_auto_close=false`, not zero/compliance/closure.
+
+Independent review correction: ledger decisions are not converted into usefulness/effectiveness (`accepted`/`modified` remain unknown unless metadata explicitly says otherwise; `executed` means applied, not useful), canonical domain matches no longer fabricate `relevance_level='alta'` or match-count criticality, external lookup sources require explicit trust metadata plus `allowed_domains` before being treated as trusted, and external lookup quota usage no longer uses a hardcoded zero UUID sentinel for missing tenant.
+
+Validation PASS: Python compile with temp pycache, `test_ai_guided_canonical_knowledge.py` 6 tests OK, DGX/LiteLLM hardening regression 11 tests OK, isolated PostgreSQL baseline+forward migration guided canonical knowledge test PASS with tenant B not serialized in Tenant A response, exact legacy runtime grep returned zero matches, and `git diff --check` PASS.
+
 ## AI Core Runtime Grants — 2026-09-14
 
 Status: `AI_CORE_RUNTIME_GRANTS_ALLOWLIST_REVIEW_READY`.

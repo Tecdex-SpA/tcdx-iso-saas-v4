@@ -1,6 +1,10 @@
 from typing import Any, Dict, List, Optional
 
 from app.services.ai_core_db import fetch_all, fetch_one
+from app.services.canonical_knowledge_service import (
+    CANONICAL_KNOWLEDGE_CONTRACT_VERSION,
+    build_knowledge_bundle,
+)
 
 CANONICAL_INTELLIGENCE_CONTEXT_CONTRACT_VERSION = "canonical-intelligence-context-v1"
 
@@ -122,23 +126,23 @@ def _empty_tenant_scoped_context(
 
 def get_ai_core_summary() -> Dict[str, Any]:
     """
-    Resumen de conocimiento cargado en ai_core.
+    Resumen de contratos canónicos usados por AI Engine.
     """
     rows = fetch_all(
         """
-        SELECT 'problem_types' AS source, COUNT(*)::int AS total FROM ai_core.problem_types
+        SELECT 'knowledge_items' AS source, COUNT(*)::int AS total FROM public.knowledge_items WHERE is_active IS DISTINCT FROM false
         UNION ALL
-        SELECT 'priority_rules', COUNT(*)::int FROM ai_core.priority_rules
+        SELECT 'knowledge_mappings', COUNT(*)::int FROM public.knowledge_mappings
         UNION ALL
-        SELECT 'solution_playbooks', COUNT(*)::int FROM ai_core.solution_playbooks
+        SELECT 'knowledge_recommended_actions', COUNT(*)::int FROM public.knowledge_recommended_actions
         UNION ALL
-        SELECT 'evidence_expectations', COUNT(*)::int FROM ai_core.evidence_expectations
+        SELECT 'knowledge_evidence_expectations', COUNT(*)::int FROM public.knowledge_evidence_expectations
         UNION ALL
-        SELECT 'closure_criteria', COUNT(*)::int FROM ai_core.closure_criteria
+        SELECT 'knowledge_common_gaps', COUNT(*)::int FROM public.knowledge_common_gaps
         UNION ALL
-        SELECT 'invalid_evidence_patterns', COUNT(*)::int FROM ai_core.invalid_evidence_patterns
+        SELECT 'knowledge_rules', COUNT(*)::int FROM public.knowledge_rules
         UNION ALL
-        SELECT 'response_templates', COUNT(*)::int FROM ai_core.response_templates
+        SELECT 'iso_evidence_expectations', COUNT(*)::int FROM public.iso_evidence_expectations
         ORDER BY source
         """
     )
@@ -151,108 +155,112 @@ def get_ai_core_summary() -> Dict[str, Any]:
 
 def get_problem_knowledge(problem_type_code: str) -> Dict[str, Any]:
     """
-    Devuelve el conocimiento experto para un tipo de problema:
-    tipo, playbook, evidencia esperada y criterios de cierre.
+    Devuelve conocimiento canónico para un tipo de problema.
+
+    El modelo experto legacy retirado ya no es
+    runtime. El bundle se arma desde public.knowledge_* e ISO evidence; cuando
+    no hay match exacto, devuelve listas vacías con provenance.
     """
-    problem = fetch_one(
-        """
-        SELECT
-          code,
-          name,
-          description,
-          category,
-          default_severity,
-          default_priority_weight,
-          applies_to,
-          metadata
-        FROM ai_core.problem_types
-        WHERE code = %s
-          AND is_active = true
-        """,
-        [problem_type_code],
+    bundle = build_knowledge_bundle(
+        problem_type_code=problem_type_code,
+        query_text=problem_type_code,
+        limit=5,
     )
+    first_item = (bundle.get("items") or [{}])[0] if bundle.get("items") else {}
 
-    playbooks = fetch_all(
-        """
-        SELECT
-          problem_type_code,
-          standard_code,
-          control_code,
-          title,
-          diagnosis_template,
-          solution_summary,
-          solution_steps,
-          corrective_actions,
-          preventive_actions,
-          closure_conditions,
-          health_impact_notes,
-          kpi_impact_notes,
-          metadata
-        FROM ai_core.solution_playbooks
-        WHERE problem_type_code = %s
-          AND is_active = true
-        ORDER BY
-          CASE WHEN metadata->>'generic' = 'true' THEN 2 ELSE 1 END,
-          id
-        LIMIT 5
-        """,
-        [problem_type_code],
-    )
+    problem = {
+        "code": problem_type_code,
+        "name": first_item.get("title") or problem_type_code,
+        "description": first_item.get("intent_summary") or first_item.get("implementation_guidance"),
+        "category": first_item.get("item_type"),
+        "default_severity": first_item.get("severity_default"),
+        "default_priority_weight": None,
+        "applies_to": first_item.get("applicability"),
+        "metadata": {
+            "canonical_knowledge": True,
+            "contract_version": CANONICAL_KNOWLEDGE_CONTRACT_VERSION,
+            "item_key": first_item.get("item_key"),
+            "provenance": bundle.get("provenance"),
+        },
+    } if first_item else None
 
-    evidence = fetch_all(
-        """
-        SELECT
-          problem_type_code,
-          standard_code,
-          control_code,
-          evidence_context,
-          expected_deliverables,
-          minimum_content,
-          accepted_formats,
-          invalid_evidence,
-          validation_criteria,
-          metadata
-        FROM ai_core.evidence_expectations
-        WHERE problem_type_code = %s
-          AND is_active = true
-        ORDER BY
-          CASE WHEN metadata->>'generic' = 'true' THEN 2 ELSE 1 END,
-          id
-        LIMIT 5
-        """,
-        [problem_type_code],
-    )
+    playbooks = []
+    for item in bundle.get("recommended_actions") or []:
+        playbooks.append({
+            "problem_type_code": problem_type_code,
+            "standard_code": first_item.get("standard_code"),
+            "control_code": first_item.get("clause_or_control"),
+            "title": item.get("description") or item.get("action_key") or "Acción recomendada",
+            "diagnosis_template": (bundle.get("gaps") or [{}])[0].get("gap_text") if bundle.get("gaps") else None,
+            "solution_summary": item.get("description") or item.get("action_text"),
+            "solution_steps": [item.get("action_text")] if item.get("action_text") else [],
+            "corrective_actions": [item.get("action_text")] if item.get("action_text") else [],
+            "preventive_actions": [],
+            "closure_conditions": [],
+            "health_impact_notes": None,
+            "kpi_impact_notes": None,
+            "metadata": {
+                "source": "knowledge_recommended_actions",
+                "item_key": item.get("item_key"),
+                "action_key": item.get("action_key"),
+                "action_basis": item.get("action_basis"),
+                "priority_hint": item.get("priority_hint") or item.get("priority_default"),
+            },
+        })
 
-    closure = fetch_all(
-        """
-        SELECT
-          problem_type_code,
-          standard_code,
-          control_code,
-          title,
-          required_conditions,
-          validation_questions,
-          rejection_reasons,
-          closure_summary_template,
-          requires_effectiveness_validation,
-          metadata
-        FROM ai_core.closure_criteria
-        WHERE problem_type_code = %s
-          AND is_active = true
-        ORDER BY
-          CASE WHEN metadata->>'generic' = 'true' THEN 2 ELSE 1 END,
-          id
-        LIMIT 5
-        """,
-        [problem_type_code],
-    )
+    evidence = []
+    for item in bundle.get("evidence_expectations") or []:
+        expectation_text = item.get("expectation_text") or item.get("description")
+        evidence.append({
+            "problem_type_code": problem_type_code,
+            "standard_code": first_item.get("standard_code"),
+            "control_code": first_item.get("clause_or_control"),
+            "evidence_context": item.get("description"),
+            "expected_deliverables": [expectation_text] if expectation_text else [],
+            "minimum_content": [],
+            "accepted_formats": [item.get("evidence_type")] if item.get("evidence_type") else [],
+            "invalid_evidence": [],
+            "validation_criteria": [],
+            "metadata": {
+                "source": "knowledge_evidence_expectations",
+                "item_key": item.get("item_key"),
+                "expectation_key": item.get("expectation_key"),
+                "required_level": item.get("required_level"),
+            },
+        })
+
+    closure = []
+    audit_questions = bundle.get("audit_questions") or []
+    rules = bundle.get("rules") or []
+    if audit_questions or rules:
+        closure.append({
+            "problem_type_code": problem_type_code,
+            "standard_code": first_item.get("standard_code"),
+            "control_code": first_item.get("clause_or_control"),
+            "title": "Validación humana requerida",
+            "required_conditions": [],
+            "validation_questions": [
+                row.get("question_text") or row.get("question")
+                for row in audit_questions
+                if row.get("question_text") or row.get("question")
+            ],
+            "rejection_reasons": [],
+            "closure_summary_template": None,
+            "requires_effectiveness_validation": None,
+            "metadata": {
+                "source": "knowledge_audit_questions_and_rules",
+                "rule_keys": [row.get("rule_key") for row in rules if row.get("rule_key")],
+                "missing_is_not_zero": True,
+            },
+        })
 
     return {
-        "ok": problem is not None,
+        "ok": bundle.get("ok"),
         "problem": problem,
         "playbooks": playbooks,
         "evidence_expectations": evidence,
         "closure_criteria": closure,
+        "canonical_bundle": bundle,
     }
 
 

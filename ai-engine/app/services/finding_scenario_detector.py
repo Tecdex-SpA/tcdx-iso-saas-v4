@@ -2,8 +2,7 @@ import re
 import unicodedata
 from typing import Any, Dict, List, Optional
 
-from sqlalchemy import text
-from app.core.db import engine
+from app.services.canonical_knowledge_service import build_knowledge_bundle
 
 
 def _normalize(value: Any) -> str:
@@ -127,54 +126,100 @@ def _load_scenarios(
     standard_code: Optional[str] = None,
     domain_code: Optional[str] = None,
     problem_type_code: Optional[str] = None,
+    query_text: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
-    sql = """
-      SELECT
-        scenario_code,
-        scenario_name,
-        scenario_description,
-        standard_code,
-        domain_code,
-        domain_name,
-        problem_type_code,
-        problem_type_name,
-        detection_keywords,
-        negative_keywords,
-        example_titles,
-        example_descriptions,
-        diagnosis_guidance,
-        solution_summary,
-        solution_steps,
-        expected_evidence,
-        minimum_evidence_content,
-        invalid_evidence,
-        closure_conditions,
-        health_impact,
-        kpi_impact,
-        requires_external_lookup,
-        external_lookup_reason,
-        external_source_profile,
-        priority,
-        confidence_boost,
-        metadata
-      FROM ai_core.v_finding_scenarios_active
-      WHERE 1 = 1
-        AND (standard_code IS NULL OR standard_code = :standard_code OR :standard_code IS NULL)
-        AND (:domain_code IS NULL OR domain_code = :domain_code)
-        AND (:problem_type_code IS NULL OR problem_type_code = :problem_type_code)
-      ORDER BY priority DESC, scenario_code
-    """
+    bundle = build_knowledge_bundle(
+        standard_code=standard_code,
+        domain=domain_code,
+        problem_type_code=problem_type_code,
+        query_text=query_text,
+        limit=8,
+    )
 
-    params = {
-        "standard_code": standard_code,
-        "domain_code": domain_code,
-        "problem_type_code": problem_type_code,
+    items_by_key = {
+        item.get("item_key"): item
+        for item in bundle.get("items") or []
+        if item.get("item_key")
     }
+    actions_by_key: Dict[str, List[Dict[str, Any]]] = {}
+    evidence_by_key: Dict[str, List[Dict[str, Any]]] = {}
+    questions_by_key: Dict[str, List[Dict[str, Any]]] = {}
 
-    with engine.connect() as conn:
-        rows = conn.execute(text(sql), params).mappings().all()
+    for action in bundle.get("recommended_actions") or []:
+        actions_by_key.setdefault(action.get("item_key"), []).append(action)
+    for evidence in bundle.get("evidence_expectations") or []:
+        evidence_by_key.setdefault(evidence.get("item_key"), []).append(evidence)
+    for question in bundle.get("audit_questions") or []:
+        questions_by_key.setdefault(question.get("item_key"), []).append(question)
 
-    return [dict(row) for row in rows]
+    scenarios: List[Dict[str, Any]] = []
+    for gap in bundle.get("gaps") or []:
+        item = items_by_key.get(gap.get("item_key")) or {}
+        item_actions = actions_by_key.get(gap.get("item_key"), [])
+        item_evidence = evidence_by_key.get(gap.get("item_key"), [])
+        item_questions = questions_by_key.get(gap.get("item_key"), [])
+        detection_text = " ".join([
+            gap.get("gap_text") or "",
+            gap.get("description") or "",
+            item.get("title") or "",
+            item.get("intent_summary") or "",
+            item.get("search_text") or "",
+        ])
+        keywords = [
+            term
+            for term in _normalize(detection_text).split()
+            if len(term) >= 5
+        ][:12]
+        solution_steps = [
+            row.get("action_text")
+            for row in item_actions
+            if row.get("action_text")
+        ]
+        expected_evidence = [
+            row.get("expectation_text") or row.get("description")
+            for row in item_evidence
+            if row.get("expectation_text") or row.get("description")
+        ]
+        scenarios.append({
+            "scenario_code": gap.get("gap_key") or item.get("item_key") or "canonical_knowledge_gap",
+            "scenario_name": gap.get("description") or item.get("title") or "Brecha canónica",
+            "scenario_description": gap.get("gap_text") or gap.get("description"),
+            "standard_code": item.get("standard_code") or standard_code,
+            "domain_code": item.get("domain") or domain_code,
+            "domain_name": item.get("domain") or domain_code,
+            "problem_type_code": problem_type_code,
+            "problem_type_name": problem_type_code,
+            "detection_keywords": keywords,
+            "negative_keywords": [],
+            "example_titles": [item.get("title")] if item.get("title") else [],
+            "example_descriptions": [item.get("intent_summary")] if item.get("intent_summary") else [],
+            "diagnosis_guidance": gap.get("gap_text") or gap.get("description"),
+            "solution_summary": (item_actions[0].get("description") or item_actions[0].get("action_text")) if item_actions else None,
+            "solution_steps": solution_steps,
+            "expected_evidence": expected_evidence,
+            "minimum_evidence_content": [
+                row.get("question_text") or row.get("question")
+                for row in item_questions
+                if row.get("question_text") or row.get("question")
+            ],
+            "invalid_evidence": [],
+            "closure_conditions": [],
+            "health_impact": None,
+            "kpi_impact": None,
+            "requires_external_lookup": False,
+            "external_lookup_reason": None,
+            "external_source_profile": None,
+            "priority": 50,
+            "confidence_boost": 0.0,
+            "metadata": {
+                "source": "canonical_knowledge",
+                "item_key": item.get("item_key"),
+                "provenance": bundle.get("provenance"),
+                "missing_closure_is_not_auto_close": True,
+            },
+        })
+
+    return scenarios
 
 
 def detect_finding_scenario(payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -198,6 +243,7 @@ def detect_finding_scenario(payload: Dict[str, Any]) -> Dict[str, Any]:
         standard_code=standard_code,
         domain_code=domain_code,
         problem_type_code=problem_type_code,
+        query_text=text_value,
     )
 
     scored = []
@@ -251,6 +297,12 @@ def detect_finding_scenario(payload: Dict[str, Any]) -> Dict[str, Any]:
                 }
                 for item in scored[:5]
             ],
+            "scenario_availability": "canonical_knowledge_no_match",
+            "provenance": {
+                "source": "canonical_knowledge",
+                "legacy_ai_core_used": False,
+                "v_finding_scenarios_active_used": False,
+            },
         }
 
     return {
@@ -302,4 +354,9 @@ def detect_finding_scenario(payload: Dict[str, Any]) -> Dict[str, Any]:
             }
             for item in scored[1:6]
         ],
+        "provenance": {
+            "source": "canonical_knowledge",
+            "legacy_ai_core_used": False,
+            "v_finding_scenarios_active_used": False,
+        },
     }

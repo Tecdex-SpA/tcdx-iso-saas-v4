@@ -56,6 +56,7 @@ Backend Node/Express
         |      + TCDX control lifecycle closeout local: `controls_catalog.tenant_id IS NULL` es catalogo global, same-tenant es catalogo tenant y `source_type` queda como provenance; `initialize-controls` y `public.tcdx_effective_control_catalog(uuid,text,text)` materializan `tenant_controls` + `tenant_applicable_controls` idempotentes para Dashboard, Diagnostico, `/controles`, Tenant Standards y consumidores downstream sin fabricar Health scores
         |      + TCDX post-lifecycle runtime consumers closeout local: consumidores posteriores al lifecycle leen clausula desde `controls_catalog.clause`, no desde `controls_catalog_standards`; Diagnostico usa pertenencia normativa efectiva y columnas opcionales nulas; Health ISO consume vistas tenant-scoped materializadas sobre `v_iso_control_effective_health`, aplicabilidad, evidencias, hallazgos, acciones y audit logs; `refresh_kpi_health_snapshots` queda fuera del runtime fresh; runner preflight pending no exige vistas que todavia no existen
         |      + AI Core runtime context grants local: External Lookup conserva su contrato runtime previo sobre `ai_core.external_lookup_extra_charges`, `external_lookup_logs`, `external_lookup_quota_audit`, `external_lookup_quotas` y `v_external_lookup_usage_monthly`; las vistas canonicas `ai_core.v_tenant_health_context`, `v_control_context`, `v_finding_context` y `v_kpi_context` se exponen al backend mediante grants explicitos `SELECT` al rol NOLOGIN `tcdx_backend_runtime`; `tcdx_backend_app` hereda por membresia existente, `ai_reader` no recibe acceso amplio a `ai_core`, y cualquier otro `ai_core` SELECT runtime falla el gate
+        |      + AI Guided canonical knowledge runtime grants local: el adapter Python consume KB v2/reference knowledge desde `public`; el cierre ACL agrega solo `SELECT` sobre siete tablas hijas `knowledge_*` faltantes al rol NOLOGIN `tcdx_backend_runtime`, conserva los cinco grants publicos preexistentes de knowledge/evidence/ledger, exige herencia `tcdx_backend_app -> tcdx_backend_runtime`, mantiene `ai_reader` sin acceso y rechaza DML/direct app grant/unexpected public SELECT mediante runner versionado
         |
         +--> Commercial product authority
         |      + `commercial_plans`, `commercial_plan_versions`
@@ -154,6 +155,14 @@ Backend Node/Express
                       tenant/control/catalog identity plus `implementation_status`,
                       app-derived implementation buckets, no legacy context columns
                       and no cross-tenant fallback
+                    + Guided AI canonical knowledge adapter
+                      (`canonical_knowledge_service.py`) over KB v2/reference
+                      tables `public.knowledge_*`, `iso_evidence_expectations`,
+                      tenant-scoped evidence requirements and optional decision
+                      ledger; no legacy expert `ai_core.*` model, no compatibility
+                      schema, no auto-close from rules/questions, no usefulness or
+                      effectiveness inferred from ledger decisions, and external
+                      lookup trust requires explicit metadata plus allowed domains
                     + trusted external lookup
 ```
 

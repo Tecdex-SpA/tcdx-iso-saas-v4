@@ -71,7 +71,7 @@ def fetch_one(query: str, params: Optional[Sequence[Any]] = None) -> Optional[Di
 
 def test_connection() -> Dict[str, Any]:
     """
-    Prueba rápida de conectividad y lectura.
+    Prueba rápida de conectividad y lectura sobre contratos canónicos.
     """
     result = fetch_one(
         """
@@ -84,13 +84,15 @@ def test_connection() -> Dict[str, Any]:
 
     counts = fetch_all(
         """
-        SELECT 'problem_types' AS source, COUNT(*)::int AS total FROM ai_core.problem_types
+        SELECT 'knowledge_items' AS source, COUNT(*)::int AS total FROM public.knowledge_items WHERE is_active IS DISTINCT FROM false
         UNION ALL
-        SELECT 'solution_playbooks', COUNT(*)::int FROM ai_core.solution_playbooks
+        SELECT 'knowledge_mappings', COUNT(*)::int FROM public.knowledge_mappings
         UNION ALL
-        SELECT 'evidence_expectations', COUNT(*)::int FROM ai_core.evidence_expectations
+        SELECT 'knowledge_recommended_actions', COUNT(*)::int FROM public.knowledge_recommended_actions
         UNION ALL
-        SELECT 'closure_criteria', COUNT(*)::int FROM ai_core.closure_criteria
+        SELECT 'knowledge_evidence_expectations', COUNT(*)::int FROM public.knowledge_evidence_expectations
+        UNION ALL
+        SELECT 'iso_evidence_expectations', COUNT(*)::int FROM public.iso_evidence_expectations
         ORDER BY source
         """
     )

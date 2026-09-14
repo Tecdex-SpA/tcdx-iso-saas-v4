@@ -8,6 +8,7 @@ from urllib.parse import urlparse
 
 from sqlalchemy import text
 from app.core.db import engine
+from app.services.canonical_knowledge_service import load_canonical_external_sources
 from app.services.finding_scenario_detector import detect_finding_scenario
 
 
@@ -41,80 +42,13 @@ def _load_trusted_sources(
     source_profile: Optional[str] = None,
     limit: int = 8,
 ) -> List[Dict[str, Any]]:
-    conditions = ["is_active = TRUE"]
-    params = {
-        "standard_code": standard_code,
-        "domain_code": domain_code,
-        "source_profile": source_profile,
-        "limit": max(1, min(int(limit or 8), 20)),
-    }
-
-    if standard_code:
-        conditions.append(
-            """
-            (
-              applicable_standards = '[]'::jsonb
-              OR applicable_standards ? :standard_code
-            )
-            """
-        )
-
-    if domain_code:
-        conditions.append(
-            """
-            (
-              applicable_domains = '[]'::jsonb
-              OR applicable_domains ? :domain_code
-            )
-            """
-        )
-
-    # source_profile todavía es una etiqueta de escenario.
-    # Aquí no filtramos duro por perfil, para no dejar fuentes fuera.
-    sql = f"""
-      SELECT
-        source_code,
-        source_name,
-        source_type,
-        base_url,
-        allowed_domains,
-        applicable_domains,
-        applicable_standards,
-        description,
-        trust_level,
-        metadata
-      FROM ai_core.trusted_external_sources
-      WHERE {' AND '.join(conditions)}
-      ORDER BY
-        CASE trust_level
-          WHEN 'high' THEN 1
-          WHEN 'medium' THEN 2
-          ELSE 3
-        END,
-        source_code
-      LIMIT :limit
-    """
-
-    with engine.connect() as conn:
-        rows = conn.execute(text(sql), params).mappings().all()
-
-    sources = []
-
-    for row in rows:
-        sources.append({
-            "source_code": row.get("source_code"),
-            "source_name": row.get("source_name"),
-            "source_type": row.get("source_type"),
-            "base_url": row.get("base_url"),
-            "allowed_domains": _safe_list(row.get("allowed_domains")),
-            "applicable_domains": _safe_list(row.get("applicable_domains")),
-            "applicable_standards": _safe_list(row.get("applicable_standards")),
-            "description": row.get("description"),
-            "trust_level": row.get("trust_level"),
-            "metadata": row.get("metadata") or {},
-        })
-
-    return sources
+    # source_profile sigue siendo una etiqueta semántica de escenario; no se
+    # filtra duro para no ocultar fuentes canónicas útiles.
+    return load_canonical_external_sources(
+        standard_code=standard_code,
+        domain_code=domain_code,
+        limit=limit,
+    )
 
 
 def _build_queries(payload: Dict[str, Any], scenario: Dict[str, Any]) -> List[str]:
@@ -873,7 +807,8 @@ def _check_external_lookup_quota(tenant_id: Optional[str]) -> Dict[str, Any]:
         SELECT
           COALESCE(SUM(u.used_count), 0)::integer AS used_count
         FROM ai_core.v_external_lookup_usage_monthly u
-        WHERE u.tenant_id = COALESCE(NULLIF(:tenant_id, '')::uuid, '00000000-0000-0000-0000-000000000000'::uuid)
+        WHERE NULLIF(:tenant_id, '')::uuid IS NOT NULL
+          AND u.tenant_id = NULLIF(:tenant_id, '')::uuid
           AND u.usage_month = date_trunc('month', now())::date
       )
       SELECT
