@@ -66,6 +66,11 @@ const freshArray = scriptText.match(/FRESH_PRODUCTION_MIGRATION_RUNNERS=\([\s\S]
 assert.ok(freshArray, 'fresh production migration runner registry must exist');
 assert.doesNotMatch(freshArray[0], /scripts\/phase[0-9-]/, 'fresh deploy must not include historical phase runners');
 assert.doesNotMatch(freshArray[0], /production_schema_v1\.sql|production_seed_v1\.sql|load-production-reference-catalogs\.js/, 'fresh deploy must not run bootstrap assets');
+assert.match(
+  freshArray[0],
+  /scripts\/normalization\/apply-ai-core-runtime-context-grants\.js/,
+  'fresh deploy must include AI Core runtime context grants forward migration'
+);
 
 const historicalArray = scriptText.match(/HISTORICAL_MIGRATION_RUNNERS=\([\s\S]*?\n\)/);
 assert.ok(historicalArray, 'historical migration runner registry must exist');
