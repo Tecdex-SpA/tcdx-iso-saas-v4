@@ -1445,6 +1445,14 @@ router.put('/tenants/:tenant_id/ai-settings', auth, async (req, res) => {
       data: result.rows[0],
     });
   } catch (error) {
+    if (error?.code === 'AI_MONTHLY_QUOTA_INVALID') {
+      return res.status(400).json({
+        ok: false,
+        error: 'Cuota mensual IA inválida',
+        code: 'AI_MONTHLY_QUOTA_INVALID',
+      });
+    }
+
     safeErrorLog('ERROR UPDATE TENANT AI SETTINGS:', error, req);
     return res.status(500).json({
       ok: false,

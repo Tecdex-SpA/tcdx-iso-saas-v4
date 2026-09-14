@@ -46,6 +46,48 @@ function normalizeFeatures(value = {}, defaults = DISABLED_FEATURES) {
   };
 }
 
+function normalizeFiniteNumber(value) {
+  if (value === null || value === undefined) return null;
+  if (typeof value === 'string' && value.trim() === '') return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function aiMonthlyQuotaInvalidError() {
+  const error = new Error('AI_MONTHLY_QUOTA_INVALID');
+  error.code = 'AI_MONTHLY_QUOTA_INVALID';
+  return error;
+}
+
+function parseAiMonthlyQuotaInput(value) {
+  if (value === null || value === undefined) return null;
+
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (trimmed === '') return null;
+    if (!/^\d+$/.test(trimmed)) throw aiMonthlyQuotaInvalidError();
+    const parsed = Number(trimmed);
+    if (!Number.isSafeInteger(parsed)) throw aiMonthlyQuotaInvalidError();
+    return parsed;
+  }
+
+  if (typeof value === 'number' && Number.isSafeInteger(value) && value >= 0) {
+    return value;
+  }
+
+  throw aiMonthlyQuotaInvalidError();
+}
+
+function isAiMonthlyQuotaExceeded(monthlyQuota, quotaUsed) {
+  const quota = normalizeFiniteNumber(monthlyQuota);
+  if (quota === null || quota <= 0) return false;
+
+  const used = normalizeFiniteNumber(quotaUsed);
+  if (used === null || used < 0) return false;
+
+  return used >= quota;
+}
+
 function normalizeSettings(row = {}) {
   const aiEnabled = row.ai_enabled === true;
   const plan = normalizePlan(row.ai_plan || row.ai_tier || (aiEnabled ? 'standard' : 'none'), aiEnabled ? 'standard' : 'none');
@@ -60,8 +102,8 @@ function normalizeSettings(row = {}) {
     ai_web_enabled: runtimeEnabled && (row.ai_web_enabled === undefined ? features.web_research !== false : bool(row.ai_web_enabled, true)),
     ai_report_enabled: runtimeEnabled && (row.ai_report_enabled === undefined ? features.report_enrichment !== false : bool(row.ai_report_enabled, true)),
     ai_auditor_enabled: runtimeEnabled && (row.ai_auditor_enabled === undefined ? features.auditor !== false : bool(row.ai_auditor_enabled, true)),
-    ai_monthly_quota: row.ai_monthly_quota === null || row.ai_monthly_quota === undefined ? null : Number(row.ai_monthly_quota),
-    ai_quota_used: Number(row.ai_quota_used || 0),
+    ai_monthly_quota: normalizeFiniteNumber(row.ai_monthly_quota),
+    ai_quota_used: normalizeFiniteNumber(row.ai_quota_used) ?? 0,
     ai_features_json: features,
   };
 }
@@ -145,10 +187,7 @@ async function isTenantAiFeatureEnabled(tenantId, feature) {
     getTenantAiCommercialEntitlement(tenantId, feature),
   ]);
   const key = featureKey(feature);
-  const quotaExceeded =
-    settings.ai_monthly_quota !== null &&
-    Number(settings.ai_monthly_quota) >= 0 &&
-    Number(settings.ai_quota_used || 0) >= Number(settings.ai_monthly_quota);
+  const quotaExceeded = isAiMonthlyQuotaExceeded(settings.ai_monthly_quota, settings.ai_quota_used);
   const featureEnabled = settings.ai_features_json?.[key] !== false;
   const runtimeEnabled = settings.ai_enabled === true;
   const specificEnabled =
@@ -157,22 +196,59 @@ async function isTenantAiFeatureEnabled(tenantId, feature) {
     key === 'auditor' ? settings.ai_auditor_enabled !== false :
     featureEnabled;
   const commercialEnabled = commercial.enabled === true;
-  const enabled = commercialEnabled && runtimeEnabled && specificEnabled && !quotaExceeded;
+  let reason = 'ai_enabled';
+  if (!commercialEnabled) {
+    reason = commercial.reason_code || 'AI_ADDON_NOT_CONTRACTED';
+  } else if (!runtimeEnabled) {
+    reason = 'ai_runtime_disabled';
+  } else if (!specificEnabled) {
+    reason = 'ai_feature_disabled';
+  } else if (quotaExceeded) {
+    reason = 'ai_quota_exceeded';
+  }
+  const enabled = reason === 'ai_enabled';
   return {
     enabled,
     feature: key,
     capability_key: commercial.capability_key,
     commercial,
     settings,
-    reason: enabled
-      ? 'ai_enabled'
-      : (!commercialEnabled
-        ? (commercial.reason_code || 'ai_addon_not_contracted')
-        : (quotaExceeded ? 'ai_quota_exceeded' : (runtimeEnabled ? 'ai_feature_disabled' : 'ai_runtime_disabled'))),
+    reason,
   };
 }
 
+const AI_COMMERCIAL_DISABLED_REASONS = new Set([
+  'ADDON_REQUIRED',
+  'AI_ADDON_NOT_CONTRACTED',
+  'AI_DISABLED_BY_PLAN',
+  'ADDON_NOT_ACTIVE',
+  'CAPABILITY_DISABLED',
+  'CAPABILITY_NOT_ENTITLED',
+  'MODULE_NOT_ACTIVE',
+  'NO_ACTIVE_SUBSCRIPTION',
+  'SUBSCRIPTION_REQUIRED',
+  'TENANT_REQUIRED',
+]);
+
+function normalizeReasonCode(reason) {
+  return String(reason || '').trim().replace(/[^a-z0-9]+/gi, '_').replace(/^_+|_+$/g, '').toUpperCase();
+}
+
+function isAiDisabledByCommercialPlan(reason) {
+  return AI_COMMERCIAL_DISABLED_REASONS.has(normalizeReasonCode(reason));
+}
+
+function aiDisabledCategory(reason) {
+  const normalized = normalizeReasonCode(reason);
+  if (AI_COMMERCIAL_DISABLED_REASONS.has(normalized)) return 'commercial';
+  if (normalized === 'AI_RUNTIME_DISABLED') return 'runtime';
+  if (normalized === 'AI_FEATURE_DISABLED') return 'feature';
+  if (normalized === 'AI_QUOTA_EXCEEDED') return 'quota';
+  return 'unknown';
+}
+
 function buildAiDisabledTrace({ tenantId, feature, requestId = null, modelMode = 'deterministic', reason = 'ai_disabled_by_plan' } = {}) {
+  const disabledByPlan = isAiDisabledByCommercialPlan(reason);
   return {
     ai_engine_used: false,
     llm_used: false,
@@ -181,8 +257,9 @@ function buildAiDisabledTrace({ tenantId, feature, requestId = null, modelMode =
     deterministic_fallback_used: true,
     fallback_used: false,
     ai_enrichment_failed: false,
-    ai_disabled_by_plan: true,
+    ai_disabled_by_plan: disabledByPlan,
     ai_disabled_reason: reason,
+    ai_disabled_category: aiDisabledCategory(reason),
     feature,
     selected_model: null,
     model_mode: modelMode,
@@ -210,7 +287,7 @@ function normalizeAiSettingsPayload(body = {}) {
       ai_web_enabled: false,
       ai_report_enabled: false,
       ai_auditor_enabled: false,
-      ai_monthly_quota: body.ai_monthly_quota === '' || body.ai_monthly_quota === undefined ? null : Number(body.ai_monthly_quota),
+      ai_monthly_quota: parseAiMonthlyQuotaInput(body.ai_monthly_quota),
       ai_features_json: { ...DISABLED_FEATURES },
     };
   }
@@ -223,7 +300,7 @@ function normalizeAiSettingsPayload(body = {}) {
     ai_web_enabled: webEnabled,
     ai_report_enabled: bool(body.ai_report_enabled, features.report_enrichment !== false),
     ai_auditor_enabled: bool(body.ai_auditor_enabled, features.auditor !== false),
-    ai_monthly_quota: body.ai_monthly_quota === '' || body.ai_monthly_quota === undefined ? null : Number(body.ai_monthly_quota),
+    ai_monthly_quota: parseAiMonthlyQuotaInput(body.ai_monthly_quota),
     ai_features_json: {
       ...features,
       web_research: webEnabled,
@@ -240,7 +317,14 @@ module.exports = {
   DISABLED_FEATURES,
   getTenantAiSettings,
   getTenantAiCommercialEntitlement,
+  isAiMonthlyQuotaExceeded,
   isTenantAiFeatureEnabled,
   buildAiDisabledTrace,
   normalizeAiSettingsPayload,
+  _private: {
+    aiDisabledCategory,
+    isAiDisabledByCommercialPlan,
+    normalizeFiniteNumber,
+    parseAiMonthlyQuotaInput,
+  },
 };
