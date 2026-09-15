@@ -1,0 +1,107 @@
+name: Documentation capture
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/documentation-capture.yml'
+      - 'frontend/playwright.documentation-capture.config.ts'
+      - 'frontend/tests/e2e/documentation-capture.spec.ts'
+      - 'frontend/tests/e2e/documentation-readiness.spec.ts'
+      - 'frontend/tests/e2e/documentation-transactional.spec.ts'
+      - 'docs/user-manual/**'
+  workflow_dispatch:
+    inputs:
+      scenario:
+        description: Scenario to capture
+        required: true
+        default: all
+        type: choice
+        options:
+          - all
+          - iso9001
+          - iso27001
+          - integrated
+
+permissions:
+  contents: read
+
+concurrency:
+  group: documentation-capture-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  capture:
+    name: Capture TCDX ISO user manual evidence
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: documentation
+    env:
+      DOC_WEB_BASE_URL: https://tcdx-iso.tecdex.net
+      DOC_API_BASE_URL: ${{ secrets.DOC_API_BASE_URL }}
+      DOC_DEMO_PASSWORD: ${{ secrets.DOC_DEMO_PASSWORD }}
+      DOC_SCENARIO: ${{ github.event.inputs.scenario || 'all' }}
+      DOC_ENABLE_WRITES: 'true'
+      DOC_CAPTURE_DIR: artifacts/documentation/screenshots
+      DOC_MANIFEST_FILE: artifacts/documentation/manifest.json
+      DOC_VALIDATION_FILE: artifacts/documentation/validation.json
+      DOC_RESULTS_FILE: ../artifacts/documentation/results.json
+      DOC_REPORT_DIR: ../artifacts/documentation/playwright-report
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Validate documentation configuration
+        shell: bash
+        run: |
+          missing=()
+          for name in DOC_WEB_BASE_URL DOC_API_BASE_URL DOC_DEMO_PASSWORD; do
+            if [[ -z "${!name:-}" ]]; then
+              missing+=("$name")
+            fi
+          done
+          if (( ${#missing[@]} > 0 )); then
+            printf '::error::Missing documentation configuration: %s\n' "${missing[*]}"
+            exit 1
+          fi
+          if [[ "$DOC_WEB_BASE_URL" != "https://tcdx-iso.tecdex.net" ]]; then
+            echo "::error::Documentation capture is restricted to the approved TCDX production URL"
+            exit 1
+          fi
+          if [[ "$DOC_ENABLE_WRITES" != "true" ]]; then
+            echo "::error::Transactional baseline must be explicitly enabled for this validation run"
+            exit 1
+          fi
+          echo "Write scope is enforced by documentation-transactional.spec.ts: exact demo admin accounts and DOC-* codes only."
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Install Chromium
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+
+      - name: Run documentation capture
+        working-directory: frontend
+        run: npx playwright test --config=playwright.documentation-capture.config.ts
+
+      - name: Upload documentation evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v5
+        with:
+          name: tcdx-documentation-${{ github.event.inputs.scenario || 'all' }}-${{ github.run_id }}
+          if-no-files-found: warn
+          retention-days: 30
+          path: |
+            artifacts/documentation/
+            frontend/test-results/

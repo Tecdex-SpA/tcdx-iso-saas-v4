@@ -1,0 +1,82 @@
+name: Documentation controls evidence
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/documentation-controls-evidence.yml'
+      - 'frontend/tests/e2e/documentation-controls-evidence.spec.ts'
+      - 'frontend/tests/e2e/documentation-transactional-fix.spec.ts'
+      - 'frontend/playwright.documentation-capture.config.ts'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: documentation-controls-evidence-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  controls_evidence:
+    name: Create guarded DOC control and evidence flow
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    environment: documentation
+    env:
+      DOC_WEB_BASE_URL: https://tcdx-iso.tecdex.net
+      DOC_API_BASE_URL: ${{ secrets.DOC_API_BASE_URL }}
+      DOC_DEMO_PASSWORD: ${{ secrets.DOC_DEMO_PASSWORD }}
+      DOC_ENABLE_WRITES: 'true'
+      DOC_CAPTURE_DIR: artifacts/documentation/screenshots
+      DOC_RESULTS_FILE: ../artifacts/documentation/controls-evidence-results.json
+      DOC_REPORT_DIR: ../artifacts/documentation/controls-evidence-report
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Guard production demo-only transaction
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$DOC_WEB_BASE_URL" = "https://tcdx-iso.tecdex.net"
+          test -n "$DOC_API_BASE_URL"
+          test -n "$DOC_DEMO_PASSWORD"
+          test "$DOC_ENABLE_WRITES" = "true"
+          echo "Controls/evidence documentation is restricted to the approved demo tenants and DOC-* evidence records."
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Install Chromium
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+
+      - name: Validate process baseline selector fix
+        working-directory: frontend
+        run: npx playwright test tests/e2e/documentation-transactional-fix.spec.ts --config=playwright.documentation-capture.config.ts
+
+      - name: Run controls to evidence flow
+        working-directory: frontend
+        run: npx playwright test tests/e2e/documentation-controls-evidence.spec.ts --config=playwright.documentation-capture.config.ts
+
+      - name: Upload documentation evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v5
+        with:
+          name: tcdx-documentation-controls-evidence-${{ github.run_id }}
+          if-no-files-found: warn
+          retention-days: 30
+          path: |
+            artifacts/documentation/
+            frontend/test-results/
