@@ -249,6 +249,23 @@ const knowledgeIngestionViewerWrite = authorize({ method: 'POST', path: '/api/kn
 assert.equal(knowledgeIngestionViewerWrite.nextCalled, false, 'viewer cannot ingest tenant knowledge documents');
 assert.equal(knowledgeIngestionViewerWrite.res.statusCode, 403);
 
+const companyProfileRead = authorize({ method: 'GET', path: '/api/company-profile', role: 'viewer' });
+assert.equal(companyProfileRead.nextCalled, true, 'viewer can read company profile metadata');
+
+const companyProfileAnalyzeAdmin = authorize({ method: 'POST', path: '/api/company-profile/analyze/start', role: 'tenant_admin' });
+assert.equal(companyProfileAnalyzeAdmin.nextCalled, true, 'tenant_admin can start company profile AI analysis');
+
+const companyProfileAnalyzeAuditor = authorize({ method: 'POST', path: '/api/company-profile/analyze/start', role: 'auditor' });
+assert.equal(companyProfileAnalyzeAuditor.nextCalled, false, 'auditor cannot start company profile AI analysis');
+assert.equal(companyProfileAnalyzeAuditor.res.statusCode, 403);
+
+const companyProfileRebuildAdmin = authorize({ method: 'POST', path: '/api/company-profile/applicability/rebuild', role: 'tenant_admin' });
+assert.equal(companyProfileRebuildAdmin.nextCalled, true, 'tenant_admin can rebuild applicable universe');
+
+const companyProfileRebuildViewer = authorize({ method: 'POST', path: '/api/company-profile/applicability/rebuild', role: 'viewer' });
+assert.equal(companyProfileRebuildViewer.nextCalled, false, 'viewer cannot rebuild applicable universe');
+assert.equal(companyProfileRebuildViewer.res.statusCode, 403);
+
 const definitions = listImportDefinitions();
 assert.equal(definitions.length, 33);
 assert.equal(

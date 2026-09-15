@@ -387,8 +387,8 @@ type DashboardSummary = {
   cumple?: number;
   parcial?: number;
   noCumple?: number;
-  porcentaje?: number;
-  riesgo?: number;
+  porcentaje?: number | null;
+  riesgo?: number | null;
   nivel_riesgo?: string;
   open_findings?: number;
   closed_findings?: number;
@@ -1274,11 +1274,14 @@ function DashboardPageContent() {
   const mediumRisks = numberOrZero(
     riskSummary.find((r) => r.level === 'medio')?.total
   );
+  const hasRegisteredRisks = riskSummary.some((risk) => numberOrZero(risk.total) > 0);
 
   const complianceValue =
     totalControls > 0
       ? Math.round((cumple / totalControls) * 100)
-      : numberOrZero(summary?.porcentaje);
+      : typeof summary?.porcentaje === 'number'
+      ? summary.porcentaje
+      : null;
 
   const activeActionPlans = actionPlans.filter((p) => {
     const normalized = normalizeActionStatus(p.status);
@@ -1473,10 +1476,10 @@ function DashboardPageContent() {
     effectiveTotalActiveControls > 0 ? effectiveCompliesControls : cumple;
   const executiveTotalControls =
     effectiveTotalActiveControls > 0 ? effectiveTotalActiveControls : totalControls;
-  const hasExecutiveControlBasis = executiveTotalControls > 0;
+  const hasExecutiveControlBasis = executiveTotalControls > 0 && typeof executiveComplianceValue === 'number';
   const executiveComplianceDisplay = hasExecutiveControlBasis
     ? `${executiveComplianceValue}%`
-    : 'Sin medición';
+    : 'sin_datos';
   const executiveHealthyControlsDisplay = hasExecutiveControlBasis
     ? `${executiveHealthyControls} / ${executiveTotalControls}`
     : 'Sin datos';
@@ -1893,11 +1896,11 @@ function DashboardPageContent() {
 
                       <TopCard
                         title={t('dashboard.criticalRisks')}
-                        value={highRisks}
+                        value={hasRegisteredRisks ? highRisks : 'Sin riesgos registrados'}
                         subtitle={t('dashboard.criticalRisksSubtitle')}
                         accent="red"
-                        change={t('dashboard.mediumCountPlural', { count: mediumRisks })}
-                        changeHint={t('dashboard.currentOverview')}
+                        change={hasRegisteredRisks ? t('dashboard.mediumCountPlural', { count: mediumRisks }) : 'sin_datos'}
+                        changeHint="Considera riesgos registrados y activos"
                         icon={<TcdxIcon name="alert" className="h-6 w-6" />}
                       />
 
@@ -1929,6 +1932,7 @@ function DashboardPageContent() {
                     totalControls={executiveTotalControls}
                     highRisks={highRisks}
                     mediumRisks={mediumRisks}
+                    hasRegisteredRisks={hasRegisteredRisks}
                     activeActionPlans={activeActionPlans}
                     overdueActionPlans={overdueActionPlans}
                     openNonconformities={openNcCount}
@@ -2695,37 +2699,37 @@ function OperationalChartsPanel({
   const charts = [
     {
       title: 'Controles por estado',
-      description: 'Distribución de controles aplicables según estado operativo.',
+      description: 'Distribucion de controles activos y aplicables del tenant por estado operativo registrado.',
       data: controlStatus,
       kind: 'donut' as const,
     },
     {
       title: 'Riesgos por nivel',
-      description: 'Presión de riesgo informada por el resumen del tenant.',
+      description: 'Considera solo riesgos registrados para el tenant; ausencia de filas significa sin riesgos registrados, no evaluacion cero.',
       data: riskLevels,
       kind: 'bar' as const,
     },
     {
       title: 'Auditorías por estado',
-      description: 'Programa auditado por fase de ejecución e informe.',
+      description: 'Programa auditado existente, agrupado por fase de ejecucion e informe publicado.',
       data: auditStates,
       kind: 'bar' as const,
     },
     {
       title: 'Planes de acción',
-      description: 'Estado de seguimiento de acciones correctivas y operativas.',
+      description: 'Estado de seguimiento de acciones correctivas y operativas creadas para el tenant.',
       data: actionPlans,
       kind: 'donut' as const,
     },
     {
       title: 'Cobertura de evidencias',
-      description: 'Evidencia oficial, aprobada y faltante en controles activos.',
+      description: 'Evidencia oficial, aprobada y faltante sobre controles activos dentro del universo aplicable.',
       data: evidenceCoverage,
       kind: 'bar' as const,
     },
     {
       title: 'No conformidades',
-      description: 'Balance de no conformidades abiertas y cerradas.',
+      description: 'Balance de no conformidades reales del tenant; asociar evidencia no cierra ni aprueba automaticamente.',
       data: nonconformities,
       kind: 'donut' as const,
     },
@@ -3009,44 +3013,46 @@ function ExecutiveStatusOverview({
   totalControls,
   highRisks,
   mediumRisks,
+  hasRegisteredRisks,
   activeActionPlans,
   overdueActionPlans,
   openNonconformities,
   effectiveStatus,
 }: {
-  complianceValue: number;
+  complianceValue: number | null;
   healthyControls: number;
   totalControls: number;
   highRisks: number;
   mediumRisks: number;
+  hasRegisteredRisks: boolean;
   activeActionPlans: number;
   overdueActionPlans: number;
   openNonconformities: number;
   effectiveStatus: string;
 }) {
-  const riskPressure = Math.min(100, highRisks * 18 + mediumRisks * 8);
+  const riskPressure = hasRegisteredRisks ? Math.min(100, highRisks * 18 + mediumRisks * 8) : null;
   const actionPressure = Math.min(100, activeActionPlans > 0 ? Math.round((overdueActionPlans / activeActionPlans) * 100) : 0);
-  const complianceSafe = Math.max(0, Math.min(100, complianceValue));
+  const complianceSafe = typeof complianceValue === 'number' ? Math.max(0, Math.min(100, complianceValue)) : null;
   const healthLabel = mapEffectiveHealthLabel(effectiveStatus);
 
   const segments = [
     {
       label: 'Cumplimiento ISO',
-      value: `${complianceSafe}%`,
-      helper: `${healthyControls}/${totalControls || 0} controles saludables`,
-      width: complianceSafe,
+      value: complianceSafe === null ? 'sin_datos' : `${complianceSafe}%`,
+      helper: complianceSafe === null ? 'Sin controles aplicables medidos' : `${healthyControls}/${totalControls || 0} controles saludables`,
+      width: complianceSafe ?? 0,
       color: '#16a34a',
       bg: 'bg-emerald-50',
       border: 'border-emerald-100',
     },
     {
       label: 'Presión de riesgo',
-      value: highRisks,
-      helper: `${mediumRisks} riesgos medios`,
-      width: riskPressure,
-      color: riskPressure >= 60 ? '#dc2626' : '#f59e0b',
-      bg: riskPressure >= 60 ? 'bg-red-50' : 'bg-amber-50',
-      border: riskPressure >= 60 ? 'border-red-100' : 'border-amber-100',
+      value: riskPressure === null ? 'sin_datos' : highRisks,
+      helper: riskPressure === null ? 'Sin riesgos registrados' : `${mediumRisks} riesgos medios registrados`,
+      width: riskPressure ?? 0,
+      color: riskPressure !== null && riskPressure >= 60 ? '#dc2626' : '#f59e0b',
+      bg: riskPressure !== null && riskPressure >= 60 ? 'bg-red-50' : 'bg-amber-50',
+      border: riskPressure !== null && riskPressure >= 60 ? 'border-red-100' : 'border-amber-100',
     },
     {
       label: 'Acciones vencidas',
@@ -3104,7 +3110,7 @@ function ExecutiveStatusOverview({
             <div className="mt-4 h-2 overflow-hidden rounded-full bg-white/80">
               <div
                 className="h-full rounded-full"
-                style={{ width: `${Math.max(4, Math.min(100, segment.width))}%`, background: segment.color }}
+                style={{ width: `${segment.width <= 0 ? 0 : Math.max(4, Math.min(100, segment.width))}%`, background: segment.color }}
               />
             </div>
             <p className="mt-3 text-sm font-medium text-[var(--tcdx-color-text-primary)]">{segment.helper}</p>
@@ -3236,19 +3242,28 @@ function TopCard({
 function PanelHeader({
   title,
   href,
+  description,
 }: {
   title: string;
   href?: string;
+  description?: string;
 }) {
   const { t } = useTranslation();
 
   return (
     <div className="mb-5 flex items-center justify-between gap-4">
-      <div className="flex items-center gap-2">
-        <h2 className="text-sm font-bold text-[var(--tcdx-color-text-ink)]">{title}</h2>
-        <span className="flex h-4 w-4 items-center justify-center rounded-full border border-slate-300 text-[10px] font-bold text-[var(--tcdx-color-text-muted)]">
-          i
-        </span>
+      <div>
+        <div className="flex items-center gap-2">
+          <h2 className="text-sm font-bold text-[var(--tcdx-color-text-ink)]">{title}</h2>
+          <span className="flex h-4 w-4 items-center justify-center rounded-full border border-slate-300 text-[10px] font-bold text-[var(--tcdx-color-text-muted)]">
+            i
+          </span>
+        </div>
+        {description && (
+          <p className="mt-1 max-w-2xl text-xs leading-5 text-[var(--tcdx-color-text-secondary)]">
+            {description}
+          </p>
+        )}
       </div>
 
       {href && (
@@ -3273,7 +3288,11 @@ function StandardHealthPanel({
 
   return (
     <section className="rounded-lg border border-[var(--tcdx-color-border)] bg-white p-5 shadow-[0_8px_22px_rgba(8,25,58,0.06)]">
-      <PanelHeader title={t('dashboard.controlHealthByStandard')} href="/controles" />
+      <PanelHeader
+        title={t('dashboard.controlHealthByStandard')}
+        href="/controles"
+        description="Evalua controles activos y aplicables de las normas contratadas; controles sin medicion Health no se consideran criticos por ausencia."
+      />
 
       <div className="mb-5 flex flex-wrap gap-5 text-xs font-semibold text-[var(--tcdx-color-text-primary)]">
         <span className="inline-flex items-center gap-2">
@@ -3331,7 +3350,11 @@ function AuditTimelinePanel({
 
   return (
     <section className="rounded-lg border border-[var(--tcdx-color-border)] bg-white p-5 shadow-[0_8px_22px_rgba(8,25,58,0.06)]">
-      <PanelHeader title={t('dashboard.auditStatus')} href="/auditorias" />
+      <PanelHeader
+        title={t('dashboard.auditStatus')}
+        href="/auditorias"
+        description="Considera auditorias existentes del tenant y sus estados operacionales registrados."
+      />
 
       {items.length === 0 ? (
         <div className="rounded-lg border border-dashed border-[var(--tcdx-color-border)] bg-[var(--tcdx-color-surface)] p-6 text-sm text-[var(--tcdx-color-text-secondary)]">
@@ -3379,7 +3402,11 @@ function ActionPlansPanel({ items }: { items: ActionPlanItem[] }) {
 
   return (
     <section className="rounded-lg border border-[var(--tcdx-color-border)] bg-white p-5 shadow-[0_8px_22px_rgba(8,25,58,0.06)]">
-      <PanelHeader title={t('dashboard.actionPlans')} href="/plan-accion" />
+      <PanelHeader
+        title={t('dashboard.actionPlans')}
+        href="/plan-accion"
+        description="Muestra planes de accion reales y activos; vencimientos se interpretan sobre fechas registradas."
+      />
 
       {items.length === 0 ? (
         <div className="rounded-lg border border-dashed border-[var(--tcdx-color-border)] bg-[var(--tcdx-color-surface)] p-6 text-sm text-[var(--tcdx-color-text-secondary)]">
@@ -3429,7 +3456,11 @@ function PriorityRiskPanel({
 
   return (
     <section className="rounded-lg border border-[var(--tcdx-color-border)] bg-white p-5 shadow-[0_8px_22px_rgba(8,25,58,0.06)]">
-      <PanelHeader title={t('dashboard.priorityRisks')} href="/matriz-riesgo" />
+      <PanelHeader
+        title={t('dashboard.priorityRisks')}
+        href="/matriz-riesgo"
+        description="Considera unicamente riesgos registrados y activos del alcance actual; sin riesgos registrados se muestra como sin_datos."
+      />
 
       <div className="overflow-hidden">
         <div className="hidden grid-cols-[minmax(0,1fr)_78px_82px_28px] border-b border-[rgba(216,216,216,0.55)] pb-2 text-xs font-bold text-[var(--tcdx-color-text-muted)] sm:grid">
@@ -3479,13 +3510,17 @@ function ExecutiveReportPanel({
   complianceValue,
 }: {
   period: string;
-  complianceValue: number;
+  complianceValue: number | null;
 }) {
   const { t } = useTranslation();
 
   return (
     <section className="rounded-lg border border-[var(--tcdx-color-border)] bg-white p-5 shadow-[0_8px_22px_rgba(8,25,58,0.06)]">
-      <PanelHeader title={t('dashboard.executiveReport')} href="/exportes" />
+      <PanelHeader
+        title={t('dashboard.executiveReport')}
+        href="/exportes"
+        description="Resume indicadores calculados desde controles, riesgos, evidencias y acciones existentes; no reemplaza aprobacion humana."
+      />
 
       <div className="grid gap-5 md:grid-cols-[150px_minmax(0,1fr)]">
         <div className="overflow-hidden rounded-sm border border-[var(--tcdx-color-border)] bg-white shadow-sm">
@@ -3523,7 +3558,7 @@ function ExecutiveReportPanel({
           </a>
 
           <div className="mt-4 text-xs font-semibold text-[var(--tcdx-color-text-secondary)]">
-            {t('dashboard.globalCompliance')}: {complianceValue}%
+            {t('dashboard.globalCompliance')}: {typeof complianceValue === 'number' ? `${complianceValue}%` : 'sin_datos'}
           </div>
         </div>
       </div>

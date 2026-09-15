@@ -1,5 +1,23 @@
 # CURRENT_STATE — TCDX ISO SaaS V4
 
+## Evidence Dashboard LLM Traceability Closeout — 2026-09-15
+
+Status: `EVIDENCE_DASHBOARD_LLM_TRACEABILITY_READY_FOR_REVIEW`.
+
+Local-only focused continuation on branch `main` / HEAD `49c01d3396d765ae95d8247b226c97cd383de740`. Codex did not commit, push, merge, deploy, edit `.env`, change gateway URL/API keys/model aliases, create migrations, alter schema, create tables, or write to QA/production DB.
+
+Closed locally: central LLM trace context flows from backend authenticated context to AI Engine and the OpenAI-compatible client. Human calls resolve `actor` from server-side `users.email`; process calls use stable technical actors; missing identity degrades to `unknown-system-process@tecdex.net`; `system` is centralized as `tcdx-iso`; `company` is resolved from canonical tenant/profile data server-side. Spoofed frontend `email`, `company`, `system` or `llm_trace` is overwritten before the AI Engine call. AI Engine forwards actor through OpenAI `user` and `X-OpenWebUI-User-Email`, plus OpenAI-compatible metadata/tags for system/company/tenant/user when supported.
+
+Evidence closeout now includes the productive existing `POST /semantic-evidence/analyze` route in `ai-engine/main.py`: deterministic safe base over real document text, optional `call_llm_json` enrichment through the central client, strict candidate whitelist, human-review-required output, summary/facts/inferences/chunks/suggestions/scoring/limitations/trace, and controlled fallback for timeout/malformed/no text. Backend persistence uses canonical `document_index`, `tenant_evidence_semantic_profiles`, `tenant_evidence_chunks`, `tenant_evidence_applicability_suggestions`, and `tenant_document_object_links`; accepted suggestions create human associations only and do not mutate compliance, Health, controls, NCs or findings.
+
+Profile/applicability/dashboard closeout is covered locally: company-profile AI request/render/no-double-submit/error contracts are asserted; applicability rebuild uses the existing engine over active tenant standards/profile data, deletes/rebuilds generated rows idempotently, excludes inactive transition standards, avoids duplicates and preserves tenant isolation; dashboard summary and UI preserve `null/sin_datos` for absent universe/risk/Health instead of converting absence to zero.
+
+Validation PASS: syntax for touched JS/Python files; `npm --prefix frontend run typecheck`; `node backend/src/services/llmTraceContext.service.test.js`; `node backend/src/middleware/rbac.middleware.test.js`; `PYTHONPATH=/private/tmp/tcdx-ai-engine-test-deps-reqonly python3 ai-engine/app/scripts/test_dgx_litellm_hardening.py`; `PYTHONPATH=/private/tmp/tcdx-ai-engine-test-deps-reqonly python3 ai-engine/app/scripts/test_semantic_evidence_endpoint.py`; `node scripts/normalization/canonical-document-index-dashboard.postgres.test.js`; `node scripts/normalization/company-profile-applicability-dashboard.postgres.test.js`; `node frontend/scripts/check-evidence-profile-dashboard-contracts.mjs`; `git diff --check`.
+
+Postdeploy remains pending and non-blocking for local READY: real browser click validation for evidence/profile/applicability/dashboard, real authenticated users across tenants, trace inspection in `trazas.lab.tecdex.net`, and runtime 5xx/SQL log check after deploy.
+
+Continuity: `docs/codex/handoffs/EVIDENCE-DASHBOARD-LLM-TRACEABILITY-CLOSEOUT.md`.
+
 ## Canonical Document Index / Dashboard Closeout — 2026-09-15
 
 Status: `CANONICAL_BACKEND_DATAFLOW_READY_FOR_REVIEW`.

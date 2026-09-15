@@ -75,6 +75,14 @@ class DgxLiteLlmHardeningTests(unittest.TestCase):
                     prompt="{}",
                     system_prompt="JSON only",
                     generation_options_override={"num_predict": 100, "num_ctx": 2048},
+                    trace_context={
+                        "actor": "usuario.a@empresa-a.cl",
+                        "actor_type": "authenticated_user",
+                        "system": "tcdx-iso",
+                        "company": "Empresa A SpA",
+                        "tenant_id": "tenant-a",
+                        "user_id": "user-a",
+                    },
                 )
             finally:
                 llm_client._request_json = original_request
@@ -87,9 +95,44 @@ class DgxLiteLlmHardeningTests(unittest.TestCase):
         self.assertEqual(captured["payload"]["reasoning_effort"], "low")
         self.assertGreaterEqual(captured["payload"]["max_tokens"], 2000)
         self.assertEqual(captured["payload"]["response_format"], {"type": "json_object"})
+        self.assertEqual(captured["headers"]["X-OpenWebUI-User-Email"], "usuario.a@empresa-a.cl")
+        self.assertEqual(captured["payload"]["user"], "usuario.a@empresa-a.cl")
+        self.assertEqual(captured["payload"]["metadata"]["tcdx_system"], "tcdx-iso")
+        self.assertEqual(captured["payload"]["metadata"]["tcdx_company"], "Empresa A SpA")
+        self.assertIn("system:tcdx-iso", captured["payload"]["tags"])
+        self.assertIn("company:Empresa A SpA", captured["payload"]["tags"])
         self.assertNotIn("num_predict", captured["payload"])
         self.assertNotIn("num_ctx", captured["payload"])
         self.assertEqual(result, {"ok": True, "source": "content_only"})
+
+    def test_openai_compatible_trace_fallback_actor(self):
+        from app.services import llm_client
+
+        captured = {}
+
+        def fake_request(url, headers, payload, timeout):
+            captured["headers"] = headers
+            captured["payload"] = payload
+            return {"choices": [{"message": {"content": "{\"ok\": true}"}}]}
+
+        env = {
+            "LLM_PROVIDER": "openai_compatible",
+            "OPENAI_API_KEY": "test-secret-value",
+            "OPENAI_BASE_URL": "http://ia2.tcdx.int:8000/v1",
+            "OPENAI_MODEL": "general",
+        }
+        with patch.dict(os.environ, env, clear=False):
+            original_request = llm_client._request_json
+            try:
+                llm_client._request_json = fake_request
+                llm_client.call_llm_json(prompt="{}", system_prompt="JSON only")
+            finally:
+                llm_client._request_json = original_request
+
+        self.assertEqual(captured["headers"]["X-OpenWebUI-User-Email"], "unknown-system-process@tecdex.net")
+        self.assertEqual(captured["payload"]["user"], "unknown-system-process@tecdex.net")
+        self.assertEqual(captured["payload"]["metadata"]["tcdx_system"], "tcdx-iso")
+        self.assertEqual(captured["payload"]["metadata"]["tcdx_company"], "platform")
 
     def test_openai_compatible_reasoning_and_token_env_override(self):
         from app.services import llm_client

@@ -678,6 +678,11 @@ async function buildTenantApplicabilityUniverse({ tenantId, userId = null, force
     await client.query('UPDATE tenant_applicable_kpis SET active = false, visible_to_tenant = false, updated_at = now() WHERE tenant_id = $1::uuid', [tenantId]);
     await client.query('UPDATE tenant_applicable_evidence_requirements SET active = false, visible_to_tenant = false, updated_at = now() WHERE tenant_id = $1::uuid', [tenantId]);
     await client.query('UPDATE tenant_applicability_exclusions SET active = false, updated_at = now() WHERE tenant_id = $1::uuid', [tenantId]);
+    await client.query('DELETE FROM tenant_applicability_profiles WHERE tenant_id = $1::uuid AND generated_by = $2', [tenantId, MODULE_SOURCE]);
+    await client.query('DELETE FROM tenant_applicable_controls WHERE tenant_id = $1::uuid AND source = $2', [tenantId, MODULE_SOURCE]);
+    await client.query('DELETE FROM tenant_applicable_kpis WHERE tenant_id = $1::uuid AND source = $2', [tenantId, MODULE_SOURCE]);
+    await client.query('DELETE FROM tenant_applicable_evidence_requirements WHERE tenant_id = $1::uuid AND source = $2', [tenantId, MODULE_SOURCE]);
+    await client.query('DELETE FROM tenant_applicability_exclusions WHERE tenant_id = $1::uuid AND excluded_by = $2', [tenantId, MODULE_SOURCE]);
 
     await client.query(
       `

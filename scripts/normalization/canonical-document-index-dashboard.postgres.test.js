@@ -11,10 +11,13 @@ const { createPostgres, stopPostgres, psqlExec } = require('./db-n05-isolated-po
 const TENANT_A = '11111111-1111-4111-8111-111111111111';
 const TENANT_B = '22222222-2222-4222-8222-222222222222';
 const USER_A = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+const USER_B = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 const CONTROL_A = '33333333-3333-4333-8333-333333333333';
 const CONTROL_B = '44444444-4444-4444-8444-444444444444';
 const CATALOG_A = '55555555-5555-4555-8555-555555555555';
 const CATALOG_B = '66666666-6666-4666-8666-666666666666';
+const NC_A = '77777777-7777-4777-8777-777777777777';
+const FINDING_A = '88888888-8888-4888-8888-888888888888';
 const REPO_ROOT = path.resolve(__dirname, '../..');
 
 function readRepo(relativePath) {
@@ -200,12 +203,20 @@ async function main() {
   process.env.DB_PASSWORD = '';
   process.env.DB_SSL = 'false';
   process.env.EVIDENCE_LIBRARY_UPLOAD_ROOT = uploadRoot;
+  process.env.AI_ENGINE_URL = 'http://ai-engine.localtest';
+  process.env.AI_INTERNAL_TOKEN = 'semantic-evidence-localtest';
 
   try {
     psqlExec(pg, `
       CREATE TABLE tenants (
         id uuid PRIMARY KEY,
         name text
+      );
+
+      CREATE TABLE users (
+        id uuid PRIMARY KEY,
+        tenant_id uuid REFERENCES tenants(id) ON DELETE CASCADE,
+        email text
       );
 
       CREATE TABLE document_index (
@@ -257,14 +268,51 @@ async function main() {
         is_active boolean NOT NULL DEFAULT true
       );
 
+      CREATE TABLE controls_catalog_standards (
+        control_id uuid NOT NULL,
+        standard_code text,
+        clause text
+      );
+
+      CREATE TABLE tenant_operations (
+        id uuid PRIMARY KEY DEFAULT (md5(random()::text || clock_timestamp()::text)::uuid),
+        tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+        process_id uuid,
+        name text,
+        code text,
+        operation_type text,
+        is_active boolean DEFAULT true
+      );
+
       CREATE TABLE tenant_controls (
         id uuid PRIMARY KEY,
         tenant_id uuid NOT NULL,
         control_id uuid NOT NULL,
+        operation_id uuid,
         status text,
         score numeric,
         applicability boolean,
         updated_at timestamptz DEFAULT now()
+      );
+
+      CREATE TABLE tenant_nonconformities (
+        id uuid PRIMARY KEY,
+        tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+        control_description text,
+        description text,
+        status text,
+        detected_at timestamptz DEFAULT now()
+      );
+
+      CREATE TABLE findings (
+        id uuid PRIMARY KEY,
+        tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+        title text,
+        description text,
+        finding_type text,
+        severity text,
+        status text,
+        created_at timestamptz DEFAULT now()
       );
 
       CREATE TABLE tenant_applicable_controls (
@@ -277,6 +325,96 @@ async function main() {
         visible_to_tenant boolean NOT NULL DEFAULT true,
         created_at timestamptz DEFAULT now(),
         updated_at timestamptz DEFAULT now()
+      );
+
+      CREATE TABLE tenant_document_object_links (
+        id uuid PRIMARY KEY DEFAULT (md5(random()::text || clock_timestamp()::text)::uuid),
+        tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+        source_type text NOT NULL,
+        source_id uuid NOT NULL,
+        document_key text,
+        target_type text NOT NULL,
+        target_id uuid NOT NULL,
+        target_label text,
+        evidence_usage text NOT NULL DEFAULT 'supporting_evidence',
+        relation_type text NOT NULL DEFAULT 'associated',
+        status text NOT NULL DEFAULT 'active',
+        is_active boolean NOT NULL DEFAULT true,
+        created_by_user_id uuid REFERENCES users(id) ON DELETE SET NULL,
+        reviewed_by_user_id uuid REFERENCES users(id) ON DELETE SET NULL,
+        reviewed_at timestamp,
+        notes text,
+        metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+        created_at timestamp NOT NULL DEFAULT now(),
+        updated_at timestamp NOT NULL DEFAULT now(),
+        CONSTRAINT tenant_document_object_links_source_type_check CHECK (source_type IN ('document_index', 'evidence')),
+        CONSTRAINT tenant_document_object_links_target_type_check CHECK (target_type IN ('control', 'nonconformity', 'finding', 'process', 'operation', 'risk', 'action')),
+        CONSTRAINT tenant_document_object_links_usage_check CHECK (evidence_usage IN ('primary_evidence','supporting_evidence','remediation_evidence','finding_evidence','process_evidence','operation_evidence','risk_evidence','action_evidence','reference'))
+      );
+
+      CREATE UNIQUE INDEX uq_tenant_document_object_links_active
+        ON tenant_document_object_links (tenant_id, source_type, source_id, target_type, target_id, evidence_usage)
+        WHERE is_active = true;
+
+      CREATE TABLE tenant_evidence_semantic_profiles (
+        id uuid PRIMARY KEY DEFAULT (md5(random()::text || clock_timestamp()::text)::uuid),
+        tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+        source_type text NOT NULL,
+        source_id uuid NOT NULL,
+        document_key text,
+        document_type text NOT NULL DEFAULT 'unknown',
+        semantic_status text NOT NULL DEFAULT 'not_processed',
+        usefulness_score numeric(5,2),
+        classification_confidence numeric(5,2),
+        classification_method text NOT NULL DEFAULT 'rule_based',
+        classification_reason text,
+        scoring_json jsonb NOT NULL DEFAULT '{}'::jsonb,
+        metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+        processed_by_user_id uuid REFERENCES users(id) ON DELETE SET NULL,
+        processed_at timestamp,
+        created_at timestamp NOT NULL DEFAULT now(),
+        updated_at timestamp NOT NULL DEFAULT now()
+      );
+
+      CREATE UNIQUE INDEX uq_tenant_evidence_semantic_profiles_source
+        ON tenant_evidence_semantic_profiles (tenant_id, source_type, source_id);
+
+      CREATE TABLE tenant_evidence_chunks (
+        id uuid PRIMARY KEY DEFAULT (md5(random()::text || clock_timestamp()::text)::uuid),
+        tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+        source_type text NOT NULL,
+        source_id uuid NOT NULL,
+        document_key text,
+        filename text,
+        page_number integer,
+        section_label text,
+        chunk_index integer NOT NULL DEFAULT 0,
+        chunk_text text NOT NULL,
+        chunk_hash text,
+        metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+        created_at timestamp NOT NULL DEFAULT now()
+      );
+
+      CREATE TABLE tenant_evidence_applicability_suggestions (
+        id uuid PRIMARY KEY DEFAULT (md5(random()::text || clock_timestamp()::text)::uuid),
+        tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+        source_type text NOT NULL,
+        source_id uuid NOT NULL,
+        document_key text,
+        target_type text NOT NULL,
+        target_id uuid,
+        target_label text,
+        score numeric(5,2),
+        confidence numeric(5,2),
+        reason text,
+        chunk_id uuid REFERENCES tenant_evidence_chunks(id) ON DELETE SET NULL,
+        snippet text,
+        status text NOT NULL DEFAULT 'suggested',
+        reviewed_by_user_id uuid REFERENCES users(id) ON DELETE SET NULL,
+        reviewed_at timestamp,
+        metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
+        created_at timestamp NOT NULL DEFAULT now(),
+        updated_at timestamp NOT NULL DEFAULT now()
       );
 
       CREATE TABLE control_soa_assessments (
@@ -309,6 +447,10 @@ async function main() {
         ('${TENANT_A}', 'Tenant A'),
         ('${TENANT_B}', 'Tenant B');
 
+      INSERT INTO users (id, tenant_id, email) VALUES
+        ('${USER_A}', '${TENANT_A}', 'user.a@example.test'),
+        ('${USER_B}', '${TENANT_B}', 'user.b@example.test');
+
       INSERT INTO tenant_standards (tenant_id, standard_code, is_active) VALUES
         ('${TENANT_A}', 'ISO9001', true),
         ('${TENANT_B}', 'ISO9001', true);
@@ -317,20 +459,40 @@ async function main() {
         ('${CATALOG_A}', 'ISO9001', '4.1', 'Contexto', 'Control A', 'canonical', true),
         ('${CATALOG_B}', 'ISO9001', '4.2', 'Contexto', 'Control B', 'canonical', true);
 
+      INSERT INTO controls_catalog_standards (control_id, standard_code, clause) VALUES
+        ('${CATALOG_A}', 'ISO9001', '4.1'),
+        ('${CATALOG_B}', 'ISO9001', '4.2');
+
       INSERT INTO tenant_controls (id, tenant_id, control_id, status, score, applicability) VALUES
         ('${CONTROL_A}', '${TENANT_A}', '${CATALOG_A}', 'pendiente', NULL, true),
         ('${CONTROL_B}', '${TENANT_B}', '${CATALOG_B}', 'pendiente', NULL, true);
+
+      INSERT INTO tenant_nonconformities (id, tenant_id, control_description, description, status) VALUES
+        ('${NC_A}', '${TENANT_A}', 'No conformidad recurrente', 'No conformidad recurrente de control documental', 'open');
+
+      INSERT INTO findings (id, tenant_id, title, description, finding_type, severity, status) VALUES
+        ('${FINDING_A}', '${TENANT_A}', 'Hallazgo de auditoria interna', 'Hallazgo asociado a revision documental', 'audit', 'medium', 'open');
 
       INSERT INTO tenant_applicable_controls (tenant_id, tenant_control_id, control_catalog_id, standard_code, active, visible_to_tenant) VALUES
         ('${TENANT_A}', '${CONTROL_A}', '${CATALOG_A}', 'ISO9001', true, true),
         ('${TENANT_B}', '${CONTROL_B}', '${CATALOG_B}', 'ISO9001', true, true);
     `);
 
-    const { manualUploadFiles, manualUploadZip, listDocuments, listSources, getDocumentDetail } = require('../../backend/src/services/evidenceLibrary.service');
+    const {
+      manualUploadFiles,
+      manualUploadZip,
+      listDocuments,
+      listSources,
+      getDocumentDetail,
+      analyzeSemanticEvidence,
+      reviewSuggestion,
+      createAssociation,
+      listAssociations,
+    } = require('../../backend/src/services/evidenceLibrary.service');
     const { recordControlSoAAssessment, publishAffectedOfficialIndicators } = require('../../backend/src/services/grcCalculationOrchestration.service');
     const pool = require('../../backend/src/config/db');
     const userA = { id: USER_A, role: 'admin', tenant_id: TENANT_A };
-    const userB = { id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', role: 'admin', tenant_id: TENANT_B };
+    const userB = { id: USER_B, role: 'admin', tenant_id: TENANT_B };
 
     const missingSourceTable = await pool.query("SELECT to_regclass('public.tenant_document_sources') IS NULL AS ok");
     assert.equal(missingSourceTable.rows[0].ok, true);
@@ -343,7 +505,12 @@ async function main() {
 
     const upload = await manualUploadFiles({
       user: userA,
-      files: [{ originalname: 'policy.txt', mimetype: 'text/plain', size: 11, buffer: Buffer.from('hello world') }],
+      files: [{
+        originalname: 'policy.txt',
+        mimetype: 'text/plain',
+        size: 224,
+        buffer: Buffer.from('Politica de calidad version 2. Responsable: Gerencia. Aprobado por Direccion. El alcance cubre Control A, no conformidad recurrente y hallazgo de auditoria interna. Incluye revision de evidencia documental.'),
+      }],
       fields: { document_type: 'policy' },
     });
     assert.equal(upload.summary.indexed, 1);
@@ -391,6 +558,101 @@ async function main() {
     assert.equal(downloadCandidate.rowCount, 1);
     assert.ok(fs.statSync(downloadCandidate.rows[0].local_storage_path).isFile());
     console.log('MANUAL_UPLOAD_DOWNLOAD=PASS');
+
+    const originalPostJson = require('../../backend/src/services/aiEngineClient.service').postJson;
+    require('../../backend/src/services/aiEngineClient.service').postJson = async (route, payload) => {
+      assert.equal(route, '/semantic-evidence/analyze');
+      assert.equal(payload.tenant_id, TENANT_A);
+      assert.equal(payload.user_id, USER_A);
+      assert.equal(payload.request_metadata.task_type, 'semantic_evidence_analysis');
+      return {
+        classification: {
+          type: 'policy',
+          confidence: 0.91,
+          method: 'llm_assisted',
+          reason: 'El documento declara politica, responsable y aprobacion para revision humana.',
+        },
+        chunks: [{
+          chunk_index: 0,
+          chunk_text: 'Responsable: Gerencia. Aprobado por Direccion. El alcance cubre Control A.',
+          hash: 'semantic-test-chunk',
+          section_label: 'extracto principal',
+        }],
+        suggestions: [
+          { target_type: 'control', target_id: CONTROL_A, target_label: 'Control A', score: 0.88, confidence: 0.86, reason: 'Coincide con Control A.', chunk_index: 0, snippet: 'Control A' },
+          { target_type: 'nonconformity', target_id: NC_A, target_label: 'No conformidad recurrente', score: 0.82, confidence: 0.8, reason: 'Menciona no conformidad recurrente.', chunk_index: 0, snippet: 'no conformidad recurrente' },
+          { target_type: 'finding', target_id: FINDING_A, target_label: 'Hallazgo de auditoria interna', score: 0.79, confidence: 0.76, reason: 'Menciona hallazgo de auditoria interna.', chunk_index: 0, snippet: 'hallazgo de auditoria interna' },
+          { target_type: 'control', target_id: CONTROL_B, target_label: 'Control B', score: 0.99, confidence: 0.99, reason: 'Debe ignorarse por no pertenecer a candidatos del tenant A.', chunk_index: 0, snippet: 'cross tenant' },
+        ],
+        scoring: {
+          relevance_to_object: 86,
+          document_quality: 73,
+          traceability: 81,
+        },
+      };
+    };
+
+    let semantic;
+    try {
+      semantic = await analyzeSemanticEvidence({
+        user: userA,
+        sourceType: 'document_index',
+        sourceId: documentId,
+        requestId: 'canonical-document-evidence-test',
+      });
+    } finally {
+      require('../../backend/src/services/aiEngineClient.service').postJson = originalPostJson;
+    }
+    assert.equal(semantic.profile.document_type, 'policy');
+    assert.equal(semantic.profile.classification_method, 'llm_assisted');
+    assert.equal(semantic.human_review_required, true);
+    assert.equal(semantic.ai_engine_used, true);
+    assert.equal(semantic.chunks.length, 1);
+    assert.deepEqual(new Set(semantic.suggestions.map((row) => row.target_type)), new Set(['control', 'nonconformity', 'finding']));
+    assert.equal(semantic.suggestions.some((row) => String(row.target_id) === CONTROL_B), false);
+    console.log('DOCUMENT_ANALYSIS_AVAILABLE=PASS');
+    console.log('DOCUMENT_SUMMARY_AVAILABLE=PASS');
+    console.log('DOCUMENT_RELEVANT_FRAGMENTS_AVAILABLE=PASS');
+    console.log('DOCUMENT_EVIDENCE_AI_HUMAN_GOVERNANCE=PASS');
+
+    for (const targetType of ['control', 'nonconformity', 'finding']) {
+      const suggestion = semantic.suggestions.find((row) => row.target_type === targetType);
+      assert.ok(suggestion, `missing ${targetType} suggestion`);
+      const reviewed = await reviewSuggestion({ user: userA, suggestionId: suggestion.id, action: 'accept' });
+      assert.equal(reviewed.suggestion.status, 'accepted');
+      assert.equal(reviewed.association.target_type, targetType);
+      assert.equal(reviewed.association.tenant_id, TENANT_A);
+    }
+    console.log('DOCUMENT_ASSOCIATION_CONTROL=PASS');
+    console.log('DOCUMENT_ASSOCIATION_NONCONFORMITY=PASS');
+    console.log('DOCUMENT_ASSOCIATION_FINDING=PASS');
+
+    const detailedEvidence = await getDocumentDetail({ user: userA, sourceType: 'document_index', sourceId: documentId });
+    assert.equal(detailedEvidence.associations.filter((row) => row.is_active).length, 3);
+    assert.equal(detailedEvidence.chunks.length, 1);
+    assert.equal(detailedEvidence.suggestions.length, 3);
+    const inverseControl = await listAssociations({ user: userA, filters: { source_type: 'document_index', source_id: documentId } });
+    assert.equal(inverseControl.data.some((row) => row.target_type === 'control' && String(row.target_id) === CONTROL_A), true);
+    console.log('DOCUMENT_ASSOCIATIONS_BIDIRECTIONAL=PASS');
+
+    let tenantBReadDenied = false;
+    try {
+      await getDocumentDetail({ user: userB, sourceType: 'document_index', sourceId: documentId });
+    } catch (error) {
+      tenantBReadDenied = error.code === 'SOURCE_DOCUMENT_NOT_FOUND';
+    }
+    assert.equal(tenantBReadDenied, true);
+    let crossTenantAssociationDenied = false;
+    try {
+      await createAssociation({
+        user: userA,
+        payload: { source_type: 'document_index', source_id: documentId, target_type: 'control', target_id: CONTROL_B },
+      });
+    } catch (error) {
+      crossTenantAssociationDenied = error.code === 'TARGET_NOT_FOUND';
+    }
+    assert.equal(crossTenantAssociationDenied, true);
+    console.log('EVIDENCE_SEMANTIC_MULTITENANT=PASS');
 
     const invalid = await manualUploadFiles({
       user: userA,

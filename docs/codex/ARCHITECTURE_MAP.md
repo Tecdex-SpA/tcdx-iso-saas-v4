@@ -39,6 +39,13 @@ Backend Node/Express
         |        aligned with the contract surface
         |      + `/api/me/entitlements` resolves the effective tenant through the
         |        central tenant resolver; tenant mismatch fails closed
+        |      + LLM traceability local: backend builds `llm_trace` from authenticated
+        |        server-side user/tenant context before AI Engine calls; frontend
+        |        supplied actor/company/system are ignored, `system='tcdx-iso'` is
+        |        centralized, `company` resolves from canonical tenant/profile data,
+        |        and process calls use stable technical actors. Semantic evidence,
+        |        company profile AI and process calls reuse the same central trace
+        |        contract.
         |      + standard commercial plan aliases are backend-owned:
         |        `iso -> pyme`, `iso_operational_risk -> empresa`,
         |        `grc -> enterprise`; frontend only displays backend-derived
@@ -58,6 +65,16 @@ Backend Node/Express
         |      + AI Core runtime context grants local: External Lookup conserva su contrato runtime previo sobre `ai_core.external_lookup_extra_charges`, `external_lookup_logs`, `external_lookup_quota_audit`, `external_lookup_quotas` y `v_external_lookup_usage_monthly`; las vistas canonicas `ai_core.v_tenant_health_context`, `v_control_context`, `v_finding_context` y `v_kpi_context` se exponen al backend mediante grants explicitos `SELECT` al rol NOLOGIN `tcdx_backend_runtime`; `tcdx_backend_app` hereda por membresia existente, `ai_reader` no recibe acceso amplio a `ai_core`, y cualquier otro `ai_core` SELECT runtime falla el gate
         |      + AI Guided canonical knowledge runtime grants local: el adapter Python consume KB v2/reference knowledge desde `public`; el cierre ACL agrega solo `SELECT` sobre siete tablas hijas `knowledge_*` faltantes al rol NOLOGIN `tcdx_backend_runtime`, conserva los cinco grants publicos preexistentes de knowledge/evidence/ledger, exige herencia `tcdx_backend_app -> tcdx_backend_runtime`, mantiene `ai_reader` sin acceso y rechaza DML/direct app grant/unexpected public SELECT mediante runner versionado
         |      + ISO9001 data/evidence systemic review local: `database/reference/iso/manifest.json` remains the governed ISO reference authority (`ISO9001:2015` approved/product-projected, `ISO9001:2026_FDIS` transition-only/non-product). Dashboard control lists are projected from `tenant_controls + tenant_applicable_controls`, with `v_iso_control_effective_health` as optional measurement rather than the row universe. `PUT /api/controls/:id` is canonical-only over tenant-scoped `tenant_controls`, records SoA assessment and publishes the same GRC post-mutation orchestration with no legacy `UPDATE controls` fallback. Evidence upload storage remains local disk under `backend/uploads/evidences`, with failed uploads cleaned up after validation/transaction failures. Evidence-library manual upload is a virtual-source flow over `document_index` with `provider='manual_upload'`, `source_id=NULL`, `integration_id=NULL`, tenant-root storage, and no runtime dependency on `tenant_document_sources`.
+        |      + Evidence semantic closeout local: document analysis persists
+        |        profiles/chunks/suggestions in canonical tenant evidence tables and
+        |        associations in `tenant_document_object_links`; AI suggestions are
+        |        assistive, target-whitelisted by backend tenant candidates and require
+        |        human acceptance before linking to control/NC/finding.
+        |      + Company profile applicability closeout local: rebuild uses existing
+        |        `tenant_company_profiles`, active tenant standards, `tenant_applicability_profiles`
+        |        and `tenant_applicable_controls`; generated rows are idempotently
+        |        rebuilt, inactive transition standards are excluded, and dashboard
+        |        consumers preserve absence as `NULL/sin_datos` rather than zero.
         |
         +--> Commercial product authority
         |      + `commercial_plans`, `commercial_plan_versions`
@@ -136,6 +153,10 @@ Backend Node/Express
                + AI Governance (`ai-governance-contract-v1`, `ai-capability-registry-v1`, `ai-policy-boundaries-v1`)
                + AI Evaluation Suite (`ai-evaluation-suite-v1`)
                + AI Compliance engine-health reports contractual states (`healthy`, `feature_disabled`, `engine_unavailable`, `db_unavailable`) without converting disabled features into 500; protected AI Compliance operations still require auth, tenant isolation, RBAC `ai.view` and `ai.compliance` capability
+               + AI Engine LLM client forwards trace actor through OpenAI `user`
+                 and `X-OpenWebUI-User-Email`; OpenAI-compatible requests include
+                 metadata/tags for `tcdx-iso`, canonical company, tenant and user
+                 when supported by the gateway/client
                + deterministic fallback/audit traces
                + non-blocking Intelligence Brief: deterministic base response first, tenant-scoped cache/dedupe, background AI narrative refresh, safe fallback observability
                     |
@@ -165,6 +186,12 @@ Backend Node/Express
                       effectiveness inferred from ledger decisions, and external
                       lookup trust requires explicit metadata plus allowed domains
                     + trusted external lookup
+                    + semantic evidence analyzer (`/semantic-evidence/analyze`) in
+                      `ai-engine/main.py`: deterministic base over document text,
+                      optional central `llm_client.call_llm_json` enrichment, trace
+                      propagation, strict target whitelist and human-review-required
+                      output; timeout/malformed/no-text degrades without fabricating
+                      compliance or object status.
 ```
 
 ## Ownership

@@ -21,7 +21,7 @@ from app.services.external_lookup_service import execute_external_lookup_search
 from app.services.external_lookup_service import get_cached_external_lookup
 from app.services.knowledge_loader import get_knowledge_module, get_knowledge_status
 from app.services.senior_auditor_service import analyze_as_senior_auditor
-from app.services.llm_client import call_llm_json, get_llm_metadata, is_llm_available
+from app.services.llm_client import call_llm_json, extract_llm_trace_context, get_llm_metadata, is_llm_available
 from app.services.web_context_service import build_external_context
 from app.services.bootstrap_knowledge_service import (
     approve_bootstrap_knowledge_item,
@@ -794,6 +794,7 @@ def _llm_structured_enrichment(payload: Dict[str, Any], base: Dict[str, Any], *,
     if not _truthy(payload.get("use_llm"), model_mode != "fast"):
         return {"used": False, "data": {}, "error": "", "metadata": get_llm_metadata(depth=depth, model_mode=model_mode)}
     metadata = get_llm_metadata(depth=depth, model_mode=model_mode)
+    llm_trace = extract_llm_trace_context(payload)
     if not is_llm_available():
         return {"used": False, "data": {}, "error": "llm_unavailable", "metadata": metadata}
     prompt = {
@@ -883,6 +884,9 @@ def _llm_structured_enrichment(payload: Dict[str, Any], base: Dict[str, Any], *,
             "model_mode": model_mode,
             "selected_model": metadata.get("model"),
             "timeout_ms": payload.get("timeout_ms"),
+            "llm_actor_type": llm_trace.get("actor_type"),
+            "llm_trace_system": llm_trace.get("system"),
+            "llm_trace_company": llm_trace.get("company"),
         })
         data = call_llm_json(
             prompt=str(prompt),
@@ -892,6 +896,7 @@ def _llm_structured_enrichment(payload: Dict[str, Any], base: Dict[str, Any], *,
             depth=depth,
             local_compact=True,
             model_mode=model_mode,
+            trace_context=llm_trace,
         )
         print({
             "event": "LLM REQUEST OK",
@@ -902,6 +907,9 @@ def _llm_structured_enrichment(payload: Dict[str, Any], base: Dict[str, Any], *,
             "model_mode": model_mode,
             "selected_model": metadata.get("model"),
             "duration_ms": int((time.perf_counter() - started) * 1000),
+            "llm_actor_type": llm_trace.get("actor_type"),
+            "llm_trace_system": llm_trace.get("system"),
+            "llm_trace_company": llm_trace.get("company"),
         })
         return {"used": True, "data": data if isinstance(data, dict) else {}, "error": "", "metadata": metadata}
     except Exception as exc:
@@ -915,6 +923,9 @@ def _llm_structured_enrichment(payload: Dict[str, Any], base: Dict[str, Any], *,
             "selected_model": metadata.get("model"),
             "error_type": type(exc).__name__,
             "error_message": str(exc)[:240],
+            "llm_actor_type": llm_trace.get("actor_type"),
+            "llm_trace_system": llm_trace.get("system"),
+            "llm_trace_company": llm_trace.get("company"),
         })
         return {"used": False, "data": {}, "error": str(exc)[:500], "metadata": metadata}
 
@@ -988,6 +999,7 @@ async def intelligence_narrative(
     context = payload.get("context") if isinstance(payload.get("context"), dict) else {}
     request_id = x_request_id or str(payload.get("request_id") or "")
     metadata = get_llm_metadata(depth="standard", model_mode="balanced")
+    llm_trace = extract_llm_trace_context(payload)
     fallback = _intelligence_fallback_contract(context, reason="llm_unavailable")
     llm_used = False
     llm_error = ""
@@ -1024,6 +1036,7 @@ async def intelligence_narrative(
                     "grounding_status grounded|partially_grounded|insufficient_evidence|human_review_required, "
                     "unsupported_claims_removed boolean, grounding_claims[]."
                 ),
+                trace_context=llm_trace,
             )
             normalized = _normalize_llm_data(data)
             structured = _normalize_intelligence_contract(normalized, context)
@@ -1424,6 +1437,9 @@ async def company_profile_analyze(
         "used_web": _truthy(payload.get("use_web"), _truthy(payload.get("allow_web_research"))),
         "used_rag": _truthy(payload.get("use_rag"), True),
         "used_company_profile": True,
+        "llm_actor_type": llm_trace.get("actor_type"),
+        "llm_trace_system": llm_trace.get("system"),
+        "llm_trace_company": llm_trace.get("company"),
     })
     llm = _llm_structured_enrichment(
         {**payload, "use_llm": _truthy(payload.get("use_llm"), True), "company_profile": profile},
@@ -1465,6 +1481,11 @@ async def company_profile_analyze(
         "trusted_results_count": int(external_context.get("trusted_results_count") or 0),
         "internal_context_counts": internal_counts,
         "tenant_id": payload.get("tenant_id"),
+        "llm_trace": llm_trace,
+        "llm_actor": llm_trace.get("actor"),
+        "llm_actor_type": llm_trace.get("actor_type"),
+        "llm_trace_system": llm_trace.get("system"),
+        "llm_trace_company": llm_trace.get("company"),
         "error_message": llm.get("error") or None,
     }
     result = {

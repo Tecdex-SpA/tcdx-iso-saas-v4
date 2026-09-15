@@ -235,6 +235,7 @@ router.post('/semantic/analyze', async (req, res) => {
       operationRef: req.body?.operation_ref,
       sourceType: req.body?.source_type,
       sourceId: req.body?.source_id,
+      requestId: req.requestId || req.headers?.['x-request-id'] || null,
     });
     return res.json({ ok: true, data });
   } catch (error) {

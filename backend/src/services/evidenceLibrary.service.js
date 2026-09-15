@@ -2673,7 +2673,7 @@ async function loadCandidateTargets(user) {
   return grouped;
 }
 
-async function callSemanticEvidenceEngine({ tenantId, sourceType, sourceId, source, text, candidateTargets }) {
+async function callSemanticEvidenceEngine({ tenantId, userId = null, requestId = null, sourceType, sourceId, source, text, candidateTargets }) {
   const aiEngineUrl = String(process.env.AI_ENGINE_URL || process.env.AI_ENGINE_BASE_URL || '').trim();
   const token = process.env.AI_INTERNAL_TOKEN || process.env.AI_ENGINE_TOKEN || process.env.OWN_AI_SHARED_SECRET || process.env.AI_TOKEN || '';
 
@@ -2695,6 +2695,14 @@ async function callSemanticEvidenceEngine({ tenantId, sourceType, sourceId, sour
       status: source.status || null,
     },
     candidate_targets: candidateTargets,
+    user_id: userId,
+    request_id: requestId,
+    request_metadata: {
+      request_id: requestId,
+      module_origin: 'evidence_library',
+      task_type: 'semantic_evidence_analysis',
+      user_id: userId,
+    },
   };
 
   return aiEngineClient.postJson('/semantic-evidence/analyze', payload, {
@@ -2702,7 +2710,7 @@ async function callSemanticEvidenceEngine({ tenantId, sourceType, sourceId, sour
   }).catch(() => null);
 }
 
-async function analyzeSemanticEvidence({ user, operationRef, sourceType, sourceId }) {
+async function analyzeSemanticEvidence({ user, operationRef, sourceType, sourceId, requestId = null }) {
   const { tenantId, userId } = assertAccess(user, 'manage');
   const resolvedSource = await resolveEvidenceLibrarySource(
     { operation_ref: operationRef, source_type: sourceType, source_id: sourceId },
@@ -2729,6 +2737,8 @@ async function analyzeSemanticEvidence({ user, operationRef, sourceType, sourceI
   const candidateTargets = await loadCandidateTargets(user);
   const engineResult = await callSemanticEvidenceEngine({
     tenantId,
+    userId,
+    requestId,
     sourceType,
     sourceId,
     source,
@@ -2879,7 +2889,7 @@ async function analyzeSemanticEvidence({ user, operationRef, sourceType, sourceI
       ? insertedChunks.find((chunk) => Number(chunk.chunk_index) === Number(suggestion.chunk_index))
       : bestChunk;
     const target = (candidateTargets[targetType] || []).find((candidate) => String(candidate.id) === String(targetId));
-    if (!target && !engineSuggestions.length) continue;
+    if (!target) continue;
     const result = await pool.query(
       `
       INSERT INTO tenant_evidence_applicability_suggestions (

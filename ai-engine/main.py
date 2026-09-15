@@ -7,6 +7,7 @@ from urllib.error import URLError, HTTPError
 from tempfile import NamedTemporaryFile
 import base64
 import csv
+import hashlib
 import ipaddress
 import io
 import json
@@ -21,6 +22,7 @@ from app.routes.senior_auditor_v2 import router as senior_auditor_v2_router
 from app.routes.soa_assessment import router as soa_assessment_router
 from app.core.config import settings
 from app.core.db import test_db_connection
+from app.services.llm_client import call_llm_json, extract_llm_trace_context, get_llm_metadata, is_llm_available
 
 docs_options = {}
 if not getattr(settings, "AI_ENGINE_PUBLIC_DOCS", False):
@@ -1176,6 +1178,10 @@ class SemanticEvidenceAnalyzeRequest(BaseModel):
     text: str = ""
     metadata: Dict[str, Any] = Field(default_factory=dict)
     candidate_targets: Dict[str, List[Dict[str, Any]]] = Field(default_factory=dict)
+    user_id: Optional[str] = None
+    request_id: Optional[str] = None
+    request_metadata: Dict[str, Any] = Field(default_factory=dict)
+    llm_trace: Dict[str, Any] = Field(default_factory=dict)
 
 
 def _doc_norm(value: Any) -> str:
@@ -1418,6 +1424,329 @@ def _confidence_score(
     return round(max(0.1, min(0.95, score)), 2)
 
 
+def _semantic_score(value: Any, fallback: float = 0.0) -> float:
+    try:
+        score = float(value)
+    except Exception:
+        score = fallback
+    if score <= 1:
+        score *= 100
+    return round(max(0.0, min(100.0, score)), 2)
+
+
+def _semantic_confidence(value: Any, fallback: float = 0.5) -> float:
+    try:
+        confidence = float(value)
+    except Exception:
+        confidence = fallback
+    if confidence > 1:
+        confidence /= 100
+    return round(max(0.0, min(1.0, confidence)), 2)
+
+
+def _semantic_candidates(payload: SemanticEvidenceAnalyzeRequest) -> Dict[str, Dict[str, Dict[str, Any]]]:
+    grouped: Dict[str, Dict[str, Dict[str, Any]]] = {}
+    for target_type, targets in (payload.candidate_targets or {}).items():
+        normalized_type = _doc_norm(target_type)
+        if not normalized_type:
+            continue
+        grouped.setdefault(normalized_type, {})
+        for target in safe_list(targets):
+            target_id = _doc_norm(target.get("id") or target.get("target_id"))
+            if target_id:
+                grouped[normalized_type][target_id] = target
+    return grouped
+
+
+def _semantic_build_chunks(text: str) -> List[Dict[str, Any]]:
+    chunks: List[Dict[str, Any]] = []
+    cleaned = text.replace("\r\n", "\n").replace("\r", "\n").strip()
+    for index in range(0, min(len(cleaned), 1200 * 12), 1200):
+        chunk_text = cleaned[index:index + 1200].strip()
+        if chunk_text:
+            chunks.append({
+                "chunk_index": len(chunks),
+                "chunk_text": chunk_text,
+                "page_number": None,
+                "section_label": None,
+                "relevance_reason": "Fragmento textual extraído para revisión humana y contraste con objetos tenant-scoped.",
+                "evidence_strength": "parcial",
+                "warnings": [],
+                "hash": hashlib.sha256(chunk_text.encode("utf-8")).hexdigest(),
+            })
+    return chunks
+
+
+def _semantic_rule_suggestions(
+    text: str,
+    candidate_targets: Dict[str, List[Dict[str, Any]]],
+    chunks: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    suggestions: List[Dict[str, Any]] = []
+    haystack = _doc_lower(text)
+    first_chunk = chunks[0]["chunk_text"] if chunks else ""
+    for group_name, targets in (candidate_targets or {}).items():
+        for target in safe_list(targets)[:80]:
+            label = _doc_norm(target.get("label") or target.get("title") or target.get("name"))
+            words = [word for word in _doc_lower(label).replace("-", " ").split() if len(word) >= 5]
+            matches = [word for word in words if word in haystack]
+            if not matches:
+                continue
+            score = min(0.94, 0.42 + len(matches) * 0.08)
+            suggestions.append({
+                "target_type": target.get("target_type") or group_name,
+                "target_id": target.get("id") or target.get("target_id"),
+                "target_label": label,
+                "score": round(score, 2),
+                "confidence": round(score, 2),
+                "reason": f"Coincidencias detectadas: {', '.join(matches[:5])}. Requiere revision humana.",
+                "chunk_index": 0 if chunks else None,
+                "snippet": first_chunk[:500],
+                "metadata": {
+                    "method": "rule_based_keyword_overlap",
+                    "matches": matches[:8],
+                    "human_review_required": True,
+                },
+            })
+    suggestions.sort(key=lambda item: item.get("confidence", 0), reverse=True)
+    return suggestions[:30]
+
+
+def _semantic_base_result(payload: SemanticEvidenceAnalyzeRequest, llm_trace: Dict[str, Any]) -> Dict[str, Any]:
+    text = _doc_norm(payload.text)
+    filename = _doc_norm(payload.filename or payload.title)
+    metadata = payload.metadata or {}
+    document_type = _infer_document_type(filename, _doc_norm(metadata.get("mime_type")), text)
+    standards = _infer_standards(filename, text, safe_list(metadata.get("active_standards")))
+    missing_elements = _assess_missing_elements(document_type, text, metadata)
+    probable_errors = _detect_probable_errors(filename, text, metadata, standards)
+    evidence_quality = _evidence_quality(text, document_type, missing_elements, probable_errors)
+    confidence = _confidence_score(text, standards, document_type, [], missing_elements)
+    chunks = _semantic_build_chunks(text)
+    suggestions = _semantic_rule_suggestions(text, payload.candidate_targets or {}, chunks)
+    limitations = missing_elements + probable_errors
+    status = "analizado" if text else "error"
+    if text and limitations:
+        status = "analizado_con_limitaciones"
+
+    return {
+        "ok": True,
+        "status": status,
+        "analysis_status": status,
+        "summary": " ".join([
+            f"Documento analizado como {document_type}.",
+            f"Normas probables: {', '.join(standards) if standards else 'sin determinacion suficiente'}.",
+            f"Calidad preliminar de evidencia: {evidence_quality}.",
+            "Este resultado es asistivo y requiere revision humana.",
+        ]),
+        "document_facts": [
+            item for item in [
+                f"Nombre de archivo: {filename}" if filename else None,
+                f"Texto extraido: {len(text)} caracteres." if text else "No hay texto extraido suficiente para analizar fragmentos.",
+                f"Estado fuente: {metadata.get('status')}" if metadata.get("status") else None,
+            ] if item
+        ],
+        "ai_inferences": [
+            f"Tipo documental probable: {document_type}.",
+            f"Normas inferidas desde menciones del documento: {', '.join(standards) if standards else 'sin_datos'}.",
+        ],
+        "classification": {
+            "type": document_type,
+            "confidence": confidence,
+            "method": "rule_based",
+            "reason": f"Calidad preliminar: {evidence_quality}. Revision humana obligatoria.",
+        },
+        "chunks": chunks,
+        "suggestions": suggestions,
+        "scoring": {
+            "relevance_to_object": round(confidence * 100, 2),
+            "document_quality": evidence_quality,
+            "traceability": 80 if chunks else 30,
+            "human_review_required": True,
+        },
+        "usefulness_assessment": {
+            "status": "requiere_revision_humana",
+            "relevance": "parcial" if chunks else "insuficiente",
+            "specificity": "parcial" if len(text) >= 500 else "insuficiente",
+            "traceability": "parcial" if chunks else "sin_datos",
+            "period": "sin_datos" if not _doc_contains_any(text, ["fecha", "vigencia", "emision", "emisión"]) else "requiere_revision_humana",
+            "owner_or_approver": "sin_datos" if not _doc_contains_any(text, ["responsable", "aprobado", "firma"]) else "requiere_revision_humana",
+            "criterion_coverage": "parcial",
+            "missing_for_sufficiency": limitations,
+            "human_review_required": True,
+        },
+        "limitations": limitations,
+        "human_review_required": True,
+        "trace": {
+            "tenant_id": payload.tenant_id,
+            "source_type": payload.source_type,
+            "source_id": payload.source_id,
+            "request_id": payload.request_id or (payload.request_metadata or {}).get("request_id"),
+            "llm_used": False,
+            "llm_trace": llm_trace,
+        },
+    }
+
+
+def _semantic_llm_prompt(payload: SemanticEvidenceAnalyzeRequest, base: Dict[str, Any]) -> str:
+    candidates = {}
+    for target_type, targets in (payload.candidate_targets or {}).items():
+        candidates[target_type] = [
+            {
+                "id": target.get("id") or target.get("target_id"),
+                "target_type": target.get("target_type") or target_type,
+                "label": target.get("label") or target.get("title") or target.get("name"),
+                "subtitle": target.get("subtitle"),
+            }
+            for target in safe_list(targets)[:30]
+        ]
+    return json.dumps({
+        "task": "semantic_evidence_analysis",
+        "rules": [
+            "Usa solamente el texto documental y los candidatos entregados.",
+            "No inventes texto normativo oficial ni requisitos no presentes.",
+            "No apruebes evidencia, no declares cumplimiento, no cierres NC ni hallazgos.",
+            "Separa hechos documentales de inferencias.",
+            "Las sugerencias deben referenciar target_type y target_id presentes en candidate_targets.",
+        ],
+        "expected_json": {
+            "summary": "resumen ejecutivo breve",
+            "classification": {"type": "policy|procedure|record|audit_report|risk_document|evidence|unknown", "confidence": 0.0, "reason": "motivo"},
+            "document_facts": ["hechos extraidos del documento"],
+            "ai_inferences": ["inferencias explicitamente asistivas"],
+            "chunks": [{
+                "chunk_index": 0,
+                "chunk_text": "fragmento literal relevante",
+                "page_number": None,
+                "section_label": None,
+                "relevance_reason": "por que ayuda como evidencia",
+                "evidence_strength": "fuerte|parcial|insuficiente|no_pertinente|requiere_revision_humana",
+                "warnings": ["limitaciones"]
+            }],
+            "suggestions": [{
+                "target_type": "control|nonconformity|finding",
+                "target_id": "uuid entregado",
+                "score": 0.0,
+                "confidence": 0.0,
+                "reason": "criterio de asociacion",
+                "chunk_index": 0,
+                "snippet": "texto breve"
+            }],
+            "scoring": {"relevance_to_object": 0, "document_quality": 0, "traceability": 0},
+            "usefulness_assessment": {
+                "status": "fuerte|parcial|insuficiente|no_pertinente|requiere_revision_humana",
+                "missing_for_sufficiency": ["faltantes"]
+            },
+            "limitations": ["limitaciones"]
+        },
+        "document": {
+            "tenant_id": payload.tenant_id,
+            "source_type": payload.source_type,
+            "source_id": payload.source_id,
+            "filename": payload.filename,
+            "title": payload.title,
+            "metadata": payload.metadata,
+            "base_classification": base.get("classification"),
+            "base_limitations": base.get("limitations"),
+            "text": _doc_norm(payload.text)[:18000],
+        },
+        "candidate_targets": candidates,
+    }, ensure_ascii=False)
+
+
+def _semantic_merge_llm_result(
+    payload: SemanticEvidenceAnalyzeRequest,
+    base: Dict[str, Any],
+    llm_data: Dict[str, Any],
+) -> Dict[str, Any]:
+    if not isinstance(llm_data, dict):
+        return base
+    result = {**base}
+    candidates = _semantic_candidates(payload)
+
+    summary = _doc_norm(llm_data.get("summary"))
+    if summary:
+        result["summary"] = summary
+
+    classification = llm_data.get("classification") if isinstance(llm_data.get("classification"), dict) else {}
+    if classification:
+        result["classification"] = {
+            "type": _doc_norm(classification.get("type")) or base["classification"]["type"],
+            "confidence": _semantic_confidence(classification.get("confidence"), base["classification"]["confidence"]),
+            "method": "llm_assisted",
+            "reason": _doc_norm(classification.get("reason")) or base["classification"]["reason"],
+        }
+
+    for key in ["document_facts", "ai_inferences", "limitations"]:
+        values = [_doc_norm(item) for item in safe_list(llm_data.get(key)) if _doc_norm(item)]
+        if values:
+            result[key] = values[:12]
+
+    llm_chunks = []
+    for index, chunk in enumerate(safe_list(llm_data.get("chunks"))[:40]):
+        text = _doc_norm(chunk.get("chunk_text") or chunk.get("text") or chunk.get("snippet"))
+        if not text:
+            continue
+        llm_chunks.append({
+            "chunk_index": int(chunk.get("chunk_index")) if str(chunk.get("chunk_index", "")).isdigit() else index,
+            "chunk_text": text[:1800],
+            "page_number": chunk.get("page_number"),
+            "section_label": _doc_norm(chunk.get("section_label"))[:180] or None,
+            "relevance_reason": _doc_norm(chunk.get("relevance_reason") or chunk.get("reason"))[:500],
+            "evidence_strength": _doc_norm(chunk.get("evidence_strength"))[:80] or "requiere_revision_humana",
+            "warnings": [_doc_norm(item) for item in safe_list(chunk.get("warnings")) if _doc_norm(item)][:8],
+            "hash": hashlib.sha256(text.encode("utf-8")).hexdigest(),
+        })
+    if llm_chunks:
+        result["chunks"] = llm_chunks
+
+    llm_suggestions = []
+    for suggestion in safe_list(llm_data.get("suggestions"))[:30]:
+        target_type = _doc_norm(suggestion.get("target_type"))
+        target_id = _doc_norm(suggestion.get("target_id"))
+        target = candidates.get(target_type, {}).get(target_id)
+        if not target:
+            continue
+        llm_suggestions.append({
+            "target_type": target_type,
+            "target_id": target_id,
+            "target_label": target.get("label") or target.get("title") or target.get("name") or "Objeto sugerido",
+            "score": round(_semantic_score(suggestion.get("score"), 0.0) / 100, 2),
+            "confidence": round(_semantic_score(suggestion.get("confidence"), _semantic_score(suggestion.get("score"), 0.0)) / 100, 2),
+            "reason": _doc_norm(suggestion.get("reason"))[:1000] or "Sugerencia IA asistiva. Requiere revision humana.",
+            "chunk_index": suggestion.get("chunk_index"),
+            "snippet": _doc_norm(suggestion.get("snippet"))[:1000],
+            "metadata": {
+                "method": "llm_assisted_semantic_evidence",
+                "human_review_required": True,
+            },
+        })
+    if llm_suggestions:
+        result["suggestions"] = llm_suggestions
+
+    scoring = llm_data.get("scoring") if isinstance(llm_data.get("scoring"), dict) else {}
+    if scoring:
+        result["scoring"] = {
+            "relevance_to_object": _semantic_score(scoring.get("relevance_to_object"), result["scoring"].get("relevance_to_object", 0)),
+            "document_quality": _semantic_score(scoring.get("document_quality"), 0),
+            "traceability": _semantic_score(scoring.get("traceability"), result["scoring"].get("traceability", 0)),
+            "human_review_required": True,
+        }
+
+    usefulness = llm_data.get("usefulness_assessment")
+    if isinstance(usefulness, dict):
+        result["usefulness_assessment"] = {
+            **base.get("usefulness_assessment", {}),
+            **{key: value for key, value in usefulness.items() if value is not None},
+            "human_review_required": True,
+        }
+
+    result["status"] = "analizado_con_limitaciones" if result.get("limitations") else "analizado"
+    result["analysis_status"] = result["status"]
+    result["human_review_required"] = True
+    return result
+
+
 @app.post("/api/ai-compliance/analyze-document")
 def analyze_document_for_compliance(
     payload: DocumentAnalysisRequest,
@@ -1538,64 +1867,55 @@ def analyze_semantic_evidence(
             x_internal_token=x_internal_token,
         )
 
+    payload_dict = payload.dict()
+    llm_trace = extract_llm_trace_context(payload_dict)
+    result = _semantic_base_result(payload, llm_trace)
     text = _doc_norm(payload.text)
-    filename = _doc_norm(payload.filename or payload.title)
-    metadata = payload.metadata or {}
-    document_type = _infer_document_type(filename, _doc_norm(metadata.get("mime_type")), text)
-    standards = _infer_standards(filename, text, safe_list(metadata.get("active_standards")))
-    missing_elements = _assess_missing_elements(document_type, text, metadata)
-    probable_errors = _detect_probable_errors(filename, text, metadata, standards)
-    evidence_quality = _evidence_quality(text, document_type, missing_elements, probable_errors)
-    confidence = _confidence_score(text, standards, document_type, [], missing_elements)
 
-    chunks: List[Dict[str, Any]] = []
-    cleaned = text.replace("\r\n", "\n").replace("\r", "\n").strip()
-    for index in range(0, min(len(cleaned), 1200 * 12), 1200):
-        chunk_text = cleaned[index:index + 1200].strip()
-        if chunk_text:
-            chunks.append({
-                "chunk_index": len(chunks),
-                "chunk_text": chunk_text,
-                "page_number": None,
-                "section_label": None,
-                "hash": str(abs(hash(chunk_text))),
-            })
+    if text and is_llm_available():
+        try:
+            llm_data = call_llm_json(
+                prompt=_semantic_llm_prompt(payload, result),
+                system_prompt=(
+                    "Eres un analista documental GRC. Devuelve JSON valido en espanol, "
+                    "basado solo en el documento y candidatos autorizados. No apruebes "
+                    "cumplimiento ni cierres objetos operacionales."
+                ),
+                temperature=0.1,
+                timeout=60,
+                depth="standard",
+                model_mode=_doc_norm((payload.request_metadata or {}).get("model_mode")),
+                trace_context=llm_trace,
+                response_contract_instruction="Devuelve solo JSON con summary, classification, chunks, suggestions, scoring, usefulness_assessment y limitations.",
+            )
+            result = _semantic_merge_llm_result(payload, result, llm_data)
+            metadata = get_llm_metadata("standard", False, _doc_norm((payload.request_metadata or {}).get("model_mode")))
+            result["trace"] = {
+                **result.get("trace", {}),
+                "llm_used": True,
+                "llm_provider": metadata.get("provider"),
+                "llm_model": metadata.get("model"),
+                "llm_trace": llm_trace,
+            }
+        except Exception as error:
+            result["status"] = "analizado_con_limitaciones"
+            result["analysis_status"] = "analizado_con_limitaciones"
+            result["limitations"] = safe_list(result.get("limitations")) + [
+                "El enriquecimiento LLM no se pudo completar; se conserva análisis determinístico para revisión humana."
+            ]
+            result["trace"] = {
+                **result.get("trace", {}),
+                "llm_used": False,
+                "ai_enrichment_failed": True,
+                "error_type": error.__class__.__name__,
+                "llm_trace": llm_trace,
+            }
+    elif text:
+        result["limitations"] = safe_list(result.get("limitations")) + [
+            "Proveedor LLM no configurado; análisis limitado a reglas determinísticas."
+        ]
+        result["status"] = "analizado_con_limitaciones"
+        result["analysis_status"] = "analizado_con_limitaciones"
 
-    suggestions: List[Dict[str, Any]] = []
-    haystack = _doc_lower(text)
-    for group_name, targets in (payload.candidate_targets or {}).items():
-        for target in targets[:80]:
-            label = _doc_norm(target.get("label") or target.get("title") or target.get("name"))
-            words = [word for word in _doc_lower(label).replace("-", " ").split() if len(word) >= 5]
-            matches = [word for word in words if word in haystack]
-            if not matches:
-                continue
-            score = min(0.94, 0.42 + len(matches) * 0.08)
-            suggestions.append({
-                "target_type": target.get("target_type") or group_name.rstrip("s"),
-                "target_id": target.get("id") or target.get("target_id"),
-                "target_label": label,
-                "score": round(score, 2),
-                "confidence": round(score, 2),
-                "reason": f"Coincidencias detectadas: {', '.join(matches[:5])}. Requiere revision humana.",
-                "chunk_index": 0 if chunks else None,
-                "snippet": chunks[0]["chunk_text"][:500] if chunks else "",
-            })
-
-    return {
-        "status": "processed" if text else "text_not_extractable",
-        "classification": {
-            "type": document_type,
-            "confidence": confidence,
-            "method": "rule_based",
-            "reason": f"Calidad preliminar: {evidence_quality}. Revision humana obligatoria.",
-        },
-        "chunks": chunks,
-        "suggestions": suggestions[:30],
-        "scoring": {
-            "relevance_to_object": round(confidence * 100, 2),
-            "document_quality": evidence_quality,
-            "traceability": 80 if chunks else 30,
-            "human_review_required": True,
-        },
-    }
+    result["human_review_required"] = True
+    return result

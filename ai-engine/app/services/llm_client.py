@@ -4,6 +4,9 @@ import urllib.error
 import urllib.request
 from typing import Any, Dict, Optional
 
+TRACE_SYSTEM = "tcdx-iso"
+UNKNOWN_PROCESS_ACTOR = "unknown-system-process@tecdex.net"
+
 
 def _env(name: str, fallback: str = "") -> str:
     return str(os.getenv(name, fallback) or "").strip()
@@ -128,6 +131,49 @@ def _filtered_openai_generation_options(options: Optional[Dict[str, Any]]) -> Di
     }
 
 
+def _clean_trace_value(value: Any, fallback: str = "", max_length: int = 240) -> str:
+    text = str(value or "").replace("\r", " ").replace("\n", " ").replace("\t", " ")
+    text = " ".join(text.split()).strip()
+    return (text or fallback)[:max_length]
+
+
+def _looks_like_email(value: str) -> bool:
+    return bool(value and "@" in value and "." in value.rsplit("@", 1)[-1] and " " not in value)
+
+
+def normalize_llm_trace_context(trace_context: Optional[Dict[str, Any]] = None) -> Dict[str, str]:
+    trace_context = trace_context if isinstance(trace_context, dict) else {}
+    actor = _clean_trace_value(
+        trace_context.get("actor")
+        or trace_context.get("user")
+        or trace_context.get("user_email")
+        or trace_context.get("process_actor"),
+        UNKNOWN_PROCESS_ACTOR,
+        254,
+    )
+    if not _looks_like_email(actor):
+        actor = UNKNOWN_PROCESS_ACTOR
+    system = _clean_trace_value(trace_context.get("system"), TRACE_SYSTEM, 80) or TRACE_SYSTEM
+    company = _clean_trace_value(trace_context.get("company"), "platform", 180) or "platform"
+    return {
+        "actor": actor,
+        "actor_type": _clean_trace_value(trace_context.get("actor_type"), "process", 80) or "process",
+        "system": system,
+        "company": company,
+        "tenant_id": _clean_trace_value(trace_context.get("tenant_id"), "", 80),
+        "user_id": _clean_trace_value(trace_context.get("user_id"), "", 80),
+    }
+
+
+def extract_llm_trace_context(payload: Optional[Dict[str, Any]] = None) -> Dict[str, str]:
+    payload = payload if isinstance(payload, dict) else {}
+    request_metadata = payload.get("request_metadata") if isinstance(payload.get("request_metadata"), dict) else {}
+    context = payload.get("llm_trace") if isinstance(payload.get("llm_trace"), dict) else request_metadata.get("llm_trace")
+    if not isinstance(context, dict):
+        context = {}
+    return normalize_llm_trace_context(context)
+
+
 def get_ollama_generation_options(
     depth: str = "standard",
     local_compact: bool = False,
@@ -216,6 +262,7 @@ def call_llm_json(
     append_default_json_contract: bool = True,
     generation_options_override: Optional[Dict[str, Any]] = None,
     enforce_timeout_cap: bool = False,
+    trace_context: Optional[Dict[str, Any]] = None,
 ) -> dict:
     metadata = get_llm_metadata(depth, local_compact, model_mode)
     if not metadata["available"]:
@@ -234,6 +281,7 @@ def call_llm_json(
         resolved_timeout_ms = min(resolved_timeout_ms, int(timeout * 1000))
     timeout = resolved_timeout_ms / 1000
     provider = metadata["provider"]
+    trace = normalize_llm_trace_context(trace_context)
 
     if provider in {"openai", "openai_compatible", "azure_openai"}:
         base_url = metadata["base_url"].rstrip("/")
@@ -241,6 +289,7 @@ def call_llm_json(
         headers = {
             "Content-Type": "application/json",
             "Authorization": f"Bearer {_env('OPENAI_API_KEY')}",
+            "X-OpenWebUI-User-Email": trace["actor"],
         }
         payload = {
             "model": metadata["model"],
@@ -252,6 +301,26 @@ def call_llm_json(
             ],
         }
         payload.update(_filtered_openai_generation_options(generation_options_override))
+        payload["user"] = trace["actor"]
+        if provider == "openai_compatible":
+            payload["metadata"] = {
+                **(payload.get("metadata") if isinstance(payload.get("metadata"), dict) else {}),
+                "tcdx_actor": trace["actor"],
+                "tcdx_actor_type": trace["actor_type"],
+                "tcdx_system": trace["system"],
+                "tcdx_company": trace["company"],
+                "tcdx_tenant_id": trace["tenant_id"],
+                "tcdx_user_id": trace["user_id"],
+            }
+            payload["tags"] = [
+                item
+                for item in [
+                    f"system:{trace['system']}",
+                    f"company:{trace['company']}",
+                    f"actor_type:{trace['actor_type']}",
+                ]
+                if item
+            ][:8]
         reasoning_effort = _openai_compatible_reasoning_effort(provider)
         max_tokens = _openai_compatible_max_tokens(provider)
         if reasoning_effort:

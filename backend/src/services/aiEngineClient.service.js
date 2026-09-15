@@ -2,6 +2,10 @@ const {
   isTenantAiFeatureEnabled,
   buildAiDisabledTrace,
 } = require('./tenantAiSettings.service');
+const {
+  buildLlmTraceContext,
+  mergeTraceIntoPayload,
+} = require('./llmTraceContext.service');
 
 class AiEngineClient {
   constructor() {
@@ -79,18 +83,26 @@ class AiEngineClient {
   async postJson(path, payload, options = {}) {
     const controller = new AbortController();
     const timeoutMs = Number.parseInt(String(options.timeoutMs || this.timeout), 10) || this.timeout;
+    const llmTrace = await buildLlmTraceContext({
+      path,
+      payload,
+      processActor: options.processActor || '',
+    });
+    const outboundPayload = mergeTraceIntoPayload(payload, llmTrace);
     const timeout = setTimeout(() => controller.abort(), timeoutMs);
     const requestId =
-      payload?.request_metadata?.request_id ||
-      payload?.request_id ||
+      outboundPayload?.request_metadata?.request_id ||
+      outboundPayload?.request_id ||
       null;
 
     try {
       console.info('AI ENGINE CLIENT REQUEST START:', {
         request_id: requestId,
         endpoint: path,
-        model_mode: payload?.options?.model_mode || payload?.model_mode || payload?.request_metadata?.model_mode || null,
+        model_mode: outboundPayload?.options?.model_mode || outboundPayload?.model_mode || outboundPayload?.request_metadata?.model_mode || null,
         timeout_ms: timeoutMs,
+        llm_actor_type: llmTrace.actor_type,
+        llm_trace_system: llmTrace.system,
       });
       const response = await fetch(`${this.baseUrl}${path}`, {
         method: 'POST',
@@ -100,7 +112,7 @@ class AiEngineClient {
           'x-tcdx-locale': 'es',
           ...(requestId ? { 'x-request-id': requestId } : {}),
         },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(outboundPayload),
         signal: controller.signal,
       });
 
@@ -146,6 +158,7 @@ class AiEngineClient {
         timeoutError.name = 'AbortError';
         timeoutError.code = 'AI_ENGINE_TIMEOUT';
         timeoutError.timeout_ms = timeoutMs;
+        timeoutError.llm_trace = llmTrace;
         timeoutError.cause = error;
         console.error('AI ENGINE CLIENT REQUEST ERROR:', {
           request_id: requestId,
@@ -163,6 +176,7 @@ class AiEngineClient {
         response_preview: error?.response_preview || null,
         timeout_ms: timeoutMs,
       });
+      error.llm_trace = error.llm_trace || llmTrace;
       throw error;
     } finally {
       clearTimeout(timeout);
@@ -545,6 +559,7 @@ class AiEngineClient {
       null;
     const message = error?.message ? String(error.message).slice(0, 220) : 'ai-engine no disponible';
     const timeoutMs = error?.timeout_ms || null;
+    const llmTrace = error?.llm_trace || payload?.request_metadata?.llm_trace || null;
 
     return {
       ok: false,
@@ -625,6 +640,11 @@ class AiEngineClient {
           ? 'backend_to_ai_engine'
           : null,
         timeout_ms: timeoutMs,
+        llm_trace: llmTrace,
+        llm_actor: llmTrace?.actor || null,
+        llm_actor_type: llmTrace?.actor_type || null,
+        llm_trace_system: llmTrace?.system || null,
+        llm_trace_company: llmTrace?.company || null,
       },
     };
   }

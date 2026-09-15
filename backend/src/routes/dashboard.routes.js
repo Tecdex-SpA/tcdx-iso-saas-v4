@@ -6,9 +6,6 @@ const express = require('express');
 const router = express.Router();
 const pool = require('../config/db');
 const auth = require('../middleware/auth');
-const {
-  effectiveCatalogPredicate,
-} = require('../services/controlCatalogLifecycle.service');
 
 function normalizeRole(role) {
   return String(role || '').toLowerCase().trim();
@@ -37,14 +34,6 @@ function canAccessTenant(req, tenantId) {
   return String(getUserTenantId(req.user)) === String(tenantId);
 }
 
-const getEffectiveWhere = () => `
-${effectiveCatalogPredicate({
-  catalogAlias: 'cc',
-  catalogModeSql: 'ts.catalog_mode',
-  tenantIdSql: 'tc.tenant_id',
-})}
-`;
-
 router.get('/:tenant_id', auth, async (req, res) => {
   try {
     const { tenant_id } = req.params;
@@ -56,15 +45,12 @@ router.get('/:tenant_id', auth, async (req, res) => {
     const result = await pool.query(
       `
       WITH operational_controls AS (
-        SELECT
+        SELECT DISTINCT ON (tc.id)
           tc.id AS tenant_control_id,
           tc.control_id AS catalog_control_id,
           LOWER(COALESCE(tc.status, 'pendiente')) AS status,
-          scope_match.standard_code AS matched_standard_code
+          COALESCE(tac.standard_code, cc.iso) AS matched_standard_code
         FROM tenant_controls tc
-        JOIN controls_catalog cc
-          ON tc.control_id = cc.id
-         AND cc.is_active = TRUE
         INNER JOIN tenant_applicable_controls tac
           ON tac.tenant_id = tc.tenant_id
          AND tac.active = true
@@ -73,37 +59,21 @@ router.get('/:tenant_id', auth, async (req, res) => {
            tac.tenant_control_id = tc.id
            OR tac.control_catalog_id = tc.control_id
          )
-        JOIN tenant_operations op
-          ON op.id = tc.operation_id
-         AND op.tenant_id = tc.tenant_id
-         AND op.is_active = TRUE
-        LEFT JOIN LATERAL (
-          SELECT tso.standard_code
-          FROM tenant_standard_operations tso
-          JOIN tenant_standards ts
-            ON ts.tenant_id = tso.tenant_id
-           AND ts.standard_code = tso.standard_code
-           AND ts.is_active = TRUE
-          WHERE tso.tenant_id = tc.tenant_id
-            AND tso.operation_id = tc.operation_id
-            AND tso.is_active = TRUE
-            AND (
-              cc.iso = tso.standard_code
-              OR EXISTS (
-                SELECT 1
-                FROM controls_catalog_standards ccs
-                WHERE ccs.control_id = cc.id
-                  AND ccs.standard_code = tso.standard_code
-              )
-            )
-            AND ${getEffectiveWhere()}
-          ORDER BY
-            CASE WHEN tso.standard_code = cc.iso THEN 0 ELSE 1 END,
-            tso.standard_code
-          LIMIT 1
-        ) scope_match ON TRUE
+        LEFT JOIN controls_catalog cc
+          ON tc.control_id = cc.id
+         AND cc.is_active = TRUE
         WHERE tc.tenant_id = $1
-          AND scope_match.standard_code IS NOT NULL
+          AND (
+            tac.standard_code IS NULL
+            OR EXISTS (
+              SELECT 1
+              FROM tenant_standards ts
+              WHERE ts.tenant_id = tc.tenant_id
+                AND ts.standard_code = tac.standard_code
+                AND ts.is_active = TRUE
+            )
+          )
+        ORDER BY tc.id, tac.updated_at DESC NULLS LAST, tac.created_at DESC NULLS LAST
       ),
       control_status_counts AS (
         SELECT
@@ -205,12 +175,15 @@ router.get('/:tenant_id', auth, async (req, res) => {
     const noCumple = Number(row.no_cumple || 0);
     const pendientes = Number(row.pendientes || 0);
 
-    const porcentaje = total > 0 ? Math.round((cumple / total) * 100) : 0;
-    const riesgo = total > 0 ? Math.round((noCumple / total) * 100) : 0;
+    const porcentaje = total > 0 ? Math.round((cumple / total) * 100) : null;
+    const riesgo = total > 0 ? Math.round((noCumple / total) * 100) : null;
 
-    let nivel_riesgo = 'Bajo';
-    if (riesgo > 50) nivel_riesgo = 'Alto';
-    else if (riesgo > 20) nivel_riesgo = 'Medio';
+    let nivel_riesgo = 'sin_datos';
+    if (riesgo !== null) {
+      nivel_riesgo = 'Bajo';
+      if (riesgo > 50) nivel_riesgo = 'Alto';
+      else if (riesgo > 20) nivel_riesgo = 'Medio';
+    }
 
     return res.json({
       total,
@@ -225,6 +198,12 @@ router.get('/:tenant_id', auth, async (req, res) => {
       closed_findings: Number(row.closed_findings || 0),
       open_nonconformities: Number(row.open_nonconformities || 0),
       closed_nonconformities: Number(row.closed_nonconformities || 0),
+      semantics: {
+        universe: 'tenant_applicable_controls active=true visible_to_tenant=true joined to tenant_controls for active tenant standards',
+        measured_controls: total,
+        no_data_policy: 'missing universe returns null percentages, not zero',
+        no_applicable_policy: 'controls excluded from tenant_applicable_controls active/visible universe are not counted',
+      },
     });
   } catch (err) {
     console.error('ERROR DASHBOARD SUMMARY:', err);
