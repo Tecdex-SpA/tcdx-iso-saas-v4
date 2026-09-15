@@ -28,8 +28,9 @@ assert.doesNotMatch(evidencesRoutes, /const resolveCatalogControlId/);
 
 assert.match(isoOperationalExecution, /tenantControl\.tenant_control_id,\s*\n\s*target\.nonconformity_id/s);
 assert.match(isoOperationalExecution, /direct_tc\.id = f\.tenant_control_id/);
-assert.match(isoOperationalExecution, /c\.id = f\.tenant_control_id[\s\S]*c\.tenant_id = f\.tenant_id/);
-assert.match(isoOperationalExecution, /CASE WHEN count\(\*\) = 1 THEN \(array_agg\(tc\.id\)\)\[1\] ELSE NULL END AS tenant_control_id/);
+assert.match(isoOperationalExecution, /direct_tc\.tenant_id = f\.tenant_id[\s\S]*direct_tc\.id = f\.tenant_control_id/);
+assert.match(isoOperationalExecution, /tc\.id = i\.tenant_control_id[\s\S]*tc\.tenant_id = i\.tenant_id/);
+assert.match(isoOperationalExecution, /tc\.id = lh\.tenant_control_id[\s\S]*tc\.tenant_id = lh\.tenant_id/);
 assert.doesNotMatch(isoOperationalExecution, /tenantControl\.legacy_control_id,\s*\n\s*target\.nonconformity_id/s);
 
 assert.match(controlsRoutes, /'Hallazgo generado desde Workbench de Controles[\s\S]*control\.tenant_control_id,\s*\n\s*getUserId\(req\.user\)/);

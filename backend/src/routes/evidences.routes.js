@@ -105,6 +105,17 @@ function evidenceUpload(req, res, next) {
   })
 }
 
+async function cleanupUploadedEvidenceFile(file) {
+  if (!file?.path) return
+  try {
+    await fs.promises.unlink(file.path)
+  } catch (err) {
+    if (err?.code !== 'ENOENT') {
+      safeErrorLog('EVIDENCE_UPLOAD_FILE_CLEANUP_ERROR:', err)
+    }
+  }
+}
+
 // =============================
 // Helpers
 // =============================
@@ -752,6 +763,7 @@ router.post('/upload', auth, evidenceUpload, async (req, res) => {
     } = req.body
 
     if (!tenant_id) {
+      await cleanupUploadedEvidenceFile(req.file)
       return res.status(400).json({
         error: 'tenant_id es obligatorio'
       })
@@ -764,12 +776,14 @@ router.post('/upload', auth, evidenceUpload, async (req, res) => {
     }
 
     if (!tenant_control_id && !control_id && !action_plan_id) {
+      await cleanupUploadedEvidenceFile(req.file)
       return res.status(400).json({
         error: 'Debes enviar tenant_control_id, control_id o action_plan_id'
       })
     }
 
     if (!ensureTenantAccess(req, tenant_id)) {
+      await cleanupUploadedEvidenceFile(req.file)
       return res.status(403).json({
         error: 'No autorizado para este tenant'
       })
@@ -875,6 +889,7 @@ router.post('/upload', auth, evidenceUpload, async (req, res) => {
     })
   } catch (err) {
     await client.query('ROLLBACK')
+    await cleanupUploadedEvidenceFile(req.file)
     if (err?.code === 'TENANT_CONTROL_ID_AMBIGUOUS') {
       return res.status(409).json({
         error: err.message,

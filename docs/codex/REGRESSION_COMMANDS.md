@@ -6,6 +6,9 @@ Este archivo registra comandos reutilizables. Codex NO ejecuta automáticamente 
 
 | Propósito | Comando | Directorio | Estado |
 |---|---|---|---|
+| Canonical document index / dashboard isolated PostgreSQL | `node scripts/normalization/canonical-document-index-dashboard.postgres.test.js` | repo root | VERIFIED_LOCAL/CANONICAL-DOCUMENT-INDEX-DASHBOARD-CLOSEOUT |
+| ISO9001/data/evidence systemic route contract | `node backend/src/routes/grcRuntimeRepair.contract.test.js` | repo root | VERIFIED_LOCAL/ISO9001-DATA-EVIDENCE-SYSTEMIC-CLOSEOUT |
+| ISO9001/data/evidence route syntax | `node -c backend/src/routes/dashboard-controls.routes.js && node -c backend/src/routes/controls.routes.js && node -c backend/src/routes/evidences.routes.js` | repo root | VERIFIED_LOCAL/ISO9001-DATA-EVIDENCE-SYSTEMIC-CLOSEOUT |
 | Backend focal | Usar el test exacto indicado por el work package | `backend/` | VERIFIED BY WORK PACKAGE ONLY |
 | Backend completo | Consultar `backend/package.json` antes de usar | `backend/` | NOT CONFIRMED IN CONT-00 |
 | Phase 5 | Usar scripts/documentación ya existente del repo | repo/backend | NOT CONFIRMED IN CONT-00 |

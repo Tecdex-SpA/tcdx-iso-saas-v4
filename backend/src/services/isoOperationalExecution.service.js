@@ -306,6 +306,7 @@ async function fetchExpressGapSuggestions(tenantId, createdBy) {
      AND i.iso_control_id = g.iso_control_id
     LEFT JOIN tenant_controls tc
       ON tc.id = i.tenant_control_id
+     AND tc.tenant_id = i.tenant_id
     WHERE g.tenant_id = $1::uuid
       AND a.assessment_status IS DISTINCT FROM 'archived'
       AND g.created_at >= NOW() - INTERVAL '90 days'
@@ -377,6 +378,7 @@ async function fetchRiskMatrixSuggestions(tenantId, createdBy) {
       ON i.id = a.risk_item_id
     LEFT JOIN tenant_controls tc
       ON tc.id = i.tenant_control_id
+     AND tc.tenant_id = i.tenant_id
     WHERE a.tenant_id = $1::uuid
       AND a.status = 'suggested'
       AND i.status IN ('suggested', 'accepted', 'needs_review')
@@ -447,6 +449,7 @@ async function fetchControlHealthSuggestions(tenantId, createdBy) {
     FROM latest_health lh
     JOIN tenant_controls tc
       ON tc.id = lh.tenant_control_id
+     AND tc.tenant_id = lh.tenant_id
     LEFT JOIN controls_catalog cc
       ON cc.id = tc.control_id
     WHERE lh.health_score IS NOT NULL

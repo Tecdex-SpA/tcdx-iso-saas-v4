@@ -9,6 +9,10 @@ const diagnosticRoutes = read('src/routes/diagnostic.routes.js');
 const diagnosticService = read('src/services/diagnostic.service.js');
 const isoExpressDiagnostic = read('src/services/isoExpressDiagnostic.service.js');
 const controlsRoutes = read('src/routes/controls.routes.js');
+const dashboardControlsRoutes = read('src/routes/dashboard-controls.routes.js');
+const documentIntegrationsRoutes = read('src/routes/document-integrations.routes.js');
+const evidencesRoutes = read('src/routes/evidences.routes.js');
+const evidenceLibraryService = read('src/services/evidenceLibrary.service.js');
 const controlCatalogLifecycle = read('src/services/controlCatalogLifecycle.service.js');
 const controlsPage = fs.readFileSync(path.resolve(root, '../frontend/src/app/controles/page.tsx'), 'utf8');
 const isoExpressService = require('../services/isoExpressDiagnostic.service');
@@ -39,12 +43,54 @@ assert.match(controlsRoutes, /insertActionPlan/);
 assert.match(controlsRoutes, /publishControlOrchestration\(req,\s*tenant_id,\s*'nonconformity'/);
 assert.match(controlsRoutes, /publishControlOrchestration\(req,\s*tenant_id,\s*'finding'/);
 assert.match(controlsRoutes, /publishControlOrchestration\(req,\s*tenant_id,\s*'action'/);
+assert.match(controlsRoutes, /UPDATE tenant_controls/);
+assert.match(controlsRoutes, /recordControlSoAAssessment\(\{[\s\S]*endpoint: 'PUT \/api\/controls\/:id'/);
+const putControlSection = controlsRoutes.slice(
+  controlsRoutes.indexOf("router.put('/:id'"),
+  controlsRoutes.indexOf('router._private')
+);
+assert.doesNotMatch(putControlSection, /legacyResult/);
+assert.doesNotMatch(putControlSection, /legacy_control_id/);
+assert.doesNotMatch(putControlSection, /legacy_control_updated_without_tenant_control_identity/);
+assert.doesNotMatch(putControlSection, /compatibility_endpoint/);
+assert.doesNotMatch(putControlSection, /UPDATE\s+controls\b/);
 assert.match(controlsRoutes, /function normalizeWorkbenchHealthProjection/);
 assert.match(controlsRoutes, /score === null/);
 assert.match(controlsRoutes, /veh\.standard_code = \$3/);
 assert.doesNotMatch(controlsRoutes, /row\.score\s*[<>]=?\s*80/);
 assert.doesNotMatch(controlsRoutes, /row\.health_score/);
 assert.doesNotMatch(controlsRoutes, /tc\.health_status AS tenant_health_status[\s\S]{0,500}derived_health_status/);
+
+assert.match(dashboardControlsRoutes, /operational_controls AS/);
+assert.match(dashboardControlsRoutes, /FROM operational_controls oc[\s\S]*LEFT JOIN latest_health lh/);
+assert.match(dashboardControlsRoutes, /COALESCE\(oc\.tenant_status, 'pendiente'\) AS status/);
+assert.doesNotMatch(dashboardControlsRoutes, /FROM latest_health lh[\s\S]{0,250}INNER JOIN tenant_controls/);
+
+assert.match(evidencesRoutes, /async function cleanupUploadedEvidenceFile/);
+assert.match(evidencesRoutes, /await cleanupUploadedEvidenceFile\(req\.file\)[\s\S]*tenant_id es obligatorio/);
+assert.match(evidencesRoutes, /await cleanupUploadedEvidenceFile\(req\.file\)[\s\S]*No autorizado para este tenant/);
+assert.match(evidencesRoutes, /catch \(err\) \{[\s\S]*await cleanupUploadedEvidenceFile\(req\.file\)/);
+
+const manualUploadFilesSection = evidenceLibraryService.slice(
+  evidenceLibraryService.indexOf('async function manualUploadFiles'),
+  evidenceLibraryService.indexOf('async function manualUploadZip')
+);
+const manualUploadZipSection = evidenceLibraryService.slice(
+  evidenceLibraryService.indexOf('async function manualUploadZip'),
+  evidenceLibraryService.indexOf('function defaultSourceActions')
+);
+assert.doesNotMatch(manualUploadFilesSection, /ensureManualUploadSource|touchDocumentSourceSync|tenant_document_sources/);
+assert.doesNotMatch(manualUploadZipSection, /ensureManualUploadSource|touchDocumentSourceSync|tenant_document_sources/);
+assert.match(manualUploadFilesSection, /sourceId:\s*null/);
+assert.match(manualUploadZipSection, /sourceId:\s*null/);
+assert.match(evidenceLibraryService, /provider\s*=\s*'manual_upload'|MANUAL_UPLOAD_PROVIDER/);
+assert.match(evidenceLibraryService, /cleanupWrittenManualUploadFile/);
+assert.match(documentIntegrationsRoutes, /async function tableExists/);
+assert.match(documentIntegrationsRoutes, /const hasDocumentSources = await tableExists\('tenant_document_sources'\)/);
+assert.match(documentIntegrationsRoutes, /function pathInside/);
+assert.match(documentIntegrationsRoutes, /function tenantManualUploadRoot/);
+assert.match(documentIntegrationsRoutes, /doc\.provider === 'manual_upload' && !pathInside\(tenantManualUploadRoot\(tenantId\), resolvedLocalPath\)/);
+assert.match(documentIntegrationsRoutes, /DOCUMENT_STORAGE_PATH_INVALID/);
 
 assert.match(controlsPage, /nonconformity-draft/);
 assert.match(controlsPage, /nonconformityAiDrafts/);

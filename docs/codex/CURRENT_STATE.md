@@ -1,5 +1,40 @@
 # CURRENT_STATE — TCDX ISO SaaS V4
 
+## Canonical Document Index / Dashboard Closeout — 2026-09-15
+
+Status: `CANONICAL_BACKEND_DATAFLOW_READY_FOR_REVIEW`.
+
+Continuation over interrupted local work on branch `main` / HEAD `8ba51fec476fd7bb99c81d16d8a9e54a34a37a62`. Codex did not commit, push, merge, deploy, edit `.env`, touch DGX/LiteLLM, create migrations, alter schema, or write to QA/production DB.
+
+Closed locally with isolated PostgreSQL evidence: manual evidence-library upload persists only to `document_index` with `provider='manual_upload'`, `source_id=NULL`, `integration_id=NULL`, `local_storage_path` under tenant manual-upload root, coherent `checksum/content_hash/file_hash`, and `metadata_json.manual_upload=true`. `tenant_document_sources` is not required and is not created for manual upload. Failed DB persistence after file write cleans up the newly written file.
+
+Control update closeout: `PUT /api/controls/:id` is canonical-only over `tenant_controls` for the authenticated tenant, records `control_soa_assessments`, commits, then calls official post-mutation propagation. The legacy `UPDATE controls` fallback and legacy compatibility metadata were removed from that endpoint.
+
+Dashboard closeout: `/api/dashboard-controls/:tenant_id` uses active tenant standards plus `tenant_applicable_controls + tenant_controls` as the row universe and left-joins `v_iso_control_effective_health` only as optional enrichment. Controls without Health remain visible, status comes from `tenant_controls.status`, and missing Health remains `NULL/sin_datos`, not a fabricated score.
+
+Additional focused tenant-isolation correction: `isoOperationalExecution.service.js` now tenant-scopes joins from ISO Express, risk matrix and Health suggestions back to `tenant_controls`; `controlIdentityRoutes.test.js` was updated to assert the current canonical tenant-scoped joins.
+
+Validation PASS: syntax checks for all requested backend files and the PostgreSQL test; `node backend/src/routes/grcRuntimeRepair.contract.test.js`; `node scripts/normalization/canonical-document-index-dashboard.postgres.test.js` with isolated Docker PostgreSQL; focused `soaValidation`, `grcCalculationOrchestration`, and `controlIdentityRoutes` tests; `git diff --check` pending final closeout rerun after docs.
+
+Continuity: `docs/codex/handoffs/CANONICAL-DOCUMENT-INDEX-DASHBOARD-CLOSEOUT.md`.
+
+## ISO9001 Data Evidence Systemic Review — 2026-09-15
+
+Status: `BLOCKED_GOVERNED_ISO9001_REFERENCE_AND_RUNTIME_EVIDENCE`.
+
+Local-only focused repair on branch `main` / HEAD `8ba51fec476fd7bb99c81d16d8a9e54a34a37a62`. Codex did not commit, push, merge, deploy, edit `.env`, change LLM settings, or write to QA/production DB.
+
+Inherited fact confirmed: the governed ISO reference manifest currently contains `ISO9001:2015` with 16 controls / 13 evidence expectations and `ISO9001:2026_FDIS` with 8 controls / 8 evidence expectations. `ISO9001:2015` is the only certifiable/product-projected ISO9001 version; `ISO9001:2026_FDIS` is `transition_only`, has `product_standard_code=NULL`, and is not projected into `standards` or `controls_catalog`. A requested ~50-control ISO9001:2015 universe is not present in the versioned repository authority; Codex did not invent controls.
+
+Root causes partially closed locally:
+- `/api/dashboard-controls/:tenant_id` used `v_iso_control_effective_health` as an inner source, so applicable tenant controls without a published Health snapshot disappeared from dashboard control views. It now uses `tenant_controls + tenant_applicable_controls` as the universe and joins Health optionally; displayed control status comes from `tenant_controls.status`.
+- Legacy `PUT /api/controls/:id` updated only legacy `controls` when hit by old consumers and did not write canonical `tenant_controls`, SoA assessment history, or official recalculation metadata. It now first updates canonical `tenant_controls` tenant-scoped and records SoA/orchestration; legacy `controls` remains compatibility fallback with explicit propagation metadata.
+- `POST /api/evidences/upload` could leave a physical file behind when validation/authorization/DB work failed after Multer had written to disk. It now unlinks the uploaded file on early validation failure and transaction rollback. Storage remains the existing local-disk contract under `backend/uploads/evidences`; no S3/object-store parallel path was added.
+
+Validation local PASS: `node -c` for touched backend routes and `node backend/src/routes/grcRuntimeRepair.contract.test.js`. Pending: `git diff --check` final gate, isolated PostgreSQL/runtime evidence, VM storage permission/mount evidence, and governed ISO9001 reference source decision.
+
+Continuity: `docs/codex/handoffs/ISO9001-DATA-EVIDENCE-SYSTEMIC-CLOSEOUT.md`.
+
 ## AI Guided Canonical Knowledge Runtime Grants — 2026-09-14
 
 Status: `AI_GUIDED_CANONICAL_KNOWLEDGE_RUNTIME_GRANTS_READY`.

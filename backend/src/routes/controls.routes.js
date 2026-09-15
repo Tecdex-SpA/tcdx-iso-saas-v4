@@ -2330,6 +2330,8 @@ router.get('/:tenant_id', auth, async (req, res) => {
 });
 
 router.put('/:id', auth, async (req, res) => {
+  const client = await pool.connect();
+
   try {
     const { id } = req.params;
     const { status, score } = req.body;
@@ -2340,9 +2342,11 @@ router.put('/:id', auth, async (req, res) => {
 
     const tenantId = getUserTenantId(req.user);
 
-    const result = await pool.query(
+    await client.query('BEGIN');
+
+    const tenantControlResult = await client.query(
       `
-      UPDATE controls
+      UPDATE tenant_controls
       SET status = $1, score = $2
       WHERE id = $3 AND tenant_id = $4
       RETURNING *
@@ -2350,17 +2354,48 @@ router.put('/:id', auth, async (req, res) => {
       [status, score, id, tenantId]
     );
 
-    if (result.rows.length === 0) {
-      return res.status(403).json({ error: 'No autorizado' });
+    if (tenantControlResult.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Control no encontrado para el tenant autenticado' });
     }
 
-    return res.json(result.rows[0]);
+    const controlRefs = await resolveControlRefs(client, tenantId, id);
+    const canonicalAssessment = await recordControlSoAAssessment({
+      client,
+      tenantId,
+      tenantControlId: id,
+      isoCode: controlRefs?.primary_standard_code,
+      implementationStatus: tenantControlResult.rows[0]?.status,
+      applicable: tenantControlResult.rows[0]?.applicability,
+      userId: getUserId(req.user),
+      metadata: {
+        producer: 'controls.routes',
+        endpoint: 'PUT /api/controls/:id',
+        factType: 'compliance',
+      },
+    });
+
+    await client.query('COMMIT');
+
+    const officialRecalculation = await publishControlOrchestration(req, tenantId, 'compliance', {
+      endpoint: 'PUT /api/controls/:id',
+      tenant_control_id: id,
+    });
+
+    return res.json({
+      ...tenantControlResult.rows[0],
+      canonical_assessment: canonicalAssessment,
+      official_recalculation: officialRecalculation,
+    });
   } catch (err) {
-    console.error('ERROR LEGACY UPDATE CONTROL:', err);
+    await client.query('ROLLBACK').catch(() => {});
+    console.error('ERROR UPDATE TENANT CONTROL:', err);
     return res.status(500).json({
       error: 'Error update control',
       detail: err.message,
     });
+  } finally {
+    client.release();
   }
 });
 

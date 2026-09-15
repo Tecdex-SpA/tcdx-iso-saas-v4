@@ -31,7 +31,9 @@ const EVIDENCE_USAGES = new Set([
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const OPERATION_REF_RE = /^(document_index|evidence):[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const MANUAL_UPLOAD_PROVIDER = 'manual_upload';
-const MANUAL_UPLOAD_ROOT = path.resolve(__dirname, '..', '..', 'uploads', 'evidence-library');
+const MANUAL_UPLOAD_ROOT = path.resolve(
+  process.env.EVIDENCE_LIBRARY_UPLOAD_ROOT || path.resolve(__dirname, '..', '..', 'uploads', 'evidence-library')
+);
 const MANUAL_UPLOAD_MAX_FILES = Number(process.env.EVIDENCE_LIBRARY_UPLOAD_MAX_FILES || 50);
 const MANUAL_UPLOAD_MAX_FILE_BYTES = Number(process.env.EVIDENCE_LIBRARY_UPLOAD_MAX_FILE_BYTES || 25 * 1024 * 1024);
 const MANUAL_UPLOAD_ZIP_MAX_BYTES = Number(process.env.EVIDENCE_LIBRARY_ZIP_MAX_BYTES || 50 * 1024 * 1024);
@@ -240,6 +242,12 @@ function tenantUploadRoot(tenantId) {
   return path.join(MANUAL_UPLOAD_ROOT, tenantPart, 'manual');
 }
 
+function pathInside(parent, child) {
+  const root = path.resolve(parent);
+  const target = path.resolve(child || '');
+  return target === root || target.startsWith(`${root}${path.sep}`);
+}
+
 async function writeManualUploadFile({ tenantId, buffer, originalName, relativePath = null }) {
   const safeName = safeUploadFileName(originalName);
   const dateFolder = new Date().toISOString().slice(0, 10);
@@ -249,7 +257,7 @@ async function writeManualUploadFile({ tenantId, buffer, originalName, relativeP
   const absolutePath = path.join(storageDir, storedName);
   const root = tenantUploadRoot(tenantId);
   const resolved = path.resolve(absolutePath);
-  if (!resolved.startsWith(path.resolve(root))) {
+  if (!pathInside(root, resolved)) {
     throw publicError(400, 'INVALID_UPLOAD_PATH', 'Ruta de almacenamiento inválida.');
   }
   await fs.promises.writeFile(resolved, buffer);
@@ -259,6 +267,21 @@ async function writeManualUploadFile({ tenantId, buffer, originalName, relativeP
     storageRelativePath,
     relativePath: normalizeRelativePath(relativePath || safeName, safeName),
   };
+}
+
+async function cleanupWrittenManualUploadFile({ tenantId, absolutePath }) {
+  if (!tenantId || !absolutePath) return;
+  if (!pathInside(tenantUploadRoot(tenantId), absolutePath)) return;
+  try {
+    await fs.promises.unlink(path.resolve(absolutePath));
+  } catch (error) {
+    if (error.code !== 'ENOENT') {
+      console.warn('[evidence-library] manual upload cleanup failed', {
+        tenant_id: shortLogId(tenantId),
+        code: error.code,
+      });
+    }
+  }
 }
 
 function readZipEntries(buffer) {
@@ -676,76 +699,9 @@ function action(key, label, options = {}) {
   };
 }
 
-async function ensureManualUploadSource(tenantId, userId) {
-  if (!(await tableExists('tenant_document_sources'))) {
-    throw publicError(500, 'DOCUMENT_SOURCES_TABLE_MISSING', 'No existe tabla de fuentes documentales.');
-  }
-
-  const existing = await pool.query(
-    `
-    SELECT *
-    FROM tenant_document_sources
-    WHERE tenant_id = $1::uuid
-      AND provider = $2
-      AND COALESCE(status, 'active') <> 'disconnected'
-    ORDER BY created_at ASC
-    LIMIT 1
-    `,
-    [tenantId, MANUAL_UPLOAD_PROVIDER]
-  );
-  if (existing.rowCount > 0) return existing.rows[0];
-
-  const result = await pool.query(
-    `
-    INSERT INTO tenant_document_sources (
-      tenant_id,
-      provider,
-      source_name,
-      status,
-      sync_enabled,
-      scan_frequency,
-      metadata_json,
-      created_by_user_id,
-      created_by,
-      last_sync_at,
-      updated_at
-    )
-    VALUES ($1::uuid,$2::text,'Carga manual','active',false,'manual',$3::jsonb,$4::uuid,$4::uuid,NOW(),NOW())
-    RETURNING *
-    `,
-    [
-      tenantId,
-      MANUAL_UPLOAD_PROVIDER,
-      JSON.stringify({
-        source_type: MANUAL_UPLOAD_PROVIDER,
-        created_from: 'evidence_library_manual_upload',
-      }),
-      userId || null,
-    ]
-  );
-  return result.rows[0];
-}
-
-async function touchDocumentSourceSync(sourceId, tenantId) {
-  if (!sourceId || !(await tableExists('tenant_document_sources'))) return;
-  await pool.query(
-    `
-    UPDATE tenant_document_sources
-    SET last_sync_at = NOW(),
-        status = 'active',
-        updated_at = NOW()
-    WHERE id = $1::uuid
-      AND tenant_id = $2::uuid
-    `,
-    [sourceId, tenantId]
-  ).catch((error) => {
-    if (!['42P01', '42703'].includes(error.code)) throw error;
-  });
-}
-
 async function upsertManualDocumentIndex({
   tenantId,
-  sourceId,
+  sourceId = null,
   userId,
   fileName,
   mimeType,
@@ -784,6 +740,7 @@ async function upsertManualDocumentIndex({
     INSERT INTO document_index (
       tenant_id,
       source_id,
+      integration_id,
       provider,
       provider_file_id,
       provider_version_id,
@@ -806,6 +763,7 @@ async function upsertManualDocumentIndex({
     VALUES (
       $1::uuid,
       $2::uuid,
+      NULL::uuid,
       $3::text,
       $4::text,
       $5::text,
@@ -828,6 +786,7 @@ async function upsertManualDocumentIndex({
     ON CONFLICT (tenant_id, provider, provider_file_id)
     DO UPDATE SET
       source_id = EXCLUDED.source_id,
+      integration_id = EXCLUDED.integration_id,
       provider_version_id = EXCLUDED.provider_version_id,
       file_name = EXCLUDED.file_name,
       mime_type = EXCLUDED.mime_type,
@@ -934,16 +893,16 @@ async function manualUploadFiles({ user, files = [], fields = {} }) {
     throw publicError(400, 'MANUAL_UPLOAD_TOO_MANY_FILES', 'La carga excede el máximo de archivos permitido.');
   }
 
-  const source = await ensureManualUploadSource(tenantId, userId);
   const documents = [];
   const skipped = [];
 
   for (const file of files) {
+    let written = null;
     try {
       const originalName = safeUploadFileName(file.originalname || 'documento');
       assertAllowedManualFile(originalName, file.size || file.buffer?.length || 0);
       const checksum = sha256(file.buffer);
-      const written = await writeManualUploadFile({
+      written = await writeManualUploadFile({
         tenantId,
         buffer: file.buffer,
         originalName,
@@ -951,7 +910,7 @@ async function manualUploadFiles({ user, files = [], fields = {} }) {
       });
       const row = await upsertManualDocumentIndex({
         tenantId,
-        sourceId: source.id,
+        sourceId: null,
         userId,
         fileName: originalName,
         mimeType: mimeTypeForFile(originalName, file.mimetype),
@@ -964,11 +923,11 @@ async function manualUploadFiles({ user, files = [], fields = {} }) {
       });
       documents.push(row);
     } catch (error) {
+      await cleanupWrittenManualUploadFile({ tenantId, absolutePath: written?.absolutePath });
       skipped.push({ filename: file.originalname || 'documento', reason: safeManualUploadError(error) });
     }
   }
 
-  await touchDocumentSourceSync(source.id, tenantId);
   return {
     summary: {
       uploaded: files.length,
@@ -984,9 +943,9 @@ async function manualUploadFiles({ user, files = [], fields = {} }) {
     },
     source: {
       source_type: 'manual_upload',
-      source_id: source.id,
-      source_name: source.source_name || 'Carga manual',
-      status: source.status || 'active',
+      source_id: null,
+      source_name: 'Carga manual',
+      status: 'active',
     },
     documents,
   };
@@ -1001,7 +960,6 @@ async function manualUploadZip({ user, file, fields = {} }) {
     throw publicError(400, 'MANUAL_UPLOAD_ZIP_REQUIRED', 'El archivo debe ser ZIP.');
   }
 
-  const source = await ensureManualUploadSource(tenantId, userId);
   const entries = readZipEntries(file.buffer);
   const files = entries.filter((entry) => !entry.skipped);
   const skipped = entries.filter((entry) => entry.skipped).map((entry) => ({
@@ -1014,17 +972,18 @@ async function manualUploadZip({ user, file, fields = {} }) {
 
   const folderRows = await indexZipFolders({
     tenantId,
-    sourceId: source.id,
+    sourceId: null,
     userId,
     relativePaths: files.map((entry) => entry.relativePath),
   });
   const documents = [...folderRows];
 
   for (const entry of files) {
+    let written = null;
     try {
       const originalName = safeUploadFileName(path.posix.basename(entry.relativePath));
       const checksum = sha256(entry.buffer);
-      const written = await writeManualUploadFile({
+      written = await writeManualUploadFile({
         tenantId,
         buffer: entry.buffer,
         originalName,
@@ -1032,7 +991,7 @@ async function manualUploadZip({ user, file, fields = {} }) {
       });
       const row = await upsertManualDocumentIndex({
         tenantId,
-        sourceId: source.id,
+        sourceId: null,
         userId,
         fileName: originalName,
         mimeType: mimeTypeForFile(originalName),
@@ -1045,11 +1004,11 @@ async function manualUploadZip({ user, file, fields = {} }) {
       });
       documents.push(row);
     } catch (error) {
+      await cleanupWrittenManualUploadFile({ tenantId, absolutePath: written?.absolutePath });
       skipped.push({ filename: entry.relativePath || 'entrada_zip', reason: safeManualUploadError(error) });
     }
   }
 
-  await touchDocumentSourceSync(source.id, tenantId);
   return {
     summary: {
       uploaded: 1,
@@ -1065,9 +1024,9 @@ async function manualUploadZip({ user, file, fields = {} }) {
     },
     source: {
       source_type: 'manual_upload',
-      source_id: source.id,
-      source_name: source.source_name || 'Carga manual',
-      status: source.status || 'active',
+      source_id: null,
+      source_name: 'Carga manual',
+      status: 'active',
     },
     documents,
   };
@@ -1186,6 +1145,7 @@ async function listSources({ user }) {
   }
 
   if (await tableExists('tenant_document_sources')) {
+    const hasTenantIntegrations = await tableExists('tenant_integrations');
     const result = await pool.query(
       `
       SELECT
@@ -1201,12 +1161,12 @@ async function listSources({ user }) {
         s.provider_account_email,
         s.last_sync_status,
         s.last_sync_error,
-        i.status AS integration_status,
+        ${hasTenantIntegrations ? 'i.status' : 'NULL::text'} AS integration_status,
         COALESCE(dc.documents_count, 0)::int AS source_documents_count
       FROM tenant_document_sources s
-      LEFT JOIN tenant_integrations i
+      ${hasTenantIntegrations ? `LEFT JOIN tenant_integrations i
         ON i.id = s.integration_id
-       AND i.tenant_id = s.tenant_id
+       AND i.tenant_id = s.tenant_id` : ''}
       LEFT JOIN (
         SELECT source_id, COUNT(*)::int AS documents_count
         FROM document_index
@@ -1219,10 +1179,7 @@ async function listSources({ user }) {
       ORDER BY s.updated_at DESC NULLS LAST, s.created_at DESC NULLS LAST
       `,
       [tenantId]
-    ).catch((error) => {
-      if (['42P01', '42703'].includes(error.code)) return { rows: [] };
-      throw error;
-    });
+    );
 
     for (const row of result.rows) {
       const provider = String(row.provider || '').toLowerCase();
@@ -1698,13 +1655,14 @@ async function resolveEvidenceLibrarySource(input = {}, tenantId, options = {}) 
 
   let source = null;
   if (sourceType === 'document_index') {
+    const hasDocumentSources = await tableExists('tenant_document_sources');
     const result = await pool.query(
       `
-      SELECT d.*, s.source_name
+      SELECT d.*, ${hasDocumentSources ? 's.source_name' : 'NULL::text AS source_name'}
       FROM document_index d
-      LEFT JOIN tenant_document_sources s
+      ${hasDocumentSources ? `LEFT JOIN tenant_document_sources s
         ON s.id = d.source_id
-       AND s.tenant_id = d.tenant_id
+       AND s.tenant_id = d.tenant_id` : ''}
       WHERE d.tenant_id = $1::uuid
         AND d.id = $2::uuid
         AND COALESCE(d.status, 'indexed') NOT IN ('deleted', 'ignored', 'missing')
@@ -2637,13 +2595,20 @@ async function restoreDocumentIndex({ user, payload = {} }) {
 
 async function getSourceText(tenantId, source) {
   if (source.source_type === 'document_index') {
+    const hasDocumentSources = await tableExists('tenant_document_sources');
+    const hasTenantIntegrations = await tableExists('tenant_integrations');
     const document = await pool.query(
       `
-      SELECT d.*, s.source_name, i.provider_account_email,
-             i.encrypted_access_token, i.encrypted_refresh_token, i.token_expires_at, i.scopes
+      SELECT d.*,
+             ${hasDocumentSources ? 's.source_name' : 'NULL::text AS source_name'},
+             ${hasTenantIntegrations ? 'i.provider_account_email' : 'NULL::text'} AS provider_account_email,
+             ${hasTenantIntegrations ? 'i.encrypted_access_token' : 'NULL::text'} AS encrypted_access_token,
+             ${hasTenantIntegrations ? 'i.encrypted_refresh_token' : 'NULL::text'} AS encrypted_refresh_token,
+             ${hasTenantIntegrations ? 'i.token_expires_at' : 'NULL::timestamp'} AS token_expires_at,
+             ${hasTenantIntegrations ? 'i.scopes' : 'NULL::text'} AS scopes
       FROM document_index d
-      LEFT JOIN tenant_document_sources s ON s.id = d.source_id AND s.tenant_id = d.tenant_id
-      LEFT JOIN tenant_integrations i ON i.id = d.integration_id AND i.tenant_id = d.tenant_id
+      ${hasDocumentSources ? 'LEFT JOIN tenant_document_sources s ON s.id = d.source_id AND s.tenant_id = d.tenant_id' : ''}
+      ${hasTenantIntegrations ? 'LEFT JOIN tenant_integrations i ON i.id = d.integration_id AND i.tenant_id = d.tenant_id' : ''}
       WHERE d.tenant_id = $1::uuid AND d.id = $2::uuid
       LIMIT 1
       `,

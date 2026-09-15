@@ -108,6 +108,35 @@ function safeDownloadName(value) {
   return path.basename(String(value || 'documento').replace(/[\r\n"]/g, '_'))
 }
 
+const MANUAL_UPLOAD_ROOT = path.resolve(
+  process.env.EVIDENCE_LIBRARY_UPLOAD_ROOT || path.resolve(__dirname, '..', '..', 'uploads', 'evidence-library')
+)
+
+function pathInside(parent, child) {
+  const root = path.resolve(parent)
+  const target = path.resolve(child || '')
+  return target === root || target.startsWith(`${root}${path.sep}`)
+}
+
+function tenantManualUploadRoot(tenantId) {
+  const tenantPart = String(tenantId || 'unknown').replace(/[^a-zA-Z0-9_-]/g, '_')
+  return path.join(MANUAL_UPLOAD_ROOT, tenantPart, 'manual')
+}
+
+async function tableExists(tableName) {
+  const result = await pool.query(
+    `
+    SELECT 1
+    FROM information_schema.tables
+    WHERE table_schema = 'public'
+      AND table_name = $1
+    LIMIT 1
+    `,
+    [tableName]
+  )
+  return result.rowCount > 0
+}
+
 async function getTenantSource({ sourceId, tenantId }) {
   const result = await pool.query(
     `
@@ -1265,13 +1294,17 @@ router.get('/documents/:documentId/download', auth, async (req, res) => {
   if (!tenantId) return
 
   try {
+    const hasDocumentSources = await tableExists('tenant_document_sources')
     const result = await pool.query(
       `
-      SELECT d.*, s.provider AS source_provider, s.folder_path AS source_folder_path, s.integration_id
+      SELECT d.*,
+             ${hasDocumentSources ? 's.provider' : 'NULL::text'} AS source_provider,
+             ${hasDocumentSources ? 's.folder_path' : 'NULL::text'} AS source_folder_path,
+             ${hasDocumentSources ? 's.integration_id' : 'NULL::uuid'} AS source_integration_id
       FROM document_index d
-      LEFT JOIN tenant_document_sources s
+      ${hasDocumentSources ? `LEFT JOIN tenant_document_sources s
         ON s.id = d.source_id
-       AND s.tenant_id = d.tenant_id
+       AND s.tenant_id = d.tenant_id` : ''}
       WHERE d.id = $1::uuid
         AND d.tenant_id = $2::uuid
       LIMIT 1
@@ -1287,10 +1320,14 @@ router.get('/documents/:documentId/download', auth, async (req, res) => {
       if (!localPath) {
         return res.status(409).json({ ok: false, code: 'DOCUMENT_BINARY_NOT_STORED', error: 'Archivo binario no almacenado localmente' })
       }
-      const stat = await fs.promises.stat(localPath).catch(() => null)
+      const resolvedLocalPath = path.resolve(localPath)
+      if (doc.provider === 'manual_upload' && !pathInside(tenantManualUploadRoot(tenantId), resolvedLocalPath)) {
+        return res.status(409).json({ ok: false, code: 'DOCUMENT_STORAGE_PATH_INVALID', error: 'Ruta de archivo no válida para este documento' })
+      }
+      const stat = await fs.promises.stat(resolvedLocalPath).catch(() => null)
       if (!stat || !stat.isFile()) return res.status(404).json({ error: 'Archivo no encontrado' })
       res.setHeader('X-Content-Type-Options', 'nosniff')
-      return res.download(localPath, safeDownloadName(doc.file_name))
+      return res.download(resolvedLocalPath, safeDownloadName(doc.file_name))
     }
 
     if (doc.provider === 'zoho_workdrive') {
