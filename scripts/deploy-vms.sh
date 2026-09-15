@@ -462,6 +462,7 @@ FRESH_PRODUCTION_MIGRATION_RUNNERS=(
   "Post-lifecycle runtime consumers systemic closeout|scripts/normalization/apply-tcdx-post-lifecycle-runtime-consumers-systemic-closeout.js"
   "AI Core runtime context grants|scripts/normalization/apply-ai-core-runtime-context-grants.js"
   "AI Guided canonical knowledge runtime grants|scripts/normalization/apply-ai-guided-canonical-knowledge-runtime-grants.js"
+  "AI Guided product-ready knowledge catalog|scripts/normalization/apply-ai-guided-product-ready-knowledge-catalog.js"
 )
 
 HISTORICAL_MIGRATION_RUNNERS=(

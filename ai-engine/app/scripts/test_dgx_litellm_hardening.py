@@ -527,6 +527,13 @@ class AiContextCanonicalSchemaTests(unittest.TestCase):
                 "tenant_health": "F5_5_GRC_HEALTH: valor 82, publicación published, cobertura 0.91.",
                 "signals": ["Contexto canónico disponible."],
             },
+            "knowledge_sources": {
+                "base_problem_knowledge": True,
+                "domain_knowledge": True,
+                "domain_playbook_used": False,
+                "domain_evidence_used": True,
+                "domain_closure_used": False,
+            },
             "solution": {
                 "problem_detected": "Falta evidencia objetiva.",
                 "compliance_impact": "Requiere revisión humana antes de cualquier decisión de cumplimiento.",
@@ -543,6 +550,7 @@ class AiContextCanonicalSchemaTests(unittest.TestCase):
                 "health_impact": "No se modifica Health sin evidencia.",
                 "kpi_impact": "No se modifica KPI sin evidencia.",
                 "next_best_action": "Solicitar evidencia trazable.",
+                "can_auto_close": False,
             },
         }
         payload = {
@@ -552,18 +560,34 @@ class AiContextCanonicalSchemaTests(unittest.TestCase):
             "description": "No existe evidencia objetiva del periodo actual.",
             "severity": "alta",
         }
+        llm_fallback = {
+            "llm_available": False,
+            "llm_used": False,
+            "llm_provider": "none",
+            "selected_model": "deterministic_canonical_guided",
+            "model_mode": "deterministic",
+            "fallback_used": True,
+            "fallback_reason": "llm_unavailable",
+            "enrichment": {},
+        }
 
-        with patch.object(adapter, "_safe_legacy_call", return_value={"ok": True}), \
-             patch.object(adapter, "generate_guided_solution", return_value=canonical_guided):
+        with patch.object(adapter, "_safe_legacy_call", side_effect=AssertionError("legacy path must not run")), \
+             patch.object(adapter, "generate_guided_solution", return_value=canonical_guided), \
+             patch.object(adapter, "enrich_guided_solution_with_llm", return_value=llm_fallback):
             finding = adapter.generate_finding_analysis(payload)
             action = adapter.generate_action_plan(payload)
 
         self.assertTrue(finding["ok"])
         self.assertTrue(action["ok"])
-        self.assertEqual(finding["source"], "ai-engine-guided-v2")
-        self.assertEqual(action["source"], "ai-engine-guided-v2")
+        self.assertEqual(finding["source"], "ai-engine-guided-canonical-v1")
+        self.assertEqual(action["source"], "ai-engine-guided-canonical-v1")
         self.assertEqual(finding["confidence"], 0.86)
         self.assertEqual(action["confidence"], 0.86)
+        self.assertTrue(finding["trace"]["canonical_knowledge_used"])
+        self.assertFalse(finding["trace"]["llm_used"])
+        self.assertTrue(finding["trace"]["fallback_used"])
+        self.assertNotIn("legacy_source", finding)
+        self.assertNotIn("legacy_error", action)
 
 
 if __name__ == "__main__":

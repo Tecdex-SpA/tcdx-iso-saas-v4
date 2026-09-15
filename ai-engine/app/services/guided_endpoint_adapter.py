@@ -10,10 +10,35 @@ from app.services.response_adapter import (
     guided_solution_to_legacy_response,
     guided_solution_to_text,
 )
+from app.services.guided_llm_enrichment import (
+    CANONICAL_GUIDED_MODEL,
+    enrich_guided_solution_with_llm,
+)
 from app.services.solution_engine import (
     generate_executive_recommendations,
     generate_guided_solution,
 )
+
+CANONICAL_GUIDED_SOURCE = "ai-engine-guided-canonical-v1"
+CANONICAL_GUIDED_PUBLIC_CONTRACT = "ai_guided_product_ready_v1"
+CANONICAL_GUIDED_FORBIDDEN_PUBLIC_KEYS = {
+    "legacy_error",
+    "legacy_source",
+    "legacy_error_fallback",
+    "legacy_knowledge_sources",
+    "legacy_knowledge_context",
+    "legacy_result",
+}
+CANONICAL_GUIDED_FORBIDDEN_PUBLIC_TOKENS = {
+    "legacy_error",
+    "legacy_source",
+    "legacy_error_fallback",
+    "legacy_knowledge_sources",
+    "legacy_knowledge_context",
+    "legacy_result",
+    "deterministic_" + "legacy_guided",
+}
+FORBIDDEN_OLD_GUIDED_MODEL_TOKEN = "deterministic_" + "legacy_guided"
 
 
 def _safe_legacy_call(function_name: str, payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -484,6 +509,120 @@ def _make_action_plan_steps(solution: Dict[str, Any]) -> List[Dict[str, Any]]:
 
 
 
+def _canonical_knowledge_match_count(knowledge_sources: Dict[str, Any]) -> int:
+    trace_counts = knowledge_sources.get("trace_counts") if isinstance(knowledge_sources, dict) else {}
+    if isinstance(trace_counts, dict):
+        try:
+            return int(trace_counts.get("canonical_knowledge_match_count") or 0)
+        except (TypeError, ValueError):
+            return 0
+    return 0
+
+
+def _canonical_guided_trace(guided: Dict[str, Any], llm_result: Dict[str, Any]) -> Dict[str, Any]:
+    knowledge_sources = guided.get("knowledge_sources") if isinstance(guided.get("knowledge_sources"), dict) else {}
+    trace_counts = knowledge_sources.get("trace_counts") if isinstance(knowledge_sources.get("trace_counts"), dict) else {}
+    llm_used = bool(llm_result.get("llm_used"))
+    fallback_used = bool(llm_result.get("fallback_used"))
+    selected_model = llm_result.get("selected_model") or CANONICAL_GUIDED_MODEL
+    trace = {
+        "ai_engine_used": True,
+        "canonical_context_used": True,
+        "canonical_knowledge_used": bool(
+            knowledge_sources.get("base_problem_knowledge")
+            or knowledge_sources.get("domain_knowledge")
+        ),
+        "canonical_knowledge_match_count": _canonical_knowledge_match_count(knowledge_sources),
+        "canonical_knowledge_item_count": 0,
+        "canonical_mapping_match_count": 0,
+        "canonical_action_count": 0,
+        "canonical_evidence_expectation_count": 0,
+        "canonical_gap_count": 0,
+        "canonical_audit_question_count": 0,
+        "canonical_rule_count": 0,
+        "canonical_knowledge_sources": knowledge_sources,
+        "llm_available": bool(llm_result.get("llm_available")),
+        "llm_used": llm_used,
+        "used_llm": llm_used,
+        "llm_provider": llm_result.get("llm_provider") or "none",
+        "selected_model": selected_model,
+        "model": selected_model,
+        "model_mode": llm_result.get("model_mode") or ("guided" if llm_used else "deterministic"),
+        "deterministic_mode": not llm_used,
+        "fallback_used": fallback_used,
+        "deterministic_fallback_used": fallback_used,
+        "fallback_reason": llm_result.get("fallback_reason"),
+        "ai_enrichment_failed": bool(fallback_used and llm_result.get("fallback_reason") not in {None, "llm_unavailable"}),
+        "tenant_filter_enforced": True,
+        "filtered_by_tenant_id": True,
+        "used_web": False,
+        "used_rag": False,
+        "used_company_profile": False,
+    }
+    for key in (
+        "canonical_knowledge_item_count",
+        "canonical_mapping_match_count",
+        "canonical_action_count",
+        "canonical_evidence_expectation_count",
+        "canonical_gap_count",
+        "canonical_audit_question_count",
+        "canonical_rule_count",
+    ):
+        try:
+            trace[key] = int(trace_counts.get(key) or 0)
+        except (TypeError, ValueError):
+            trace[key] = 0
+    trace["canonical_knowledge_match_count"] = trace["canonical_knowledge_item_count"]
+    return trace
+
+
+def _sanitize_canonical_guided_value(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {
+            key: _sanitize_canonical_guided_value(item)
+            for key, item in value.items()
+            if key not in CANONICAL_GUIDED_FORBIDDEN_PUBLIC_KEYS
+        }
+    if isinstance(value, list):
+        return [_sanitize_canonical_guided_value(item) for item in value]
+    if isinstance(value, str):
+        return value.replace(FORBIDDEN_OLD_GUIDED_MODEL_TOKEN, CANONICAL_GUIDED_MODEL)
+    return value
+
+
+def _strip_endpoint_legacy_fields(response: Dict[str, Any]) -> Dict[str, Any]:
+    sanitized = _sanitize_canonical_guided_value(response)
+    response.clear()
+    response.update(sanitized if isinstance(sanitized, dict) else {})
+    return response
+
+
+def _with_guided_enrichment(
+    *,
+    endpoint_type: str,
+    payload: Dict[str, Any],
+    guided: Dict[str, Any],
+    response: Dict[str, Any],
+) -> Dict[str, Any]:
+    llm_result = enrich_guided_solution_with_llm(
+        endpoint_type=endpoint_type,
+        payload=payload,
+        guided=guided,
+        deterministic_response=response,
+    )
+    enrichment = llm_result.get("enrichment") if isinstance(llm_result.get("enrichment"), dict) else {}
+    if enrichment:
+        response.update(enrichment)
+
+    trace = _canonical_guided_trace(guided, llm_result)
+    response["trace"] = {**trace, **(response.get("trace") if isinstance(response.get("trace"), dict) else {})}
+    response["engine"] = {**response["trace"]}
+    response["knowledge_sources"] = guided.get("knowledge_sources") or {}
+    response["public_contract"] = CANONICAL_GUIDED_PUBLIC_CONTRACT
+    response["can_auto_close"] = False
+    return _strip_endpoint_legacy_fields(response)
+
+
 def _clean_public_response(response: Dict[str, Any]) -> Dict[str, Any]:
     """
     Limpieza final de salida pública:
@@ -541,10 +680,17 @@ def _clean_public_response(response: Dict[str, Any]) -> Dict[str, Any]:
         if key in response:
             response[key] = dedupe(response.get(key), limit)
 
-    # Mantener trazabilidad legacy pero no sobreexponerla como bloque principal.
-    if response.get("source") == "ai-engine-guided-v2" and response.get("structured_guided"):
+    # Mantener compatibilidad sólo para endpoints antiguos fuera del contrato product-ready.
+    if (
+        response.get("source") == "ai-engine-guided-v2"
+        and response.get("public_contract") != CANONICAL_GUIDED_PUBLIC_CONTRACT
+        and response.get("structured_guided")
+    ):
         response["legacy_knowledge_sources"] = response.pop("knowledge_sources", [])
         response["legacy_knowledge_context"] = response.pop("knowledge_context", None)
+
+    if response.get("public_contract") == CANONICAL_GUIDED_PUBLIC_CONTRACT:
+        _strip_endpoint_legacy_fields(response)
 
     return response
 
@@ -592,8 +738,6 @@ def generate_health_summary(payload: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def generate_finding_analysis(payload: Dict[str, Any]) -> Dict[str, Any]:
-    legacy = _safe_legacy_call("generate_finding_analysis", payload)
-
     tenant_id = payload.get("tenant_id")
     finding_id = payload.get("finding_id")
     standard_code = _first_standard(payload)
@@ -632,12 +776,11 @@ def generate_finding_analysis(payload: Dict[str, Any]) -> Dict[str, Any]:
     )
 
     response = {
-        **legacy,
         "ok": True,
         "type": "finding_analysis",
-        "summary": adapted.get("summary") or legacy.get("summary"),
-        "impact": solution.get("compliance_impact") or legacy.get("impact"),
-        "priority": _priority_from_guided(guided, legacy.get("priority", "Media")),
+        "summary": adapted.get("summary"),
+        "impact": solution.get("compliance_impact"),
+        "priority": _priority_from_guided(guided, "Media"),
         "likely_causes": likely_causes,
         "recommended_actions": recommended_actions,
         "expected_deliverables": solution.get("expected_deliverables") or [],
@@ -649,11 +792,17 @@ def generate_finding_analysis(payload: Dict[str, Any]) -> Dict[str, Any]:
         "next_best_action": solution.get("next_best_action"),
         "guided_recommendation": adapted.get("recommendation"),
         "confidence": adapted.get("confidence") or "alta",
-        "source": "ai-engine-guided-v2",
+        "source": CANONICAL_GUIDED_SOURCE,
         "structured_guided": guided,
-        "legacy_source": legacy.get("source"),
+        "can_auto_close": False,
     }
 
+    response = _with_guided_enrichment(
+        endpoint_type="finding_analysis",
+        payload=payload,
+        guided=guided,
+        response=response,
+    )
     return _clean_public_response(response)
 
 
@@ -738,8 +887,6 @@ def generate_nonconformity_draft(payload: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def generate_action_plan(payload: Dict[str, Any]) -> Dict[str, Any]:
-    legacy = _safe_legacy_call("generate_action_plan", payload)
-
     tenant_id = payload.get("tenant_id")
     standard_code = _first_standard(payload)
 
@@ -767,29 +914,25 @@ def generate_action_plan(payload: Dict[str, Any]) -> Dict[str, Any]:
     action_plan = _make_action_plan_steps(solution)
 
     immediate_actions = _dedupe(
-        (solution.get("concrete_actions") or [])
-        + (legacy.get("immediate_actions") or []),
+        (solution.get("concrete_actions") or []),
         limit=8,
     )
 
     success_criteria = _dedupe(
         (solution.get("closure_conditions") or [])
-        + (solution.get("validation_criteria") or [])
-        + (legacy.get("success_criteria") or []),
+        + (solution.get("validation_criteria") or []),
         limit=10,
     )
 
     objective = (
         solution.get("solution_summary")
-        or legacy.get("objective")
         or "Resolver la brecha con acción, responsable, evidencia objetiva y validación de cierre."
     )
 
     response = {
-        **legacy,
         "ok": True,
         "type": "action_plan_suggestion",
-        "priority": _priority_from_guided(guided, legacy.get("priority", "Media")),
+        "priority": _priority_from_guided(guided, "Media"),
         "objective": objective,
         "immediate_actions": immediate_actions,
         "action_plan": action_plan,
@@ -802,11 +945,17 @@ def generate_action_plan(payload: Dict[str, Any]) -> Dict[str, Any]:
         "kpi_impact": solution.get("kpi_impact"),
         "guided_recommendation": adapted.get("recommendation"),
         "confidence": adapted.get("confidence") or "alta",
-        "source": "ai-engine-guided-v2",
+        "source": CANONICAL_GUIDED_SOURCE,
         "structured_guided": guided,
-        "legacy_source": legacy.get("source"),
+        "can_auto_close": False,
     }
 
+    response = _with_guided_enrichment(
+        endpoint_type="action_plan",
+        payload=payload,
+        guided=guided,
+        response=response,
+    )
     return _clean_public_response(response)
 
 

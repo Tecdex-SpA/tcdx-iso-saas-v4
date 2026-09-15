@@ -304,3 +304,40 @@ The GRC repair now fails closed for schema drift in action plan persistence: onl
 ISO Express standard eligibility is data-driven. Tenant standard codes are normalized syntactically and matched against `iso_standard_versions` identity candidates; no code path owns a whitelist of individual ISO numbers. Compact labels such as `ISO27001` are presentation-only formatting.
 
 Control workbench Health consumes `public.v_iso_control_effective_health` as a single canonical pair. A null score cannot coexist with `saludable`, `atencion`, `deteriorado` or `critico`; it normalizes to `sin_datos` with null score. Summary counts, average, badges and frontend filters use that same normalized state.
+
+## AI Guided product-ready architecture — 2026-09-14
+
+`POST /api/ai/suggest/finding-analysis` and `POST /api/ai/suggest/action-plan` now follow the canonical guided path:
+
+```text
+Request
+-> tenant authorization / tenant scope
+-> problem classification
+-> domain inference with true/unknown applicability
+-> canonical tenant context from ai_core context views
+-> canonical knowledge retrieval from public.knowledge_*
+-> deterministic solution facts
+-> DGX/LiteLLM JSON enrichment through app.services.llm_client when available
+-> structural validation / guardrails
+-> response trace
+```
+
+The fallback path is model-only degradation: DGX unavailable, invalid JSON, timeout or exception returns the deterministic guided response with explicit `fallback_used` and `fallback_reason`. It does not call legacy backend knowledge search and does not recreate AI Core expert tables.
+
+Fresh recurrent deploy includes the new forward-only catalog runner after AI Core context grants and AI Guided KB runtime grants:
+
+```text
+scripts/normalization/apply-ai-guided-product-ready-knowledge-catalog.js
+```
+
+The catalog is global reference knowledge, not tenant/customer data. Tenant operational context remains tenant-scoped in canonical views, and no LLM output writes operational state, closes findings/actions or updates Health/KPI.
+
+## AI Guided product-ready final guardrails — 2026-09-15
+
+The final scoped public contract for `POST /api/ai/suggest/finding-analysis` and `POST /api/ai/suggest/action-plan` is `ai_guided_product_ready_v1`. These endpoints do not execute `_safe_legacy_call()` and do not expose `legacy_*` public response fields. Legacy compatibility remains isolated to older endpoint sources outside this contract.
+
+DGX/LiteLLM enrichment is a narrative layer over deterministic facts. The deterministic solution owns problem type, domain, applicability, priority, tenant scope, Health/KPI facts, evidence/closure lists, action-plan step identity, owner roles, target days and `can_auto_close=false`. If the model attempts to mutate or invent those facts, validation returns explicit deterministic fallback.
+
+Canonical trace counts are measured at the bundle level. `canonical_knowledge_match_count` is the count of unique matched `public.knowledge_items`; mapping, action, evidence expectation, gap, audit question and rule counts are separate deterministic counts. Base-problem and domain lookups are deduplicated so the same item is not counted twice.
+
+The product-ready catalog runner is deploy-safe by mode: `--checksum` validates SQL without DB access, `--preflight` is read-only over schema/ledger/coverage state, and `--apply` is the only mode that creates/mutates `schema_migrations` or catalog rows.

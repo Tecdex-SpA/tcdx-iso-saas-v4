@@ -3,6 +3,7 @@ from typing import Any, Dict, List, Optional
 from app.services.canonical_knowledge_service import (
     build_knowledge_bundle,
     canonical_domain_applies_to_standard,
+    canonical_domain_standard_applicability,
     infer_domains_from_canonical_knowledge,
 )
 
@@ -209,7 +210,11 @@ def get_standard_domains(standard_code: Optional[str]) -> List[Dict[str, Any]]:
     ]
 
 
-def _domain_applies_to_standard(domain_code: str, standard_code: Optional[str]) -> bool:
+def _domain_applicability(domain_code: str, standard_code: Optional[str]) -> Dict[str, Any]:
+    return canonical_domain_standard_applicability(domain_code, standard_code)
+
+
+def _domain_applies_to_standard(domain_code: str, standard_code: Optional[str]) -> Optional[bool]:
     return canonical_domain_applies_to_standard(domain_code, standard_code)
 
 
@@ -282,6 +287,7 @@ def infer_domain_code(
             "alternatives": [],
             "source": "fallback",
             "applies_to_standard": _domain_applies_to_standard(fallback, standard_code),
+            "standard_applicability": _domain_applicability(fallback, standard_code),
         }
 
     aggregated: Dict[str, Dict[str, Any]] = {}
@@ -295,12 +301,16 @@ def infer_domain_code(
                 "matched_terms": [],
                 "sources": [],
                 "applies_to_standard": _domain_applies_to_standard(domain, standard_code),
+                "standard_applicability": _domain_applicability(domain, standard_code),
             }
 
         # Si aplica a la norma, bonus. Si no aplica, penaliza.
         score = item["score"]
         if standard_code:
-            score = score + 5 if aggregated[domain]["applies_to_standard"] else score - 5
+            if aggregated[domain]["applies_to_standard"] is True:
+                score += 5
+            elif aggregated[domain]["applies_to_standard"] is False:
+                score -= 5
 
         aggregated[domain]["score"] += score
         aggregated[domain]["matched_terms"].extend(item.get("matched_terms") or [])
@@ -315,8 +325,8 @@ def infer_domain_code(
     best_domain, best_data = ranked[0]
 
     # Si el mejor no aplica a la norma, intentar elegir uno que sí aplique.
-    if standard_code and not best_data["applies_to_standard"]:
-        applying = [item for item in ranked if item[1]["applies_to_standard"]]
+    if standard_code and best_data["applies_to_standard"] is False:
+        applying = [item for item in ranked if item[1]["applies_to_standard"] is True]
         if applying:
             best_domain, best_data = applying[0]
 
@@ -328,11 +338,13 @@ def infer_domain_code(
         "matched_terms": list(dict.fromkeys(best_data["matched_terms"])),
         "sources": list(dict.fromkeys(best_data["sources"])),
         "applies_to_standard": best_data["applies_to_standard"],
+        "standard_applicability": best_data["standard_applicability"],
         "alternatives": [
             {
                 "domain_code": domain,
                 "score": data["score"],
                 "applies_to_standard": data["applies_to_standard"],
+                "standard_applicability": data["standard_applicability"],
                 "matched_terms": list(dict.fromkeys(data["matched_terms"])),
                 "sources": list(dict.fromkeys(data["sources"])),
             }

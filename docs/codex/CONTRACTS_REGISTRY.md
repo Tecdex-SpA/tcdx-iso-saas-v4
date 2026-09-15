@@ -1023,6 +1023,27 @@ Current evidence supersedes previous missing-pgvector/static-only reports:
 
 Next: supply or identify governed complete reference sources/manifests for the declared product families, wire them through the same loader and close the failing catalog gate. Review application role mappings for any newly registered commercial permission identities; the loader does not silently grant those permissions. No real production creation and no DB-N06. See artifacts/db-n05/VALIDATION_RESULTS.md and REFERENCE_CATALOG_COVERAGE.md.
 
+## AI Guided product-ready runtime — 2026-09-14
+
+| Contract | Status | Authority | Validation |
+|---|---|---|---|
+| Guided endpoint source | CURRENT_LOCAL | `ai-engine/app/services/guided_endpoint_adapter.py` for `finding-analysis` and `action-plan` consumes `generate_guided_solution()` only; `_safe_legacy_call()` remains compat for other endpoints but is not executed here. | Python contract tests patch `_safe_legacy_call` to raise and both endpoints still return `ok=true` with no `legacy_*` fields. |
+| Canonical KB coverage | CURRENT_LOCAL | `database/migrations/20260914_ai_guided_product_ready_knowledge_catalog.sql` loads 25 runtime problem types into existing `public.knowledge_*` tables with `source_key='tecdx_ai_guided_problem_catalog_v1'` and `license_class='derived_summary'`. | Isolated PostgreSQL baseline+seed+runner apply/reapply PASS; `access_review_missing` and `missing_evidence` have item/mapping/action/evidence coverage. |
+| Domain applicability | CURRENT_LOCAL | `canonical_domain_standard_applicability()` returns explicit `state=true|unknown` and `applies_to_standard=true|null`; no mapping absence is reported as false. | Unit test `test_domain_applicability_unknown_is_not_false` PASS. |
+| Finding lifecycle signal | CURRENT_LOCAL | `build_context_pack()` exposes `open_findings`, `closed_findings`, `recent_findings`; classifier uses open/active findings for active gap signal and treats closed findings as history. | Unit test `test_closed_finding_does_not_become_open_signal` PASS. |
+| DGX/LiteLLM enrichment | CURRENT_LOCAL | `ai-engine/app/services/guided_llm_enrichment.py` calls existing `app.services.llm_client.call_llm_json()` with JSON contract and guardrails; invalid/unavailable/exception responses fallback deterministically. | Mock success/invalid/exception/unavailable tests PASS; DGX hardening regression PASS. |
+| Traceability | CURRENT_LOCAL | Response trace/engine exposes `ai_engine_used`, canonical context/knowledge used/count/sources, LLM available/used/provider/model/mode, fallback reason, tenant filter, web/RAG/company profile flags. | Adapter contract tests PASS; route wrapper preserves existing LLM trace. |
+| RBAC/ACL | CURRENT_LOCAL | No new ACL grants; relies on prior exact `tcdx_backend_runtime` SELECT grants for canonical context and KB relations. | PostgreSQL isolated test validates no legacy `ai_core` expert objects and no new grants were required. |
+
+## AI Guided final product-ready contracts — 2026-09-15
+
+| Contract | Status | Authority | Validation |
+|---|---|---|---|
+| Catalog runner CLI | CURRENT_LOCAL | `scripts/normalization/apply-ai-guided-product-ready-knowledge-catalog.js` exposes exactly `--checksum`, `--preflight`, `--apply`. | `--checksum` validates SQL without DB; PostgreSQL isolated test proves `--preflight` preserves all relevant `knowledge_*` counts and does not create/mutate ledger; `--apply` applies, replays as `already_applied` and fails closed on checksum mismatch. |
+| LLM factual fail-closed | CURRENT_LOCAL | `ai-engine/app/services/guided_llm_enrichment.py`; DGX/LiteLLM enrichment is narrative-only and preserves deterministic facts. | Mock tests reject auto-close, priority mutation, invented owner/target days/evidence/KPI/Health/applicability/extra step and compliance-achieved claims; fallback remains explicit and deterministic. |
+| Canonical trace counts | CURRENT_LOCAL | `canonical_knowledge_service.build_knowledge_bundle()` loads mappings and emits deterministic `trace_counts`; `solution_engine` deduplicates across base/domain bundles; adapter publishes counts. | Unit and PostgreSQL isolated tests prove item count is unique real `knowledge_items`, not booleans; mappings do not duplicate item count; KB empty returns zero without compliance semantics. |
+| Public response legacy-free scope | CURRENT_LOCAL | `guided_endpoint_adapter.py` sets `public_contract=ai_guided_product_ready_v1` for `finding-analysis`/`action-plan` and sanitizes recursively. | Contract tests cover DGX success, unavailable, exception/invalid fallback; no forbidden legacy public tokens or old deterministic model name serialize in scoped responses. |
+
 ## DB integral formula and Health authority — 2026-09-09
 
 | Contract | Status | Authority | Validation |

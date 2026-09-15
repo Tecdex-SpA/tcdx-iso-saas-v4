@@ -26,6 +26,27 @@ def _safe_limit(limit: int, default: int = 8, maximum: int = 25) -> int:
     return max(1, min(value, maximum))
 
 
+def _standard_variants(standard_code: Optional[str]) -> Optional[List[str]]:
+    if not standard_code:
+        return None
+    raw = str(standard_code or "").strip()
+    compact = re.sub(r"[^A-Za-z0-9]+", "", raw).upper()
+    variants = {raw, raw.upper(), compact}
+    aliases = {
+        "ISO27001": ["ISO27001", "ISO 27001:2022", "ISO/IEC 27001:2022", "ISO_27001_2022"],
+        "ISO9001": ["ISO9001", "ISO 9001:2015 + AMD 1:2024", "ISO_9001_2015"],
+        "ISO42001": ["ISO42001", "ISO 42001:2023", "ISO_42001_2023"],
+        "ISO200001": ["ISO20000-1", "ISO/IEC20000-1", "ISO/IEC 20000-1"],
+        "ISO50001": ["ISO50001", "ISO 50001"],
+        "ISO14001": ["ISO14001", "ISO 14001"],
+        "ISO45001": ["ISO45001", "ISO 45001"],
+    }
+    for value in aliases.get(compact, []):
+        variants.add(value)
+        variants.add(value.upper())
+    return sorted(v for v in variants if v)
+
+
 def _as_list(value: Any) -> List[Any]:
     if value is None:
         return []
@@ -71,6 +92,7 @@ def _knowledge_filters(
     query_norm = _normalize(query_text)
     return {
         "standard_code": standard_code or None,
+        "standard_codes": _standard_variants(standard_code),
         "control_code": control_code or None,
         "domain": domain or None,
         "problem_type_code": problem_type_code or None,
@@ -139,7 +161,12 @@ def search_knowledge_items(
             ON m.item_key = i.item_key
           WHERE i.is_active IS DISTINCT FROM false
             AND i.lifecycle_state = 'active'
-            AND (%(standard_code)s IS NULL OR i.standard_code = %(standard_code)s OR m.standard_code = %(standard_code)s)
+            AND (
+              %(standard_codes)s IS NULL
+              OR i.standard_code = ANY(%(standard_codes)s)
+              OR m.standard_code = ANY(%(standard_codes)s)
+              OR (i.standard_code IS NULL AND m.standard_code IS NULL)
+            )
             AND (%(control_code)s IS NULL OR i.clause_or_control = %(control_code)s OR m.clause_or_control = %(control_code)s OR m.target_key = %(control_code)s)
             AND (%(domain)s IS NULL OR i.domain = %(domain)s OR m.domain = %(domain)s)
             AND (
@@ -209,6 +236,67 @@ def _load_child_rows(table: str, item_keys: List[str], limit: int = 20) -> List[
         """,
         [item_keys, _safe_limit(limit, default=20, maximum=80)],
     )
+
+
+def _load_mapping_rows(item_keys: List[str], limit: int = 20) -> List[Dict[str, Any]]:
+    if not item_keys:
+        return []
+
+    return fetch_all(
+        """
+        SELECT
+          item_key,
+          mapping_key,
+          target_type,
+          target_key,
+          entity_type,
+          standard_family,
+          standard_code,
+          clause_or_control,
+          domain,
+          match_weight,
+          confidence
+        FROM public.knowledge_mappings
+        WHERE item_key = ANY(%s)
+        ORDER BY item_key, mapping_key
+        LIMIT %s
+        """,
+        [item_keys, _safe_limit(limit, default=20, maximum=80)],
+    )
+
+
+def _stable_unique_count(rows: List[Dict[str, Any]], fields: List[str]) -> int:
+    seen = set()
+    for row in rows or []:
+        if not isinstance(row, dict):
+            continue
+        key = tuple(str(row.get(field) or "") for field in fields)
+        if any(key):
+            seen.add(key)
+    return len(seen)
+
+
+def _trace_counts(
+    *,
+    items: List[Dict[str, Any]],
+    mappings: List[Dict[str, Any]],
+    gaps: List[Dict[str, Any]],
+    actions: List[Dict[str, Any]],
+    evidence: List[Dict[str, Any]],
+    rules: List[Dict[str, Any]],
+    questions: List[Dict[str, Any]],
+) -> Dict[str, int]:
+    item_count = _stable_unique_count(items, ["item_key"])
+    return {
+        "canonical_knowledge_item_count": item_count,
+        "canonical_knowledge_match_count": item_count,
+        "canonical_mapping_match_count": _stable_unique_count(mappings, ["item_key", "mapping_key", "target_type", "target_key", "domain", "standard_code"]),
+        "canonical_action_count": _stable_unique_count(actions, ["item_key", "action_key", "action_text"]),
+        "canonical_evidence_expectation_count": _stable_unique_count(evidence, ["item_key", "expectation_key", "expectation_text"]),
+        "canonical_gap_count": _stable_unique_count(gaps, ["item_key", "gap_key", "gap_text"]),
+        "canonical_audit_question_count": _stable_unique_count(questions, ["item_key", "question_text", "question"]),
+        "canonical_rule_count": _stable_unique_count(rules, ["item_key", "rule_key", "rule_text"]),
+    }
 
 
 def load_iso_evidence_expectations(
@@ -330,9 +418,20 @@ def build_knowledge_bundle(
         bundle["ok"] = bool(bundle["iso_evidence_expectations"] or bundle["tenant_evidence_requirements"])
         if bundle["ok"]:
             bundle["provenance"]["limitations"] = ["no_structured_knowledge_item_match"]
+        bundle["mappings"] = []
+        bundle["trace_counts"] = _trace_counts(
+            items=[],
+            mappings=[],
+            gaps=[],
+            actions=[],
+            evidence=[],
+            rules=[],
+            questions=[],
+        )
         return bundle
 
     item_keys = [row["item_key"] for row in items if row.get("item_key")]
+    mappings = _load_mapping_rows(item_keys, limit=limit)
     gaps = _load_child_rows("knowledge_common_gaps", item_keys, limit=limit)
     actions = _load_child_rows("knowledge_recommended_actions", item_keys, limit=limit)
     evidence = _load_child_rows("knowledge_evidence_expectations", item_keys, limit=limit)
@@ -360,6 +459,7 @@ def build_knowledge_bundle(
         "ok": True,
         "contract_version": CANONICAL_KNOWLEDGE_CONTRACT_VERSION,
         "items": items,
+        "mappings": mappings,
         "gaps": gaps,
         "recommended_actions": actions,
         "evidence_expectations": evidence,
@@ -377,6 +477,15 @@ def build_knowledge_bundle(
         "rule_hints": hints,
         "audit_questions": questions,
         "sources": sources,
+        "trace_counts": _trace_counts(
+            items=items,
+            mappings=mappings,
+            gaps=gaps,
+            actions=actions,
+            evidence=evidence,
+            rules=rules,
+            questions=questions,
+        ),
         "provenance": {
             "source": "canonical_knowledge",
             "filters": filters,
@@ -416,7 +525,12 @@ def infer_domains_from_canonical_knowledge(
         WHERE i.is_active IS DISTINCT FROM false
           AND i.lifecycle_state = 'active'
           AND COALESCE(m.domain, i.domain) IS NOT NULL
-          AND (%(standard_code)s IS NULL OR i.standard_code = %(standard_code)s OR m.standard_code = %(standard_code)s)
+          AND (
+            %(standard_codes)s IS NULL
+            OR i.standard_code = ANY(%(standard_codes)s)
+            OR m.standard_code = ANY(%(standard_codes)s)
+            OR (i.standard_code IS NULL AND m.standard_code IS NULL)
+          )
           AND (
             %(problem_type_code)s IS NULL
             OR i.item_key = %(problem_type_code)s
@@ -449,9 +563,13 @@ def infer_domains_from_canonical_knowledge(
     )
 
 
-def canonical_domain_applies_to_standard(domain_code: str, standard_code: Optional[str]) -> bool:
+def canonical_domain_standard_applicability(domain_code: str, standard_code: Optional[str]) -> Dict[str, Any]:
     if not standard_code or not domain_code:
-        return True
+        return {
+            "state": "unknown",
+            "applies_to_standard": None,
+            "basis": "insufficient_filter",
+        }
 
     row = fetch_one(
         """
@@ -462,12 +580,43 @@ def canonical_domain_applies_to_standard(domain_code: str, standard_code: Option
         WHERE i.is_active IS DISTINCT FROM false
           AND i.lifecycle_state = 'active'
           AND (i.domain = %s OR m.domain = %s)
-          AND (i.standard_code = %s OR m.standard_code = %s)
+          AND (
+            i.standard_code = ANY(%s)
+            OR m.standard_code = ANY(%s)
+          )
         LIMIT 1
         """,
-        [domain_code, domain_code, standard_code, standard_code],
+        [domain_code, domain_code, _standard_variants(standard_code), _standard_variants(standard_code)],
     )
-    return row is not None
+    if row is not None:
+        return {
+            "state": "true",
+            "applies_to_standard": True,
+            "basis": "canonical_knowledge_mapping",
+        }
+
+    any_domain = fetch_one(
+        """
+        SELECT 1
+        FROM public.knowledge_items i
+        LEFT JOIN public.knowledge_mappings m
+          ON m.item_key = i.item_key
+        WHERE i.is_active IS DISTINCT FROM false
+          AND i.lifecycle_state = 'active'
+          AND (i.domain = %s OR m.domain = %s)
+        LIMIT 1
+        """,
+        [domain_code, domain_code],
+    )
+    return {
+        "state": "unknown",
+        "applies_to_standard": None,
+        "basis": "no_canonical_standard_mapping" if any_domain else "no_canonical_domain_knowledge",
+    }
+
+
+def canonical_domain_applies_to_standard(domain_code: str, standard_code: Optional[str]) -> Optional[bool]:
+    return canonical_domain_standard_applicability(domain_code, standard_code).get("applies_to_standard")
 
 
 def load_canonical_external_sources(

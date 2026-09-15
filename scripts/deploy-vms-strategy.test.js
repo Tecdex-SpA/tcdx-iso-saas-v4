@@ -8,7 +8,9 @@ const { spawnSync } = require('child_process');
 
 const root = path.resolve(__dirname, '..');
 const deployScript = path.join(root, 'scripts/deploy-vms.sh');
+const aiGuidedCatalogRunner = path.join(root, 'scripts/normalization/apply-ai-guided-product-ready-knowledge-catalog.js');
 const scriptText = fs.readFileSync(deployScript, 'utf8');
+const aiGuidedRunnerText = fs.readFileSync(aiGuidedCatalogRunner, 'utf8');
 
 const missingStrategy = spawnSync('env', ['-u', 'TCDX_DB_DEPLOY_STRATEGY', 'bash', deployScript], {
   cwd: root,
@@ -76,6 +78,20 @@ assert.match(
   /scripts\/normalization\/apply-ai-guided-canonical-knowledge-runtime-grants\.js/,
   'fresh deploy must include AI Guided canonical knowledge runtime grants forward migration'
 );
+assert.match(
+  freshArray[0],
+  /scripts\/normalization\/apply-ai-guided-product-ready-knowledge-catalog\.js/,
+  'fresh deploy must include AI Guided product-ready canonical knowledge catalog forward migration'
+);
+assert.match(scriptText, /run_phase_migration "\$phase" "--preflight" "\$script_path"/, 'registered migrations must run read-only preflight first');
+assert.match(scriptText, /run_phase_migration "\$phase" "--apply" "\$script_path"/, 'registered migrations must run apply after preflight');
+assert.match(aiGuidedRunnerText, /--checksum/, 'AI Guided product-ready catalog runner must expose --checksum');
+assert.match(aiGuidedRunnerText, /--preflight/, 'AI Guided product-ready catalog runner must expose --preflight');
+assert.match(aiGuidedRunnerText, /--apply/, 'AI Guided product-ready catalog runner must expose --apply');
+assert.match(aiGuidedRunnerText, /preflightMigration/, 'AI Guided product-ready catalog runner must implement explicit preflight');
+const preflightFunction = aiGuidedRunnerText.match(/async function preflightMigration[\s\S]*?\n}\n\nasync function applyMigration/);
+assert.ok(preflightFunction, 'AI Guided preflight function must be inspectable');
+assert.doesNotMatch(preflightFunction[0], /ensureSchemaMigrations|INSERT INTO|UPDATE public\.schema_migrations|CREATE TABLE/i, 'AI Guided preflight must not create or mutate schema_migrations');
 
 const historicalArray = scriptText.match(/HISTORICAL_MIGRATION_RUNNERS=\([\s\S]*?\n\)/);
 assert.ok(historicalArray, 'historical migration runner registry must exist');

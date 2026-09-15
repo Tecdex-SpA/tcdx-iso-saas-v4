@@ -2,6 +2,7 @@ from typing import Any, Dict, List, Optional
 
 from app.services.context_builder import build_context_pack, get_problem_knowledge
 from app.services.domain_knowledge import get_domain_knowledge, infer_domain_code
+from app.services.canonical_knowledge_service import canonical_domain_standard_applicability
 from app.services.problem_classifier import classify_problem
 from app.services.explicit_intent import detect_explicit_problem_and_domain
 
@@ -46,6 +47,60 @@ def _number_or_none(value: Any) -> Optional[float]:
         return float(value)
     except (TypeError, ValueError):
         return None
+
+
+def _unique_count(rows: List[Dict[str, Any]], fields: List[str]) -> int:
+    seen = set()
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        key = tuple(str(row.get(field) or "") for field in fields)
+        if any(key):
+            seen.add(key)
+    return len(seen)
+
+
+def _knowledge_trace_counts(*bundles: Dict[str, Any]) -> Dict[str, int]:
+    rows: Dict[str, List[Dict[str, Any]]] = {
+        "items": [],
+        "mappings": [],
+        "recommended_actions": [],
+        "evidence_expectations": [],
+        "gaps": [],
+        "audit_questions": [],
+        "rules": [],
+    }
+    for bundle in bundles:
+        if not isinstance(bundle, dict):
+            continue
+        for key in rows:
+            rows[key].extend([item for item in (bundle.get(key) or []) if isinstance(item, dict)])
+    item_count = _unique_count(rows["items"], ["item_key"])
+    return {
+        "canonical_knowledge_item_count": item_count,
+        "canonical_knowledge_match_count": item_count,
+        "canonical_mapping_match_count": _unique_count(rows["mappings"], ["item_key", "mapping_key", "target_type", "target_key", "domain", "standard_code"]),
+        "canonical_action_count": _unique_count(rows["recommended_actions"], ["item_key", "action_key", "action_text"]),
+        "canonical_evidence_expectation_count": _unique_count(rows["evidence_expectations"], ["item_key", "expectation_key", "expectation_text"]),
+        "canonical_gap_count": _unique_count(rows["gaps"], ["item_key", "gap_key", "gap_text"]),
+        "canonical_audit_question_count": _unique_count(rows["audit_questions"], ["item_key", "question_text", "question"]),
+        "canonical_rule_count": _unique_count(rows["rules"], ["item_key", "rule_key", "rule_text"]),
+    }
+
+
+def _canonical_sources(*bundles: Dict[str, Any]) -> List[Dict[str, Any]]:
+    out: List[Dict[str, Any]] = []
+    seen = set()
+    for bundle in bundles:
+        for source in (bundle.get("sources") if isinstance(bundle, dict) else None) or []:
+            if not isinstance(source, dict):
+                continue
+            source_key = source.get("source_key")
+            if not source_key or source_key in seen:
+                continue
+            seen.add(source_key)
+            out.append(source)
+    return out
 
 
 
@@ -101,7 +156,9 @@ def _detect_contextual_signals(context: Dict[str, Any]) -> List[str]:
 
     critical_controls = context.get("critical_controls") or []
     attention_controls = context.get("attention_controls") or []
-    recent_findings = context.get("recent_findings") or []
+    open_findings = context.get("open_findings")
+    closed_findings = context.get("closed_findings") or []
+    recent_findings = open_findings if isinstance(open_findings, list) else (context.get("recent_findings") or [])
     recent_kpis = context.get("recent_kpis") or []
 
     if critical_controls:
@@ -116,7 +173,11 @@ def _detect_contextual_signals(context: Dict[str, Any]) -> List[str]:
 
     if recent_findings:
         signals.append(
-            f"El contexto contiene {len(recent_findings)} hallazgos recientes o relacionados."
+            f"El contexto contiene {len(recent_findings)} hallazgos abiertos recientes o relacionados."
+        )
+    elif closed_findings:
+        signals.append(
+            f"El contexto contiene {len(closed_findings)} hallazgos cerrados como historial, sin señal de brecha activa."
         )
 
     partial_coverage_metrics = [
@@ -182,8 +243,9 @@ def generate_guided_solution(
 
     problem_type_code = classification["problem_type_code"]
 
-    domain_detection = (
-        {
+    if effective_domain_code:
+        applicability = canonical_domain_standard_applicability(effective_domain_code, standard_code)
+        domain_detection = {
             "domain_code": effective_domain_code,
             "confidence": 1.0,
             "matched_terms": [
@@ -191,16 +253,16 @@ def generate_guided_solution(
             ],
             "alternatives": [],
             "source": "forced" if forced_domain_code else "explicit_intent",
-            "applies_to_standard": True,
+            "applies_to_standard": applicability.get("applies_to_standard"),
+            "standard_applicability": applicability,
         }
-        if effective_domain_code
-        else infer_domain_code(
+    else:
+        domain_detection = infer_domain_code(
             user_text=user_text,
             standard_code=standard_code,
             problem_type_code=problem_type_code,
             context=context,
         )
-    )
 
     domain_code = domain_detection.get("domain_code")
 
@@ -210,6 +272,10 @@ def generate_guided_solution(
         problem_type_code=problem_type_code,
         standard_code=standard_code,
     )
+    base_bundle = base_knowledge.get("canonical_bundle") or {}
+    domain_bundle = domain_knowledge.get("canonical_bundle") or {}
+    trace_counts = _knowledge_trace_counts(base_bundle, domain_bundle)
+    canonical_sources = _canonical_sources(base_bundle, domain_bundle)
 
     override_content = _override_content(domain_knowledge)
 
@@ -353,6 +419,7 @@ def generate_guided_solution(
             "standard_focus": standard_domain.get("standard_focus"),
             "relevance_level": standard_domain.get("relevance_level"),
             "applies_to_standard": domain_detection.get("applies_to_standard"),
+            "standard_applicability": domain_detection.get("standard_applicability"),
         },
         "context_summary": {
             "tenant_health": _summarize_tenant_health(context),
@@ -393,11 +460,15 @@ def generate_guided_solution(
             "domain_closure_used": bool(domain_closure),
             "standard_overrides_count": len(domain_knowledge.get("overrides") or []),
             "standard_overrides_used": bool(override_content),
+            "trace_counts": trace_counts,
+            "canonical_sources": canonical_sources,
         },
         "raw_context": {
             "tenant_health": context.get("tenant_health", [])[:5],
             "critical_controls": context.get("critical_controls", [])[:5],
             "attention_controls": context.get("attention_controls", [])[:5],
+            "open_findings": context.get("open_findings", [])[:5],
+            "closed_findings": context.get("closed_findings", [])[:5],
             "recent_findings": context.get("recent_findings", [])[:5],
             "recent_kpis": context.get("recent_kpis", [])[:5],
             "selected_control": context.get("selected_control", [])[:1],

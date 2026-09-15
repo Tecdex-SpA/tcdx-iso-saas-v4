@@ -158,7 +158,7 @@ def _with_runtime_metrics(result: Dict[str, Any], *, started_at: float, endpoint
         "deterministic_mode": engine.get("deterministic_mode", trace.get("deterministic_mode", mode in {"fast_mode", "deterministic"})),
         "fallback_used": engine.get("fallback_used", trace.get("fallback_used", False)),
         "ai_enrichment_failed": engine.get("ai_enrichment_failed", trace.get("ai_enrichment_failed", False)),
-        "selected_model": engine.get("selected_model", trace.get("selected_model", "deterministic_legacy_guided")),
+        "selected_model": engine.get("selected_model", trace.get("selected_model", "deterministic_canonical_guided")),
         "model_mode": engine.get("model_mode", trace.get("model_mode", mode)),
         "llm_provider": engine.get("llm_provider", trace.get("llm_provider", None)),
         "used_rag": engine.get("used_rag", trace.get("used_rag", False)),
@@ -189,7 +189,7 @@ def _with_runtime_metrics(result: Dict[str, Any], *, started_at: float, endpoint
             "used_rag": metrics["used_rag"],
             "used_drive": metrics["used_drive"],
             "used_web": metrics["used_web"],
-            "model": engine.get("model") or "deterministic_legacy_guided",
+            "model": engine.get("model") or "deterministic_canonical_guided",
             **merged_trace,
             **engine,
             "duration_ms": duration_ms,
@@ -922,24 +922,43 @@ def _deterministic_contract(result: Dict[str, Any], *, endpoint: str, request_id
     if not isinstance(result, dict):
         result = {"answer": str(result or "")}
     trace = result.get("trace") if isinstance(result.get("trace"), dict) else {}
+    engine = result.get("engine") if isinstance(result.get("engine"), dict) else {}
+    is_health = endpoint.endswith("/health-summary")
+    default_model = "deterministic_health_summary" if is_health else "deterministic_canonical_guided"
+
+    def current(key: str, default: Any) -> Any:
+        if key in trace:
+            return trace.get(key)
+        if key in engine:
+            return engine.get(key)
+        return default
+
+    llm_used = bool(current("llm_used", False))
+    fallback_used = bool(current("fallback_used", False))
     trace.update({
         "ai_engine_used": True,
-        "llm_used": False,
-        "used_llm": False,
-        "deterministic_mode": True,
-        "deterministic_fallback_used": True,
-        "fallback_used": False,
-        "ai_enrichment_failed": False,
-        "selected_model": "deterministic_health_summary" if endpoint.endswith("/health-summary") else "deterministic_legacy_guided",
-        "model_mode": "deterministic",
-        "llm_provider": "none",
-        "used_web": False,
-        "used_rag": False,
-        "used_drive": False,
-        "used_company_profile": False,
+        "llm_used": llm_used,
+        "used_llm": bool(current("used_llm", llm_used)),
+        "deterministic_mode": bool(current("deterministic_mode", not llm_used)),
+        "deterministic_fallback_used": bool(current("deterministic_fallback_used", True)),
+        "fallback_used": fallback_used,
+        "fallback_reason": current("fallback_reason", None),
+        "ai_enrichment_failed": bool(current("ai_enrichment_failed", False)),
+        "selected_model": current("selected_model", default_model),
+        "model": current("model", current("selected_model", default_model)),
+        "model_mode": current("model_mode", "deterministic"),
+        "llm_provider": current("llm_provider", "none"),
+        "used_web": bool(current("used_web", False)),
+        "used_rag": bool(current("used_rag", False)),
+        "used_drive": bool(current("used_drive", False)),
+        "used_company_profile": bool(current("used_company_profile", False)),
         "company_profile_impact_used": False,
         "tenant_filter_enforced": True,
         "filtered_by_tenant_id": True,
+        "canonical_context_used": bool(current("canonical_context_used", False)),
+        "canonical_knowledge_used": bool(current("canonical_knowledge_used", False)),
+        "canonical_knowledge_match_count": current("canonical_knowledge_match_count", 0),
+        "canonical_knowledge_sources": current("canonical_knowledge_sources", {}),
         "applicability_universe_applied": bool(result.get("applicability_universe_used") or result.get("filtered_by_applicability_universe")),
         "applicability_universe_used": bool(result.get("applicability_universe_used")),
         "filtered_by_applicability_universe": bool(result.get("filtered_by_applicability_universe")),

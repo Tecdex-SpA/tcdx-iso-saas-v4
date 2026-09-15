@@ -50,6 +50,11 @@ def _normalize_status(value: Any) -> str:
     return str(value or "").strip().lower()
 
 
+def _is_open_finding(row: Dict[str, Any]) -> bool:
+    status = _normalize_status(row.get("status"))
+    return status not in {"closed", "cerrado", "resuelto", "resolved", "done", "cancelled", "canceled"}
+
+
 def _control_context_bucket(row: Dict[str, Any]) -> str:
     status = _normalize_status(row.get("implementation_status"))
     if status in CONTROL_IMPLEMENTATION_CRITICAL_STATUSES:
@@ -389,7 +394,7 @@ def get_finding_context(
     where_sql = f"WHERE {' AND '.join(where)}" if where else ""
     safe_limit = _canonical_int_limit(limit, default=20)
 
-    return fetch_all(
+    rows = fetch_all(
         f"""
         SELECT
           tenant_id::text AS tenant_id,
@@ -406,6 +411,15 @@ def get_finding_context(
         """,
         [*params, safe_limit],
     )
+    enriched = []
+    for row in rows:
+        is_open = _is_open_finding(row)
+        enriched.append({
+            **row,
+            "finding_lifecycle": "open" if is_open else "closed",
+            "active_gap_signal": is_open,
+        })
+    return enriched
 
 
 def get_kpi_context(
@@ -528,6 +542,14 @@ def build_context_pack(
             limit=10,
         )
 
+    recent_findings = get_finding_context(
+        tenant_id=tenant_id,
+        finding_id=entity_id if entity_type == "finding" else None,
+        limit=10,
+    )
+    open_findings = [row for row in recent_findings if row.get("active_gap_signal")]
+    closed_findings = [row for row in recent_findings if not row.get("active_gap_signal")]
+
     context: Dict[str, Any] = {
         "contract_version": CANONICAL_INTELLIGENCE_CONTEXT_CONTRACT_VERSION,
         "tenant_id": tenant_id,
@@ -539,11 +561,9 @@ def build_context_pack(
         "tenant_health": tenant_health,
         "critical_controls": critical_controls,
         "attention_controls": attention_controls,
-        "recent_findings": get_finding_context(
-            tenant_id=tenant_id,
-            finding_id=entity_id if entity_type == "finding" else None,
-            limit=10,
-        ),
+        "open_findings": open_findings,
+        "closed_findings": closed_findings,
+        "recent_findings": recent_findings,
         "recent_kpis": recent_kpis,
         "warnings": [],
         "provenance": {

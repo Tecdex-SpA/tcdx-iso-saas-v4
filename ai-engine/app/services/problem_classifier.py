@@ -149,7 +149,8 @@ def classify_problem(
     if context:
         critical_controls = context.get("critical_controls") or []
         recent_kpis = context.get("recent_kpis") or []
-        recent_findings = context.get("recent_findings") or []
+        open_findings = context.get("open_findings")
+        recent_findings = open_findings if isinstance(open_findings, list) else (context.get("recent_findings") or [])
 
         if critical_controls:
             scores.append(("control_not_executed", 1, ["contexto: controles con brecha de implementación"]))
@@ -173,9 +174,12 @@ def classify_problem(
             for finding in recent_findings:
                 status = _normalize_text(finding.get("status"))
                 severity = _normalize_text(finding.get("severity"))
-                if status and status not in {"closed", "cerrado", "resuelto"}:
+                is_open = finding.get("active_gap_signal")
+                if is_open is None:
+                    is_open = status and status not in {"closed", "cerrado", "resuelto", "resolved", "done", "cancelled", "canceled"}
+                if is_open:
                     scores.append(("finding_open", 2, ["contexto: hallazgo abierto"]))
-                if severity in {"alta", "high", "critica", "crítica", "critical"}:
+                if is_open and severity in {"alta", "high", "critica", "crítica", "critical"}:
                     scores.append(("nonconformity_open", 1, ["contexto: severidad alta/crítica"]))
 
     if not scores:
